@@ -32,6 +32,7 @@ internal sealed class FilePickerForm : Form
     private readonly TextBox _comment = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, Height = 70 };
     private readonly CheckBox _keep = new CheckBox { AutoSize = true, Text = "Keep checked out (save a version and keep editing)" };
     private readonly Button _ok = new Button { DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(90, 28) };
+    private readonly TableLayoutPanel _layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1 };
     private readonly bool _askComment;
 
     public FilePickerForm(string title, string intro, IReadOnlyList<PickItem> items, string okText, bool askComment, bool askKeep, string? note = null)
@@ -43,13 +44,15 @@ internal sealed class FilePickerForm : Form
         ShowInTaskbar = false;
         MinimizeBox = false;
         MaximizeBox = false;
-        Size = new Size(560, askComment ? 520 : 420);
-        MinimumSize = new Size(420, 320);
+        // Sized by hand in OnLoad for the screen's DPI. WinForms auto-scaling inside the
+        // SolidWorks process shrank the window and hid the comment box and buttons.
+        AutoScaleMode = AutoScaleMode.None;
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1 };
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label { Text = intro, AutoSize = true, MaximumSize = new Size(520, 0), Margin = new Padding(0, 0, 0, 6) });
+        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 6; i++) _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var layout = _layout;
+        layout.Controls.Add(new Label { Text = intro, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
         layout.Controls.Add(_list);
 
         foreach (var item in items) _list.Items.Add(item, item.IsChecked && !item.IsLocked);
@@ -72,7 +75,7 @@ internal sealed class FilePickerForm : Form
 
         if (note != null)
         {
-            layout.Controls.Add(new Label { Text = note, AutoSize = true, MaximumSize = new Size(520, 0), ForeColor = Color.FromArgb(0xB2, 0x4A, 0x00), Margin = new Padding(0, 6, 0, 0) });
+            layout.Controls.Add(new Label { Text = note, AutoSize = true, ForeColor = Color.FromArgb(0xB2, 0x4A, 0x00), Margin = new Padding(0, 6, 0, 0) });
         }
 
         if (askComment)
@@ -95,6 +98,32 @@ internal sealed class FilePickerForm : Form
         CancelButton = cancel;
         Shown += (_, _) => (askComment ? (Control)_comment : _list).Focus();
         UpdateOk();
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        float scale;
+        using (var g = CreateGraphics()) scale = g.DpiX / 96f;
+        int Scaled(int value) => (int)Math.Round(value * scale);
+
+        MinimumSize = new Size(Scaled(420), Scaled(320));
+        Size = new Size(Scaled(560), Scaled(_askComment ? 520 : 420));
+        _comment.Height = Scaled(70);
+        _ok.MinimumSize = new Size(Scaled(90), Scaled(28));
+        FitLabels();
+        Resize += (_, _) => FitLabels();
+        if (Owner == null) CenterToScreen();
+    }
+
+    /// <summary>Wraps text labels to the window width.</summary>
+    private void FitLabels()
+    {
+        var width = Math.Max(100, _layout.ClientSize.Width - _layout.Padding.Horizontal);
+        foreach (Control c in _layout.Controls)
+        {
+            if (c is Label label && !(c is LinkLabel)) label.MaximumSize = new Size(width, 0);
+        }
     }
 
     public List<string> SelectedPaths => _list.CheckedItems.Cast<PickItem>().Select(i => i.Path).ToList();
