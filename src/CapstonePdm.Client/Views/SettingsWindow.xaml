@@ -6,7 +6,7 @@
     <StackPanel Margin="14">
         <TextBlock FontWeight="SemiBold" Text="Vault folder" />
         <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
-                   Text="Everyone must use the same folder (C:\CapstoneVault) or assembly references will break." />
+                   Text="Everyone on the team must use the same vault folder, or assembly references break. Pick a different vault here to switch projects (the SolidWorks add-in follows)." />
         <DockPanel>
             <Button DockPanel.Dock="Right" Content="Browse&#x2026;" Padding="10,2" Margin="6,0,0,0" Click="OnBrowse" />
             <TextBox x:Name="VaultPathBox" Height="24" VerticalContentAlignment="Center" />

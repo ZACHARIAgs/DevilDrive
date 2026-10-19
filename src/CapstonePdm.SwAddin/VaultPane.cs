@@ -177,6 +177,15 @@ internal sealed class VaultPane : UserControl
         _busy = true;
         try
         {
+            // Follow a vault switch made in the desktop app's Settings (e.g. capstone vault vs. club vault).
+            if (_vault != null && !string.Equals(Path.GetFullPath(UserSettings.Load().VaultPath).TrimEnd('\\'), _vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                _vault = null;
+                _snapshot = null;
+                _filesByFullPath = new Dictionary<string, VaultFile>(StringComparer.OrdinalIgnoreCase);
+                _checkedOnline.Clear();
+                contactVault = true;
+            }
             if (_vault == null) await OpenVaultAsync();
             if (_vault == null) return;
 

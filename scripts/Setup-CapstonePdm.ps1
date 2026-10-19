@@ -5,27 +5,30 @@
 .DESCRIPTION
     1. Installs Git for Windows (includes Git LFS) with winget if it's missing.
     2. Turns on Git LFS.
-    3. Asks for your name, email and GitHub username.
-    4. Clones the vault to C:\CapstoneVault. A browser window opens so you can sign in to GitHub.
+    3. Asks for your name and email.
+    4. Clones the vault (to C:\CapstoneVault unless an admin changed it). A browser window opens so you can sign in to GitHub.
     5. Installs CapstonePDM.exe and adds Desktop and Start menu shortcuts.
 
     Run it by double-clicking Setup.cmd. It's safe to run again: finished steps are skipped.
 
 .NOTES
-    Admins: set $DefaultRepoUrl (and optionally $DefaultClientUrl) below before sharing.
+    Admins: set $DefaultRepoUrl and $DefaultVaultPath (and optionally $DefaultClientUrl) below before sharing.
+    Using this for a different project (e.g. a club)? Point them at that project's vault repo and folder.
 #>
 [CmdletBinding()]
 param(
     [string]$RepoUrl,
-    [string]$VaultPath = 'C:\CapstoneVault',
+    [string]$VaultPath,
     [string]$ClientUrl
 )
 
 # >>> Admins: fill these in before sharing the script <<<
 $DefaultRepoUrl   = 'https://github.com/aturne59-stack/capstone-vault.git'
+$DefaultVaultPath = 'C:\CapstoneVault'   # same folder on every PC, or assembly references break
 $DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/capstone-pdm/releases/latest/download/CapstonePDM.exe
 
 $ErrorActionPreference = 'Stop'
+if (-not $VaultPath) { $VaultPath = $DefaultVaultPath }
 $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\CapstonePDM'
 $ExePath    = Join-Path $InstallDir 'CapstonePDM.exe'
 
@@ -101,7 +104,6 @@ $currentName  = (& $script:Git config --global user.name) 2>$null
 $currentEmail = (& $script:Git config --global user.email) 2>$null
 $name  = Read-Default 'Your full name' $currentName
 $email = Read-Default 'Your email (the one on your GitHub account)' $currentEmail
-$login = Read-Default 'Your GitHub username' ''
 if (-not $name -or -not $email) { Stop-Setup 'Name and email are required.' }
 if (-not $currentName)  { Invoke-Git config --global user.name $name }
 if (-not $currentEmail) { Invoke-Git config --global user.email $email }
@@ -128,7 +130,6 @@ Invoke-Git -C $VaultPath config user.email $email
 Invoke-Git -C $VaultPath config lfs.locksverify true
 Invoke-Git -C $VaultPath config lfs.setlockablereadonly true
 Invoke-Git -C $VaultPath config core.longpaths true
-if ($login) { Invoke-Git -C $VaultPath config pdm.githubLogin $login }
 Write-Ok 'Vault ready.'
 
 # 5. The Capstone PDM app ---------------------------------------------------
@@ -165,6 +166,8 @@ if (Test-Path $ExePath) {
         $shortcut.Save()
     }
     Write-Ok 'Shortcuts added to the Desktop and Start menu.'
+    Start-Process -FilePath $ExePath -ArgumentList '--register-explorer' -Wait
+    Write-Ok 'Added Capstone PDM to File Explorer''s right-click menu (Windows 11: under "Show more options").'
 }
 
 # 6. SolidWorks add-in (optional) ----------------------------------------------
