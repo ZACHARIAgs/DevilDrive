@@ -138,6 +138,9 @@ public sealed class VaultSnapshot
 
     /// <summary>Admin check-in requests for files checked out to this user. Call ProcessCheckInRequestsAsync.</summary>
     public int CheckInRequestsForMe { get; set; }
+
+    /// <summary>Set while this PC shows a milestone instead of the latest files (read-only).</summary>
+    public Milestone? ViewingMilestone { get; set; }
 }
 
 public sealed class FileFailure

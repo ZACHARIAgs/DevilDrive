@@ -81,6 +81,16 @@ public sealed class FrozenFileException : PdmException
     public override string Title => "File is frozen";
 }
 
+public sealed class ViewingMilestoneException : PdmException
+{
+    public ViewingMilestoneException(string milestone)
+        : base($"You're viewing the milestone “{milestone}”, which is read-only. Click Return to Latest first, then try again.")
+    {
+    }
+
+    public override string Title => "Viewing a milestone";
+}
+
 public enum PushRejectReason
 {
     OutOfDate,

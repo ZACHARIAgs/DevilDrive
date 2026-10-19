@@ -45,19 +45,21 @@ public sealed class MainViewModel : ViewModelBase
         FilesView.SortDescriptions.Add(new SortDescription(nameof(FileRowViewModel.Path), ListSortDirection.Ascending));
         _autoRefresh.Tick += async (_, _) => await RefreshAsync(quiet: true);
 
-        GetLatestCommand = new RelayCommand(async () => await GetLatestAsync(), () => CanRun);
-        CheckOutCommand = new RelayCommand(async () => await CheckOutAsync(), () => CanRun && CheckOutTargets().Count > 0);
-        CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanRun && CheckInTargets().Count > 0);
-        UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanRun && UndoTargets().Count > 0);
+        GetLatestCommand = new RelayCommand(async () => await GetLatestAsync(), () => CanEdit);
+        CheckOutCommand = new RelayCommand(async () => await CheckOutAsync(), () => CanEdit && CheckOutTargets().Count > 0);
+        CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanEdit && CheckInTargets().Count > 0);
+        UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
-        BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanRun && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
-        FreezeCommand = new RelayCommand(async () => await FreezeAsync(), () => CanRun && IsAdmin && FreezeTargets().Count > 0);
-        UnfreezeCommand = new RelayCommand(async () => await UnfreezeAsync(), () => CanRun && IsAdmin && UnfreezeTargets().Count > 0);
-        RequestCheckInCommand = new RelayCommand(async () => await RequestCheckInAsync(), () => CanRun && IsAdmin && SingleSelected?.File.State == FileState.CheckedOutByOther);
+        BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
+        FreezeCommand = new RelayCommand(async () => await FreezeAsync(), () => CanEdit && IsAdmin && FreezeTargets().Count > 0);
+        UnfreezeCommand = new RelayCommand(async () => await UnfreezeAsync(), () => CanEdit && IsAdmin && UnfreezeTargets().Count > 0);
+        RequestCheckInCommand = new RelayCommand(async () => await RequestCheckInAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.State == FileState.CheckedOutByOther);
         OpenCommand = new RelayCommand(OpenSelected, () => SingleSelected?.File.ExistsLocally == true);
         ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
+        MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
+        ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
     }
 
     public ObservableCollection<FileRowViewModel> Files { get; } = new();
@@ -76,6 +78,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand OpenCommand { get; }
     public ICommand ShowInExplorerCommand { get; }
     public ICommand SettingsCommand { get; }
+    public ICommand MilestonesCommand { get; }
+    public ICommand ReturnToLatestCommand { get; }
 
     public IVaultService? Vault => _vault;
 
@@ -187,6 +191,13 @@ public sealed class MainViewModel : ViewModelBase
 
     private FileRowViewModel? SingleSelected => _selected.Count == 1 ? _selected[0] : null;
     private bool CanRun => _vault != null && !IsBusy;
+
+    /// <summary>Commands that change the vault are off while a (read-only) milestone is shown.</summary>
+    private bool CanEdit => CanRun && !IsViewingMilestone;
+
+    private Milestone? _viewingMilestone;
+
+    public bool IsViewingMilestone => _viewingMilestone != null;
 
     public bool IsBusy
     {
@@ -352,6 +363,14 @@ public sealed class MainViewModel : ViewModelBase
         // Banner: the most important things first.
         var lines = new List<string>();
         var brush = InfoBrush;
+        _viewingMilestone = snapshot.ViewingMilestone;
+        OnPropertyChanged(nameof(IsViewingMilestone));
+        if (_viewingMilestone != null)
+        {
+            var when = _viewingMilestone.CreatedAt == default ? "" : $" (created {_viewingMilestone.CreatedAt.LocalDateTime:MMM d, yyyy} by {_viewingMilestone.CreatedBy})";
+            lines.Add($"Viewing the milestone \u201C{_viewingMilestone.Name}\u201D{when}: files show how they were then, and nothing can be checked out or in. Click Return to Latest to keep working.");
+            brush = WarningBrush;
+        }
         if (snapshot.ConfigProblem != null)
         {
             lines.Add(snapshot.ConfigProblem);
@@ -579,6 +598,40 @@ public sealed class MainViewModel : ViewModelBase
             await RefreshAsync(quiet: false);
         }
     }
+
+    public Task<IReadOnlyList<Milestone>> LoadMilestonesAsync() =>
+        _vault?.GetMilestonesAsync() ?? Task.FromResult<IReadOnlyList<Milestone>>(Array.Empty<Milestone>());
+
+    /// <summary>Called by the Milestones window. Returns true if it was created.</summary>
+    public async Task<bool> CreateMilestoneAsync(string name, string description)
+    {
+        if (_vault == null) return false;
+        try
+        {
+            var milestone = await _vault.CreateMilestoneAsync(name, description);
+            StatusText = $"Created milestone \u201C{milestone.Name}\u201D.";
+            return true;
+        }
+        catch (PdmException ex)
+        {
+            _dialogs.ShowError(ex);
+            return false;
+        }
+    }
+
+    public Task ViewMilestoneAsync(Milestone milestone) =>
+        RunAsync($"Opening milestone \u201C{milestone.Name}\u201D\u2026", async (vault, progress) =>
+        {
+            await vault.ViewMilestoneAsync(milestone.Tag, progress);
+            return $"Viewing milestone \u201C{milestone.Name}\u201D (read-only).";
+        });
+
+    private Task ReturnToLatestAsync() =>
+        RunAsync("Returning to the latest files\u2026", async (vault, progress) =>
+        {
+            await vault.ReturnToLatestAsync(progress);
+            return "Back on the latest files.";
+        });
 
     public Task<IReadOnlyList<FileVersion>> LoadHistoryAsync(string path) =>
         _vault?.GetHistoryAsync(path) ?? Task.FromResult<IReadOnlyList<FileVersion>>(Array.Empty<FileVersion>());

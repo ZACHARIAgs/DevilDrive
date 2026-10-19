@@ -19,6 +19,7 @@ public enum VaultEventKind
     Frozen,
     Unfrozen,
     CheckInRequested,
+    MilestoneCreated,
 }
 
 public sealed class VaultEvent
@@ -115,6 +116,10 @@ public sealed class DiscordWebhookNotifier : INotifier
             case VaultEventKind.CheckInRequested:
                 message = $"\U0001F4E5 **{user}** (admin) asked **{Escape(e.PreviousOwner ?? "someone")}** to check in {files}. " +
                           "Their last saved version will be checked in automatically from their PC.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.MilestoneCreated:
+                message = $"\U0001F3C1 **{user}** (admin) created the milestone **{Escape(e.Files.FirstOrDefault() ?? "")}**. Anyone can view the vault exactly as it is now.";
                 if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
                 break;
             default:

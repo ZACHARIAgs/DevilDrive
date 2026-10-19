@@ -49,7 +49,19 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="History&#x2026;" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
+                <Button Command="{Binding MilestonesCommand}" ToolTip="Snapshots of the whole vault (e.g. design reviews): view the vault as it was.">
+                    <StackPanel MinWidth="70">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7C1;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Milestones&#x2026;" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding ReturnToLatestCommand}" Visibility="{Binding IsViewingMilestone, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Leave the milestone and go back to the newest files.">
+                    <StackPanel MinWidth="80">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72B;" Foreground="#B45309" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Return to Latest" />
+                    </StackPanel>
+                </Button>                <Button Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72C;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Refresh" />

@@ -185,6 +185,7 @@ public sealed class VaultService : IVaultService
             }
         }
         snapshot.LocksUnknown = !_locksKnown;
+        snapshot.ViewingMilestone = await GetViewingMilestoneAsync(ct).ConfigureAwait(false);
 
         var tracked = GitParsers.SplitZ((await RunCheckedAsync("list the vault files", new[] { "ls-files", "-z" }, ct).ConfigureAwait(false)).StdOut);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
@@ -287,6 +288,8 @@ public sealed class VaultService : IVaultService
     /// </summary>
     private async Task<GetLatestResult> SyncCoreAsync(IProgress<string>? progress, CancellationToken ct, bool fetch = true)
     {
+        // Every change goes through here, so this one check keeps a milestone view read-only.
+        await EnsureNotViewingMilestoneAsync(ct).ConfigureAwait(false);
         if (fetch)
         {
             progress?.Report("Contacting the vault…");
@@ -657,6 +660,7 @@ public sealed class VaultService : IVaultService
 
     private async Task<OperationResult> UndoCheckOutCoreAsync(IReadOnlyList<string> relatives, IProgress<string>? progress, CancellationToken ct)
     {
+        await EnsureNotViewingMilestoneAsync(ct).ConfigureAwait(false);
         var result = new OperationResult();
         var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
@@ -1223,6 +1227,147 @@ public sealed class VaultService : IVaultService
         }
     }
 
+    // ---------------------------------------------------------------- Milestones
+
+    /// <summary>Milestones, newest first.</summary>
+    public async Task<IReadOnlyList<Milestone>> GetMilestonesAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                await FetchAsync(ct).ConfigureAwait(false);
+            }
+            catch (VaultOfflineException)
+            {
+                // Show the milestones this PC already knows about.
+            }
+            return await ListMilestonesCoreAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Admin: labels the vault's latest state, e.g. "Design Review 1", so anyone can view it later.</summary>
+    public async Task<Milestone> CreateMilestoneAsync(string name, string description, CancellationToken ct = default)
+    {
+        RequireAdmin("create milestones");
+        name = (name ?? "").Trim();
+        description = (description ?? "").Trim();
+        if (name.Length == 0) throw new PdmException("Give the milestone a name, for example \"Design Review 1\".");
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await FetchAsync(ct).ConfigureAwait(false);
+            if (!await UpstreamExistsAsync(ct).ConfigureAwait(false)) throw new PdmException("The vault is empty, so there's nothing to label yet.");
+
+            var tag = MilestoneTags.TagFor(name);
+            if ((await RunAsync(new[] { "rev-parse", "--verify", "--quiet", "refs/tags/" + tag }, ct).ConfigureAwait(false)).Success)
+            {
+                throw new PdmException($"There's already a milestone called “{name}”. Pick a different name.");
+            }
+
+            var message = description.Length > 0 ? name + "\n\n" + description : name;
+            await RunCheckedAsync("create the milestone", new[] { "tag", "-a", tag, "-m", message, Upstream }, ct).ConfigureAwait(false);
+            var push = await RunAsync(new[] { "push", Config.Remote, "refs/tags/" + tag }, ct, NetworkTimeout).ConfigureAwait(false);
+            if (!push.Success)
+            {
+                await RunAsync(new[] { "tag", "-d", tag }, ct).ConfigureAwait(false);
+                throw GitErrorClassifier.Classify(push, "create the milestone");
+            }
+
+            await NotifyAsync(new VaultEvent(VaultEventKind.MilestoneCreated, UserDisplayName, new[] { name }) { Comment = description }, new OperationResult()).ConfigureAwait(false);
+            return new Milestone(tag, name, description, UserName, DateTimeOffset.Now);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Switches this PC's vault folder to show every file as it was at the milestone. Read-only:
+    /// nothing can be checked out or in until <see cref="ReturnToLatestAsync"/>.
+    /// </summary>
+    public async Task ViewMilestoneAsync(string tag, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var changed = (await GetLocalChangesAsync(ct).ConfigureAwait(false)).Where(c => !c.IsUntracked).Select(c => c.Path).ToList();
+            if (changed.Count > 0)
+            {
+                throw new PdmException($"You have changes on this PC that aren't checked in ({PathList.Format(changed)}). " +
+                                       "Check them in (or undo them) before viewing a milestone, so nothing gets mixed up.");
+            }
+            await EnsureFilesFreeAsync("HEAD", tag, ct).ConfigureAwait(false);
+
+            progress?.Report("Getting the milestone's files…");
+            await RunCheckedAsync("view the milestone", new[] { "checkout", "--quiet", "--detach", tag }, ct, TransferTimeout).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Leaves a milestone view and brings the vault folder back to the newest files.</summary>
+    public async Task<GetLatestResult> ReturnToLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (await GetViewingMilestoneAsync(ct).ConfigureAwait(false) != null)
+            {
+                await EnsureFilesFreeAsync("HEAD", Config.Branch, ct).ConfigureAwait(false);
+                progress?.Report("Returning to the latest files…");
+                await RunCheckedAsync("return to the latest files", new[] { "checkout", "--quiet", Config.Branch }, ct, TransferTimeout).ConfigureAwait(false);
+            }
+            return await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<List<Milestone>> ListMilestonesCoreAsync(CancellationToken ct)
+    {
+        var r = await RunAsync(new[] { "for-each-ref", "--sort=-creatordate", "--format=" + MilestoneTags.ListFormat, "refs/tags/" + MilestoneTags.Prefix }, ct).ConfigureAwait(false);
+        return r.Success ? MilestoneTags.Parse(r.StdOut) : new List<Milestone>();
+    }
+
+    /// <summary>The milestone this PC is showing, or null when it's on the latest files.</summary>
+    private async Task<Milestone?> GetViewingMilestoneAsync(CancellationToken ct)
+    {
+        if ((await RunAsync(new[] { "symbolic-ref", "--quiet", "HEAD" }, ct).ConfigureAwait(false)).Success) return null;
+
+        var describe = await RunAsync(new[] { "describe", "--tags", "--exact-match", "--match", MilestoneTags.Prefix + "*", "HEAD" }, ct).ConfigureAwait(false);
+        var tag = describe.Success ? describe.StdOut.Trim() : "";
+        if (tag.Length == 0) return new Milestone("", "an older version", "", "", default);
+        var known = (await ListMilestonesCoreAsync(ct).ConfigureAwait(false)).FirstOrDefault(m => m.Tag == tag);
+        return known ?? new Milestone(tag, tag.Substring(MilestoneTags.Prefix.Length), "", "", default);
+    }
+
+    private async Task EnsureNotViewingMilestoneAsync(CancellationToken ct)
+    {
+        var milestone = await GetViewingMilestoneAsync(ct).ConfigureAwait(false);
+        if (milestone != null) throw new ViewingMilestoneException(milestone.Name);
+    }
+
+    /// <summary>Files that differ between two versions get replaced on disk, so none may be open in SolidWorks.</summary>
+    private async Task EnsureFilesFreeAsync(string from, string to, CancellationToken ct)
+    {
+        var diff = await RunAsync(new[] { "diff", "--name-only", "-z", "--no-renames", from, to }, ct).ConfigureAwait(false);
+        if (!diff.Success) return;
+        var inUse = GitParsers.SplitZ(diff.StdOut).Where(p => FileUtil.IsInUse(ToFullPath(p))).ToList();
+        if (inUse.Count > 0) throw new FileInUseException(inUse, "Close them in SolidWorks, then try again.");
+    }
+
     private void RequireAdmin(string what)
     {
         if (IsAdmin) return;
@@ -1243,7 +1388,7 @@ public sealed class VaultService : IVaultService
     }
 
     private Task FetchAsync(CancellationToken ct) =>
-        RunCheckedAsync("contact the vault", new[] { "fetch", "--prune", "--no-tags", Config.Remote }, ct, NetworkTimeout);
+        RunCheckedAsync("contact the vault", new[] { "fetch", "--prune", "--tags", Config.Remote }, ct, NetworkTimeout);
 
     private async Task<bool> UpstreamExistsAsync(CancellationToken ct) =>
         (await RunAsync(new[] { "rev-parse", "--verify", "--quiet", Upstream + "^{commit}" }, ct).ConfigureAwait(false)).Success;

@@ -31,7 +31,7 @@ public sealed class VaultIntegrationTests : IDisposable
         Directory.CreateDirectory(_root);
 
         Git(_root, "init", "--bare", "--initial-branch=main", remote);
-        Git(_root, "clone", remote, _alice);
+        Git(_root, "clone", "-c", "core.autocrlf=false", remote, _alice);
         Configure(_alice, "Alice");
         File.WriteAllText(Path.Combine(_alice, ".gitattributes"), "*.sldprt lockable\n");
         Write(_alice, "shared.txt", "v1");
@@ -42,7 +42,7 @@ public sealed class VaultIntegrationTests : IDisposable
         Git(_alice, "commit", "-m", "first version");
         Git(_alice, "push", "-u", "origin", "main");
 
-        Git(_root, "clone", remote, _bob);
+        Git(_root, "clone", "-c", "core.autocrlf=false", remote, _bob);
         Configure(_bob, "Bob");
     }
 
@@ -266,6 +266,39 @@ public sealed class VaultIntegrationTests : IDisposable
         var notes = await alice.GetFileAsync("notes.txt");
         Assert.Equal("Test notes", notes!.Index!.GetProperty(IndexEntry.DescriptionNames));
         Assert.Equal("Bob", notes.Index.UpdatedBy);
+    }
+
+    [Fact]
+    public async Task Milestone_ShowsOldFiles_IsReadOnly_AndReturnsToLatest()
+    {
+        // Alice is an admin.
+        Write(_alice, "pdm.json", "{ \"admins\": [ \"alice-gh\" ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Admins");
+        Git(_alice, "push");
+        Git(_alice, "config", "pdm.githubLogin", "alice-gh");
+
+        var alice = await Open(_alice);
+        var milestone = await alice.CreateMilestoneAsync("Design Review 1", "Before the redesign");
+        Assert.Equal("milestone/design-review-1", milestone.Tag);
+        AliceChecksIn("shared.txt", "v2", "after the review");
+
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        var listed = (await bob.GetMilestonesAsync()).Single();
+        Assert.Equal("Design Review 1", listed.Name);
+        Assert.Equal("Before the redesign", listed.Description);
+
+        await bob.ViewMilestoneAsync(listed.Tag);
+        Assert.Equal("v1", Read(_bob, "shared.txt"));
+        Assert.Equal("Design Review 1", (await bob.GetSnapshotAsync(contactVault: false)).ViewingMilestone!.Name);
+        Write(_bob, "notes.txt", "edit while viewing");
+        await Assert.ThrowsAsync<ViewingMilestoneException>(() => bob.CheckInAsync(new[] { "notes.txt" }, "should fail"));
+        Git(_bob, "checkout", "--", "notes.txt");
+
+        await bob.ReturnToLatestAsync();
+        Assert.Equal("v2", Read(_bob, "shared.txt"));
+        Assert.Null((await bob.GetSnapshotAsync(contactVault: false)).ViewingMilestone);
     }
 
     // ------------------------------------------------------------ helpers

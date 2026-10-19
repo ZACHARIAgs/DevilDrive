@@ -51,6 +51,17 @@ public interface IVaultService
     /// <summary>Saves index entries (references, properties, saved-in version) recorded by the SolidWorks add-in.</summary>
     Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default);
 
+    /// <summary>Milestones (labeled snapshots of the whole vault), newest first.</summary>
+    Task<IReadOnlyList<Milestone>> GetMilestonesAsync(CancellationToken ct = default);
+
+    /// <summary>Admin: label the vault's latest state, e.g. "Design Review 1".</summary>
+    Task<Milestone> CreateMilestoneAsync(string name, string description, CancellationToken ct = default);
+
+    /// <summary>Show every file as it was at the milestone (read-only until ReturnToLatestAsync).</summary>
+    Task ViewMilestoneAsync(string tag, IProgress<string>? progress = null, CancellationToken ct = default);
+
+    Task<GetLatestResult> ReturnToLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default);
+
     Task SetGitHubLoginAsync(string login, CancellationToken ct = default);
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);

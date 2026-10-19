@@ -293,10 +293,11 @@ internal sealed class VaultPane : UserControl
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
         // Editing in a newer SolidWorks than the team's would save files the others can't open.
-        var editable = ready && !NewerThanTeam;
+        var viewingMilestone = _snapshot?.ViewingMilestone != null;
+        var editable = ready && !NewerThanTeam && !viewingMilestone;
         _checkIn.Enabled = _checkOut.Enabled = _freeze.Enabled = editable;
-        _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready;
-        _getLatest.Enabled = ready;
+        _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready && !viewingMilestone;
+        _getLatest.Enabled = ready && !viewingMilestone;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
         _rebuildIndex.Enabled = ready;
@@ -391,6 +392,12 @@ internal sealed class VaultPane : UserControl
                 kind = NoticeKind.Warning;
             }
             if (_snapshot.UpdatesAvailable > 0) lines.Add($"The vault has {_snapshot.UpdatesAvailable} new check-in(s). Click Get Latest.");
+        }
+        if (_snapshot?.ViewingMilestone != null)
+        {
+            lines.Insert(0, $"Viewing the milestone \u201C{_snapshot.ViewingMilestone.Name}\u201D: files show how they were then (read-only). " +
+                            "Use Return to Latest in Capstone PDM to keep working.");
+            if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
         }
         if (NewerThanTeam)
         {
