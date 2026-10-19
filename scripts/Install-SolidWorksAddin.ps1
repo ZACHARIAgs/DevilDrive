@@ -76,18 +76,28 @@ if (-not $Elevated) {
 # ---- administrator part ----
 try {
     if ($Uninstall) {
+        if (Test-Path $InstallDir) {
+            & takeown.exe /F $InstallDir /A /R /D Y *> $null
+            & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
+        }
         if (Test-Path $Dll) { & $RegAsm $Dll /unregister /nologo | Out-Host }
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host 'Capstone PDM add-in removed.'
     }
     else {
         New-Item -ItemType Directory -Force $InstallDir | Out-Null
+        # Earlier installers could leave the files with no permissions at all; take them back and reset them.
+        & takeown.exe /F $InstallDir /A /R /D Y *> $null
+        & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
         Copy-Item (Join-Path $Source '*.dll') $InstallDir -Force
         Get-ChildItem $InstallDir | Unblock-File
         # Only administrators (and Windows) may change the add-in files; everyone else can only read them.
         # Otherwise another account on this PC could drop a DLL here that SolidWorks would load.
-        & icacls.exe $InstallDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /T /Q | Out-Null
-        if ($LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
+        # Set on the folder only; the files then inherit it (inheritance flags on files would leave them unreadable).
+        & icacls.exe $InstallDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /Q | Out-Null
+        $folderOk = $LASTEXITCODE -eq 0
+        & icacls.exe (Join-Path $InstallDir '*') /reset /C /Q | Out-Null
+        if (-not $folderOk -or $LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
         & $RegAsm $Dll /codebase /nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "RegAsm failed (exit code $LASTEXITCODE)." }
         Write-Host "Capstone PDM add-in installed to $InstallDir."
