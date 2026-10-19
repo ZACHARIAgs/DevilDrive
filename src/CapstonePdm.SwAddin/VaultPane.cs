@@ -47,6 +47,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _requestCheckIn;
     private readonly ModernButton _rename;
     private readonly ModernButton _downloadRefs;
+    private readonly ModernButton _watch;
     private List<string> _missingRefs = new List<string>();
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
@@ -101,6 +102,7 @@ internal sealed class VaultPane : UserControl
         _requestCheckIn = new ModernButton("Request Check-In (admin)", "");
         _rename = new ModernButton("Rename / Move", "");
         _downloadRefs = new ModernButton("Download missing parts", "\uE896");
+        _watch = new ModernButton("Notify me when it's free", "\uEA8F");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
@@ -110,7 +112,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _downloadRefs, _checkIn, _checkOut, _undo, _rename, _requestCheckIn, _freeze, _unfreeze,
+            _downloadRefs, _checkIn, _checkOut, _undo, _watch, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp, _rebuildIndex,
             _status,
@@ -126,6 +128,7 @@ internal sealed class VaultPane : UserControl
         _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
         _rename.Click += async (_, _) => await RenameAsync();
         _downloadRefs.Click += async (_, _) => await DownloadMissingPartsAsync();
+        _watch.Click += (_, _) => ToggleWatch();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
@@ -197,6 +200,15 @@ internal sealed class VaultPane : UserControl
             if (contactVault) _lastVaultContact = DateTime.Now;
             _filesByFullPath = _snapshot.Files.ToDictionary(f => _vault.ToFullPath(f.RelativePath), f => f, StringComparer.OrdinalIgnoreCase);
             if (_snapshot.CheckInRequestsForMe > 0) await CarryOutCheckInRequestsAsync();
+            if (contactVault)
+            {
+                var nowFree = WatchList.TakeNowFree(_vault.VaultRoot, _snapshot);
+                if (nowFree.Count > 0)
+                {
+                    MessageBox.Show(_sw.MainWindow, $"{PathList.Format(nowFree.Select(f => f.RelativePath))} {(nowFree.Count == 1 ? "is" : "are")} free now. You can check {(nowFree.Count == 1 ? "it" : "them")} out.",
+                        "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
             _missingRefs = _snapshot.DownloadFolders != null && _currentPath != null && SolidWorksSession.HasReferences(_currentPath)
                 ? _sw.GetReferences(_currentPath).Where(IsInVault).Where(r => FileAt(r)?.NotDownloaded == true).ToList()
                 : new List<string>();
@@ -310,6 +322,11 @@ internal sealed class VaultPane : UserControl
         _unfreeze.Visible = isAdmin && state == FileState.Frozen;
         _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
         _downloadRefs.Visible = _missingRefs.Count > 0;
+        _watch.Visible = state == FileState.CheckedOutByOther;
+        if (_watch.Visible && _vault != null && file != null)
+        {
+            _watch.Text = WatchList.IsWatching(_vault.VaultRoot, file.RelativePath) ? "Stop notifying me" : "Notify me when it's free";
+        }
         _downloadRefs.Enabled = ready && _snapshot?.ViewingMilestone == null;
         _rename.Visible = file != null && file.ExistsLocally && IsSolidWorksFile(file.RelativePath) && !file.HasLocalChanges &&
                           state is FileState.Available or FileState.CheckedOutByMe;
@@ -966,6 +983,23 @@ internal sealed class VaultPane : UserControl
     /// With "only download my folders", an assembly can use parts that are only placeholders here. Download
     /// them, then reopen the assembly so SolidWorks loads them.
     /// </summary>
+    private void ToggleWatch()
+    {
+        var file = CurrentFile;
+        if (file == null || _vault == null) return;
+        if (WatchList.IsWatching(_vault.VaultRoot, file.RelativePath))
+        {
+            WatchList.Stop(_vault.VaultRoot, file.RelativePath);
+            SetStatus($"You won't be told about {file.Name}.");
+        }
+        else
+        {
+            WatchList.Watch(_vault.VaultRoot, file.RelativePath);
+            SetStatus($"You'll be told when {file.Name} is free.");
+        }
+        UpdateView();
+    }
+
     private async Task DownloadMissingPartsAsync()
     {
         var top = _currentPath;

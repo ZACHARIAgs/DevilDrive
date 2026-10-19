@@ -184,6 +184,7 @@
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
                         <Separator />
                         <MenuItem Header="Download" Command="{Binding DownloadCommand}" />
+                    <MenuItem Header="Notify Me When It's Free (on/off)" Command="{Binding WatchCommand}" />
                     <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" />
                         <MenuItem Header="Open" Command="{Binding OpenCommand}" />
                         <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" />

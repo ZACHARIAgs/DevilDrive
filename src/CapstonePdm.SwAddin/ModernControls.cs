@@ -106,6 +106,7 @@ internal sealed class ModernButton : PaneControl
     protected override void OnMouseDown(MouseEventArgs e) { _pressed = true; Invalidate(); base.OnMouseDown(e); }
     protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+    protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
 
     protected override void OnPaint(PaintEventArgs e)
     {

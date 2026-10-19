@@ -61,6 +61,7 @@ public sealed class MainViewModel : ViewModelBase
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
         Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
+        WatchCommand = new RelayCommand(ToggleWatch, () => _vault != null && SingleSelected?.File.State is FileState.CheckedOutByOther);
         DownloadCommand = new RelayCommand(async () => await DownloadAsync(), () => CanEdit && _selected.Any(r => r.File.NotDownloaded));
         UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
     }
@@ -86,6 +87,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand UpdateVaultSetupCommand { get; }
     public ICommand Open3DCommand { get; }
     public ICommand DownloadCommand { get; }
+    public ICommand WatchCommand { get; }
 
     private VaultSnapshot? _snapshot;
 
@@ -173,6 +175,26 @@ public sealed class MainViewModel : ViewModelBase
         {
             details.Loading3D = false;
         }
+    }
+
+    private void ToggleWatch()
+    {
+        var row = SingleSelected;
+        if (row == null || _vault == null) return;
+        if (WatchList.IsWatching(_vault.VaultRoot, row.Path))
+        {
+            WatchList.Stop(_vault.VaultRoot, row.Path);
+            row.IsWatched = false;
+            StatusText = $"You won't be told about {row.Name}.";
+        }
+        else
+        {
+            WatchList.Watch(_vault.VaultRoot, row.Path);
+            row.IsWatched = true;
+            StatusText = $"You'll be told when {row.Name} is free (checked out by {row.CheckedOutBy}).";
+        }
+        row.Update(row.File);
+        UpdateDetails(reloadThumbnail: false);
     }
 
     private Task DownloadAsync()
@@ -442,6 +464,14 @@ public sealed class MainViewModel : ViewModelBase
         {
             Files.Remove(_rows[gone]);
             _rows.Remove(gone);
+        }
+        // "Notify me when it's free": mark watched rows, and tell the user about files that just became free.
+        foreach (var row in Files) row.IsWatched = WatchList.IsWatching(_vault!.VaultRoot, row.Path);
+        foreach (var free in WatchList.TakeNowFree(_vault!.VaultRoot, snapshot))
+        {
+            var by = free.LatestVersion != null ? $" (last checked in by {free.LatestVersion.Author})" : "";
+            _dialogs.Notify($"{free.Name} is free now{by}. You can check it out.");
+            if (_rows.TryGetValue(free.RelativePath, out var freeRow)) freeRow.IsWatched = false;
         }
         FilesView.Refresh();
         UpdateDetails(reloadThumbnail: false);

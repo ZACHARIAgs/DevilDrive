@@ -40,5 +40,7 @@ public interface IDialogs
     SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders);
     void ShowHistory(string relativePath);
     void ShowMilestones();
+    /// <summary>A small message in the corner of the screen that goes away by itself.</summary>
+    void Notify(string message);
     void Show3D(string title, System.Windows.Media.Media3D.Model3D model);
 }

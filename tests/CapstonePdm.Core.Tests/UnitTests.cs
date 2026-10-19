@@ -147,6 +147,32 @@ public class GitParsersTests
     }
 }
 
+public class WatchListTests
+{
+    [Fact]
+    public void WatchedFile_IsReportedOnce_WhenItBecomesFree()
+    {
+        var vault = "C:\\TestVault-" + System.Guid.NewGuid().ToString("N");
+        try
+        {
+            CapstonePdm.Core.Config.WatchList.Watch(vault, "Parts/bracket.sldprt");
+            Assert.True(CapstonePdm.Core.Config.WatchList.IsWatching(vault, "parts/BRACKET.sldprt"));
+
+            var stillTaken = new VaultSnapshot { Files = new[] { new VaultFile { RelativePath = "Parts/bracket.sldprt", State = FileState.CheckedOutByOther } } };
+            Assert.Empty(CapstonePdm.Core.Config.WatchList.TakeNowFree(vault, stillTaken));
+
+            var free = new VaultSnapshot { Files = new[] { new VaultFile { RelativePath = "Parts/bracket.sldprt", State = FileState.Available } } };
+            Assert.Single(CapstonePdm.Core.Config.WatchList.TakeNowFree(vault, free));
+            Assert.Empty(CapstonePdm.Core.Config.WatchList.TakeNowFree(vault, free));
+            Assert.False(CapstonePdm.Core.Config.WatchList.IsWatching(vault, "Parts/bracket.sldprt"));
+        }
+        finally
+        {
+            CapstonePdm.Core.Config.WatchList.Stop(vault, "Parts/bracket.sldprt");
+        }
+    }
+}
+
 public class RevisionTests
 {
     [Theory]

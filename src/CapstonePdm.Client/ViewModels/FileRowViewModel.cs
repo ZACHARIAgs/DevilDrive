@@ -22,6 +22,9 @@ public sealed class FileRowViewModel : ViewModelBase
 
     public VaultFile File { get; private set; }
 
+    /// <summary>This user asked to be told when the file is free.</summary>
+    public bool IsWatched { get; set; }
+
     public string Path => File.RelativePath;
     public string Name => File.Name;
     public string Folder => File.Folder.Length == 0 ? "(vault root)" : File.Folder.Replace('/', '\\');
@@ -59,6 +62,7 @@ public sealed class FileRowViewModel : ViewModelBase
             if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
             if (File.NotDownloaded) text += " (not downloaded: right-click, Download)";
             if (File.ChangedSinceDrawing.Count > 0) text += " (drawing may be out of date)";
+            if (IsWatched) text += " (you'll be told when it's free)";
             return text;
         }
     }
