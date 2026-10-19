@@ -74,7 +74,7 @@ public sealed class NotifySettings
     public bool IsEnabled(VaultEventKind kind) => kind switch
     {
         VaultEventKind.CheckedOut => CheckOut,
-        VaultEventKind.CheckedIn => CheckIn,
+        VaultEventKind.CheckedIn or VaultEventKind.CheckInRequested => CheckIn,
         VaultEventKind.UndoCheckOut => UndoCheckOut,
         VaultEventKind.LockBroken => BreakLock,
         VaultEventKind.Frozen or VaultEventKind.Unfrozen => Freeze,

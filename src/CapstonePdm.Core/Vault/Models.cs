@@ -105,6 +105,11 @@ public sealed class VaultFile
     public string? FrozenBy { get; set; }
     /// <summary>Frozen, but the admin's lock is gone (e.g. broken), so the freeze isn't enforced. Freeze it again.</summary>
     public bool FreezeLockMissing { get; set; }
+
+    /// <summary>An admin asked whoever has it checked out to check it in.</summary>
+    public AdminCheckInRequest? CheckInRequest { get; set; }
+    /// <summary>Display name of the admin who asked.</summary>
+    public string? CheckInRequestedBy { get; set; }
 }
 
 public sealed class VaultSnapshot
@@ -125,6 +130,9 @@ public sealed class VaultSnapshot
     public int UpdatesAvailable { get; set; }
 
     public string? ConfigProblem { get; set; }
+
+    /// <summary>Admin check-in requests for files checked out to this user. Call ProcessCheckInRequestsAsync.</summary>
+    public int CheckInRequestsForMe { get; set; }
 }
 
 public sealed class FileFailure

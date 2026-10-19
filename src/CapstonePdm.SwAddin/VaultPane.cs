@@ -44,6 +44,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _undo;
     private readonly ModernButton _freeze;
     private readonly ModernButton _unfreeze;
+    private readonly ModernButton _requestCheckIn;
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
@@ -83,6 +84,7 @@ internal sealed class VaultPane : UserControl
         _undo = new ModernButton("Undo Check Out", "");
         _freeze = new ModernButton("Freeze (admin)", "");
         _unfreeze = new ModernButton("Unfreeze (admin)", "");
+        _requestCheckIn = new ModernButton("Request Check-In (admin)", "");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
@@ -91,7 +93,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _checkIn, _checkOut, _undo, _freeze, _unfreeze,
+            _checkIn, _checkOut, _undo, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp,
             _status,
@@ -104,6 +106,7 @@ internal sealed class VaultPane : UserControl
         _undo.Click += async (_, _) => await UndoCheckOutAsync();
         _freeze.Click += async (_, _) => await FreezeAsync();
         _unfreeze.Click += async (_, _) => await UnfreezeAsync();
+        _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
@@ -164,6 +167,7 @@ internal sealed class VaultPane : UserControl
             _snapshot = await _vault.GetSnapshotAsync(contactVault);
             if (contactVault) _lastVaultContact = DateTime.Now;
             _filesByFullPath = _snapshot.Files.ToDictionary(f => _vault.ToFullPath(f.RelativePath), f => f, StringComparer.OrdinalIgnoreCase);
+            if (_snapshot.CheckInRequestsForMe > 0) await CarryOutCheckInRequestsAsync();
             WarnIfCheckedOutByOther();
         }
         catch (PdmException ex)
@@ -272,9 +276,10 @@ internal sealed class VaultPane : UserControl
         var isAdmin = _vault?.IsAdmin == true;
         _freeze.Visible = isAdmin && file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
         _unfreeze.Visible = isAdmin && state == FileState.Frozen;
+        _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
-        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = _freeze.Enabled = _unfreeze.Enabled = ready;
+        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = _freeze.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready;
         _getLatest.Enabled = ready;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
@@ -308,6 +313,12 @@ internal sealed class VaultPane : UserControl
         if (file.State == FileState.Available && !file.IsOutdated) lines.Add("Check out to edit.");
         if (file.State == FileState.ModifiedWithoutCheckOut) lines.Add("Check it out to keep your edits, or Undo to discard them.");
         if (file.IsOutdated) lines.Add("Click Get Latest to update it.");
+        if (file.CheckInRequest != null)
+        {
+            lines.Add(file.State == FileState.CheckedOutByMe
+                ? $"{file.CheckInRequestedBy} asked for this file. Your saved version will be checked in automatically."
+                : $"Check-in requested by {file.CheckInRequestedBy} on {file.CheckInRequest.RequestedAt.LocalDateTime:MMM d, h:mm tt}");
+        }
         if (file.State == FileState.Frozen && file.Freeze != null)
         {
             lines.Clear();
@@ -536,6 +547,63 @@ internal sealed class VaultPane : UserControl
             _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
             return Report(result, "Froze");
         });
+    }
+
+    /// <summary>
+    /// An admin asked this user to check files in. Close any of them that have no unsaved changes (so
+    /// Git can read them), check in what's saved on disk, reopen, and tell the user.
+    /// </summary>
+    private async Task CarryOutCheckInRequestsAsync()
+    {
+        if (_vault == null || _snapshot == null) return;
+        var requested = _snapshot.Files
+            .Where(f => f.CheckInRequest != null && f.State == FileState.CheckedOutByMe)
+            .Select(f => _vault.ToFullPath(f.RelativePath))
+            .ToList();
+        if (requested.Count == 0) return;
+
+        SetStatus("Checking in files an admin asked for…");
+        var stillOpenWithChanges = requested.Where(p => _sw.FindOpen(p)?.GetSaveFlag() == true).ToList();
+        var closed = _sw.CloseIfSaved(requested);
+        try
+        {
+            var result = await _vault.ProcessCheckInRequestsAsync(new Progress<string>(SetStatus));
+            if (result.Succeeded.Count > 0 && stillOpenWithChanges.Count > 0)
+            {
+                result.Warnings.Add($"{PathList.Format(stillOpenWithChanges)} still {(stillOpenWithChanges.Count == 1 ? "has" : "have")} unsaved changes open in SolidWorks " +
+                                    "that are NOT in the vault, and you no longer have it checked out. Use Save As to keep a copy outside the vault.");
+            }
+            if (result.Succeeded.Count > 0 || result.Failures.Count > 0) SetStatus(Report(result, "Checked in (admin request)"));
+            _snapshot = await _vault.GetSnapshotAsync(false);
+            _filesByFullPath = _snapshot.Files.ToDictionary(f => _vault.ToFullPath(f.RelativePath), f => f, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (PdmException ex)
+        {
+            SetStatus("An admin asked you to check in a file, but it couldn't be done yet: " + ex.Message + " It will be tried again in a minute.");
+        }
+        finally
+        {
+            _sw.Reopen(closed);
+        }
+    }
+
+    private async Task RequestCheckInAsync()
+    {
+        var top = _currentPath;
+        var file = CurrentFile;
+        if (top == null || _vault == null || file == null) return;
+
+        using var picker = new FilePickerForm("Request Check-In (admin)",
+            $"{file.CheckedOutBy}'s PC will check in their last saved version of this file and release it, the next time Capstone PDM or SolidWorks " +
+            "is running there. Unsaved changes in their SolidWorks aren't included.",
+            new[] { new PickItem(top, Path.GetFileName(top), true, isLocked: false) }, "Request",
+            askComment: true, askKeep: false, commentLabel: $"Note to {file.CheckedOutBy} (required): why do you need it?",
+            defaultComment: "Needed by another teammate");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var note = picker.Comment;
+
+        await RunAsync("Requesting check-in…", async progress =>
+            Report(await _vault.RequestCheckInAsync(top, note, progress), "Requested check-in of"));
     }
 
     private async Task UnfreezeAsync()

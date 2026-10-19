@@ -77,6 +77,14 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Break Lock" />
                     </StackPanel>
                 </Button>
+                <Button Command="{Binding RequestCheckInCommand}"
+                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Admin: have the person who has this file checked out check in their last saved version automatically.">
+                    <StackPanel MinWidth="80">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE715;" Foreground="#334155" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Request Check-In" />
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding FreezeCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: freeze the selected files (e.g. released for production) so nobody can change them.">
@@ -153,6 +161,8 @@
                     <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" />
                     <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                     <MenuItem Header="Break Lock (admin)" Command="{Binding BreakLockCommand}"
+                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                    <MenuItem Header="Request Check-In&#x2026; (admin)" Command="{Binding RequestCheckInCommand}"
                               Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                     <MenuItem Header="Freeze&#x2026; (admin)" Command="{Binding FreezeCommand}"
                               Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />

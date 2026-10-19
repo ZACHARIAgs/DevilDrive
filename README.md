@@ -113,6 +113,15 @@ Select the file, then click **Break Lock**. The button only appears for users li
 
 GitHub decides whether a forced unlock is allowed. If it's refused, your GitHub role on the repo may need to be raised (Maintain or Admin).
 
+### Requesting a check-in
+
+Someone has a file checked out and isn't around, but a teammate needs it? Select the file and click **Request Check-In** (in the app or the SolidWorks pane), and add a short note.
+
+* That person's own Capstone PDM, either the app or the SolidWorks add-in, checks in **their last saved version** and releases the file automatically. Both contact the vault every minute, so if their PC is on it usually happens within a minute. They get a message explaining what happened, and the team sees it in Discord.
+* Changes they hadn't **saved** in SolidWorks aren't included, because those aren't on disk.
+* If their PC is off, the request waits until they next open Capstone PDM or SolidWorks. If you can't wait, **Break Lock** releases the file right away, but their saved work then stays on their PC only.
+* The file shows "check-in requested by *name*" until it's done.
+
 ### Freezing files (released for production)
 
 Select files in the app (or open one in SolidWorks) and click **Freeze…**, then give a reason such as "Released for production, rev A". Only admins listed in `pdm.json` see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
@@ -188,6 +197,7 @@ This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-f
 | History / Restore | `log -- file` / `checkout <commit> -- file`, then Check In |
 | Break Lock | `lfs unlock --force --id` |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
+| Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
 
 ### SolidWorks add-in

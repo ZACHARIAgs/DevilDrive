@@ -52,6 +52,7 @@ public sealed class FileRowViewModel : ViewModelBase
                 _ => File.State.ToString(),
             };
             if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
+            if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
             return text;
         }
     }

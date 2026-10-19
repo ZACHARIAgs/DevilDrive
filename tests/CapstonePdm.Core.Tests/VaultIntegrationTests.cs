@@ -199,6 +199,34 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.Contains("Only vault admins", freeze.Message);
     }
 
+    [Fact]
+    public async Task CheckInRequest_IsIgnored_WhenThatPersonNoLongerHasItCheckedOut()
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm"));
+        Write(_alice, ".pdm/checkin-requests.json",
+            "{ \"requests\": [ { \"path\": \"frame.sldprt\", \"owner\": \"bob-gh\", \"requestedBy\": \"alice-gh\", " +
+            "\"requestedAt\": \"2026-10-19T10:00:00+00:00\", \"note\": \"Sam needs it\" } ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Requested check-in");
+        Git(_alice, "push");
+
+        // Nobody holds a lock on frame.sldprt (bob-gh already checked it in), so the request is moot.
+        var bob = await Open(_bob);
+        var file = await bob.GetFileAsync("frame.sldprt", contactVault: true);
+        var snapshot = await bob.GetSnapshotAsync(contactVault: false);
+
+        Assert.Null(file!.CheckInRequest);
+        Assert.Equal(0, snapshot.CheckInRequestsForMe);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotRequestCheckIn()
+    {
+        var bob = await Open(_bob);
+        var error = await Assert.ThrowsAsync<PdmException>(() => bob.RequestCheckInAsync("frame.sldprt", "please"));
+        Assert.Contains("Only vault admins", error.Message);
+    }
+
     // ------------------------------------------------------------ helpers
 
     /// <summary>What an admin's Freeze records in the vault (the lock part needs a real LFS server).</summary>

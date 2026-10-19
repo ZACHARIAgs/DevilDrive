@@ -39,6 +39,15 @@ public interface IVaultService
     /// <summary>Admin: make frozen files editable again.</summary>
     Task<OperationResult> UnfreezeAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
+    /// <summary>Admin: ask whoever has a file checked out to check in their last saved version (done by their PC).</summary>
+    Task<OperationResult> RequestCheckInAsync(string path, string note, IProgress<string>? progress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Carries out admin check-in requests for files checked out to this user: checks in the last saved
+    /// version and releases the check-out. Clients call it when a snapshot reports CheckInRequestsForMe.
+    /// </summary>
+    Task<OperationResult> ProcessCheckInRequestsAsync(IProgress<string>? progress = null, CancellationToken ct = default);
+
     Task SetGitHubLoginAsync(string login, CancellationToken ct = default);
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);

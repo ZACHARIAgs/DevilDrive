@@ -121,6 +121,24 @@ internal sealed class SolidWorksSession
         }
     }
 
+    /// <summary>
+    /// Closes the windows of these exact files when they have no unsaved changes, so Git can read and
+    /// replace them. Files with unsaved changes stay open; their saved copy on disk is what gets used.
+    /// </summary>
+    public ClosedDocuments CloseIfSaved(IEnumerable<string> paths)
+    {
+        var set = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
+        var closed = new ClosedDocuments(ActiveDocumentPath);
+        foreach (var doc in VisibleDocuments())
+        {
+            var path = doc.GetPathName();
+            if (!set.Contains(path) || doc.GetSaveFlag()) continue;
+            _sw.CloseDoc(path);
+            closed.Paths.Add(path);
+        }
+        return closed;
+    }
+
     /// <summary>Switches open, unmodified documents to read-only (after freezing).</summary>
     public void MakeReadOnly(IEnumerable<string> paths)
     {

@@ -18,6 +18,7 @@ public enum VaultEventKind
     LockBroken,
     Frozen,
     Unfrozen,
+    CheckInRequested,
 }
 
 public sealed class VaultEvent
@@ -110,6 +111,11 @@ public sealed class DiscordWebhookNotifier : INotifier
                 break;
             case VaultEventKind.Unfrozen:
                 message = $"\U0001F513 **{user}** (admin) unfroze {files}. They can be checked out again.";
+                break;
+            case VaultEventKind.CheckInRequested:
+                message = $"\U0001F4E5 **{user}** (admin) asked **{Escape(e.PreviousOwner ?? "someone")}** to check in {files}. " +
+                          "Their last saved version will be checked in automatically from their PC.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
                 break;
             default:
                 message = $"**{user}**: {files}";

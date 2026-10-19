@@ -53,6 +53,7 @@ public sealed class MainViewModel : ViewModelBase
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanRun && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
         FreezeCommand = new RelayCommand(async () => await FreezeAsync(), () => CanRun && IsAdmin && FreezeTargets().Count > 0);
         UnfreezeCommand = new RelayCommand(async () => await UnfreezeAsync(), () => CanRun && IsAdmin && UnfreezeTargets().Count > 0);
+        RequestCheckInCommand = new RelayCommand(async () => await RequestCheckInAsync(), () => CanRun && IsAdmin && SingleSelected?.File.State == FileState.CheckedOutByOther);
         OpenCommand = new RelayCommand(OpenSelected, () => SingleSelected?.File.ExistsLocally == true);
         ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
@@ -70,6 +71,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand BreakLockCommand { get; }
     public ICommand FreezeCommand { get; }
     public ICommand UnfreezeCommand { get; }
+    public ICommand RequestCheckInCommand { get; }
     public ICommand OpenCommand { get; }
     public ICommand ShowInExplorerCommand { get; }
     public ICommand SettingsCommand { get; }
@@ -190,8 +192,10 @@ public sealed class MainViewModel : ViewModelBase
         StatusText = "Refreshing…";
         try
         {
-            Apply(await _vault.GetSnapshotAsync(contactVault: true));
+            var snapshot = await _vault.GetSnapshotAsync(contactVault: true);
+            Apply(snapshot);
             StatusText = quiet ? previousStatus : "Ready";
+            if (snapshot.CheckInRequestsForMe > 0) await CarryOutCheckInRequestsAsync();
         }
         catch (PdmException ex)
         {
@@ -202,6 +206,24 @@ public sealed class MainViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>An admin asked this user to check files in: do it, then tell them what happened.</summary>
+    private async Task CarryOutCheckInRequestsAsync()
+    {
+        StatusText = "Checking in files an admin asked for…";
+        try
+        {
+            var result = await _vault!.ProcessCheckInRequestsAsync(new Progress<string>(s => StatusText = s));
+            if (result.Succeeded.Count > 0 || result.Failures.Count > 0) StatusText = Report(result, "Checked in (admin request)");
+            Apply(await _vault.GetSnapshotAsync(contactVault: false));
+        }
+        catch (PdmException ex)
+        {
+            StatusText = "Admin check-in request not done";
+            SetBanner("An admin asked you to check in a file, but it couldn't be done automatically: " + ex.Message +
+                      " Save and close it in SolidWorks; it will be tried again within a minute.", ErrorBrush);
         }
     }
 
@@ -314,6 +336,17 @@ public sealed class MainViewModel : ViewModelBase
         if (request == null) return Task.CompletedTask;
         return RunAsync("Freezing…", async (vault, progress) =>
             Report(await vault.FreezeAsync(targets, request.Comment, progress), "Froze"));
+    }
+
+    private Task RequestCheckInAsync()
+    {
+        var row = SingleSelected;
+        if (row == null) return Task.CompletedTask;
+        var request = _dialogs.AskCheckIn("Request Check-In (admin)", "Request", new[] { row.Path }, "Needed by another teammate",
+            allowKeepCheckedOut: false, prompt: $"Note to {row.CheckedOutBy} (required): why do you need it?");
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Requesting check-in…", async (vault, progress) =>
+            Report(await vault.RequestCheckInAsync(row.Path, request.Comment, progress), "Requested check-in of"));
     }
 
     private Task UnfreezeAsync()

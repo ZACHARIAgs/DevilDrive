@@ -191,6 +191,7 @@ public sealed class VaultService : IVaultService
         var incoming = await GetIncomingChangesAsync(ct).ConfigureAwait(false);
         var latest = await GetLatestVersionsAsync(ct).ConfigureAwait(false);
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+        var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
         var locks = _lastLocks;
 
         if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
@@ -224,6 +225,14 @@ public sealed class VaultService : IVaultService
             var freeze = frozen.Find(path);
             if (freeze != null) state = FileState.Frozen;
 
+            // A request only counts while the person it was made of still holds the check-out.
+            var request = requests.Find(path);
+            if (request != null && _locksKnown && (fileLock == null || !string.Equals(fileLock.Owner, request.Owner, StringComparison.OrdinalIgnoreCase)))
+            {
+                request = null;
+            }
+            if (request != null && fileLock?.IsMine == true && freeze == null) snapshot.CheckInRequestsForMe++;
+
             latest.TryGetValue(path, out var version);
             files.Add(new VaultFile
             {
@@ -239,6 +248,8 @@ public sealed class VaultService : IVaultService
                 Freeze = freeze,
                 FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
                 FreezeLockMissing = freeze != null && _locksKnown && fileLock == null,
+                CheckInRequest = request,
+                CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
             });
         }
 
@@ -956,26 +967,43 @@ public sealed class VaultService : IVaultService
         }
     }
 
-    /// <summary>Reads the frozen list as the vault has it (falls back to this PC's copy).</summary>
-    private async Task<FrozenList> ReadFrozenListAsync(CancellationToken ct)
-    {
-        if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
-        {
-            var show = await RunAsync(new[] { "show", Upstream + ":" + FrozenList.RelativePath }, ct).ConfigureAwait(false);
-            return show.Success ? FrozenList.Parse(show.StdOut) : new FrozenList();
-        }
-        var local = ToFullPath(FrozenList.RelativePath);
-        return File.Exists(local) ? FrozenList.Parse(File.ReadAllText(local)) : new FrozenList();
-    }
+    private async Task<FrozenList> ReadFrozenListAsync(CancellationToken ct) =>
+        FrozenList.Parse(await ReadVaultTextAsync(FrozenList.RelativePath, ct).ConfigureAwait(false));
 
     private async Task SaveFrozenListAsync(FrozenList frozen, string message, IProgress<string>? progress, CancellationToken ct)
     {
-        var full = ToFullPath(FrozenList.RelativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, frozen.Serialize());
+        WriteVaultText(FrozenList.RelativePath, frozen.Serialize());
+        await CommitAndPushAsync(new[] { FrozenList.RelativePath }, message, progress, ct).ConfigureAwait(false);
+    }
 
-        await RunCheckedAsync("save the frozen list", new[] { "add", "--", FrozenList.RelativePath }, ct).ConfigureAwait(false);
-        await RunCheckedAsync("save the frozen list", new[] { "commit", "--quiet", "-m", message, "--", FrozenList.RelativePath }, ct).ConfigureAwait(false);
+    /// <summary>Reads a vault file as the vault (GitHub) has it, falling back to this PC's copy.</summary>
+    private async Task<string?> ReadVaultTextAsync(string relativePath, CancellationToken ct)
+    {
+        if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
+        {
+            var show = await RunAsync(new[] { "show", Upstream + ":" + relativePath }, ct).ConfigureAwait(false);
+            return show.Success ? show.StdOut : null;
+        }
+        var local = ToFullPath(relativePath);
+        return File.Exists(local) ? File.ReadAllText(local) : null;
+    }
+
+    private void WriteVaultText(string relativePath, string text)
+    {
+        var full = ToFullPath(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, text);
+    }
+
+    /// <summary>Commits exactly these paths (adds, edits and deletions) and pushes, retrying if the vault moved.</summary>
+    private async Task CommitAndPushAsync(IReadOnlyList<string> relativePaths, string message, IProgress<string>? progress, CancellationToken ct)
+    {
+        var pathspec = string.Join("\0", relativePaths) + "\0";
+        await RunCheckedAsync("save to the vault", new[] { "add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, TransferTimeout, pathspec).ConfigureAwait(false);
+        var commit = await RunAsync(new[] { "commit", "--quiet", "-m", message, "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, null, pathspec).ConfigureAwait(false);
+        var nothingToCommit = (commit.StdOut + commit.StdErr).IndexOf("nothing", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                              (commit.StdOut + commit.StdErr).IndexOf("no changes added", StringComparison.OrdinalIgnoreCase) >= 0;
+        if (!commit.Success && !nothingToCommit) throw GitErrorClassifier.Classify(commit, "save to the vault");
         try
         {
             progress?.Report("Sending to the vault…");
@@ -986,6 +1014,148 @@ public sealed class VaultService : IVaultService
             throw PushRejectedException.NotSent(ex);
         }
     }
+
+    // ---------------------------------------------------------------- Admin check-in requests
+
+    /// <summary>
+    /// Admin: asks whoever has the file checked out to check in their last saved version. Their own
+    /// Capstone PDM does it (the file only exists on their PC) the next time it contacts the vault.
+    /// </summary>
+    public async Task<OperationResult> RequestCheckInAsync(string path, string note, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        RequireAdmin("request a check-in");
+        var rel = ToRelativePath(path);
+        note = (note ?? "").Trim();
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            if ((await ReadFrozenListAsync(ct).ConfigureAwait(false)).Find(rel) != null)
+            {
+                throw new PdmException($"{PathList.Name(rel)} is frozen, not checked out.");
+            }
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+            var fileLock = FindLock(locks, rel) ?? throw new PdmException($"{PathList.Name(rel)} isn't checked out by anyone, so there's nothing to request.");
+            if (fileLock.IsMine) throw new PdmException($"{PathList.Name(rel)} is checked out to you. Just check it in.");
+
+            var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
+            // Drop requests that are done or moot (the person no longer holds that check-out), and any older one for this file.
+            requests.Requests.RemoveAll(r =>
+                SamePath(r.Path, rel) ||
+                !string.Equals(FindLock(locks, r.Path)?.Owner, r.Owner, StringComparison.OrdinalIgnoreCase));
+            requests.Requests.Add(new AdminCheckInRequest
+            {
+                Path = rel,
+                Owner = fileLock.Owner,
+                RequestedBy = GitHubLogin ?? UserName,
+                RequestedAt = DateTimeOffset.Now,
+                Note = note,
+            });
+
+            var owner = Config.DisplayNameFor(fileLock.Owner);
+            WriteVaultText(CheckInRequestList.RelativePath, requests.Serialize());
+            await CommitAndPushAsync(new[] { CheckInRequestList.RelativePath }, $"Requested check-in of {PathList.Name(rel)} from {owner}", progress, ct).ConfigureAwait(false);
+
+            result.Succeeded.Add(rel);
+            result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time Capstone PDM " +
+                             "or SolidWorks is running there (within about a minute if it's on). Unsaved changes in their SolidWorks aren't included.\n\n" +
+                             "If their PC is off and you can't wait, use Break Lock instead (their saved work then stays on their PC only).");
+            await NotifyAsync(new VaultEvent(VaultEventKind.CheckInRequested, UserDisplayName, new[] { rel }) { PreviousOwner = owner, Comment = note }, result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Carries out admin requests for files checked out to this user: checks in the saved file as it
+    /// is on disk (even if SolidWorks has it open, when Windows allows reading it) and releases the lock.
+    /// </summary>
+    public async Task<OperationResult> ProcessCheckInRequestsAsync(IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await FetchAsync(ct).ConfigureAwait(false);
+            var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
+            if (requests.Requests.Count == 0) return result;
+
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+            var mine = requests.Requests
+                .Where(r => frozen.Find(r.Path) == null)
+                .Where(r => FindLock(locks, r.Path) is LockInfo l && l.IsMine && string.Equals(l.Owner, r.Owner, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (mine.Count == 0) return result;
+
+            progress?.Report("Checking in files an admin asked for…");
+            await SyncCoreAsync(progress, ct, fetch: false).ConfigureAwait(false);
+
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            var changed = mine.Select(r => r.Path).Where(changes.ContainsKey).ToList();
+            var all = mine.Select(r => r.Path).ToList();
+            var requesters = string.Join(", ", mine.Select(r => Config.DisplayNameFor(r.RequestedBy)).Distinct());
+
+            foreach (var request in mine) requests.Requests.Remove(request);
+            WriteVaultText(CheckInRequestList.RelativePath, requests.Serialize());
+
+            var comment = changed.Count > 0
+                ? $"Checked in at {requesters}'s request (last saved version)"
+                : $"Released at {requesters}'s request (no saved changes)";
+            try
+            {
+                await CommitAndPushAsync(changed.Concat(new[] { CheckInRequestList.RelativePath }).ToList(), comment, progress, ct).ConfigureAwait(false);
+            }
+            catch (PdmException)
+            {
+                // If nothing was committed (e.g. Windows wouldn't let Git read a file), put the request back for next time.
+                if (await IsUncommittedAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false))
+                {
+                    await RunAsync(new[] { "reset", "--quiet", "--", CheckInRequestList.RelativePath }, ct).ConfigureAwait(false);
+                    await RunAsync(new[] { "checkout", "HEAD", "--", CheckInRequestList.RelativePath }, ct).ConfigureAwait(false);
+                }
+                throw;
+            }
+
+            foreach (var rel in all)
+            {
+                var unlock = await RunAsync(new[] { "lfs", "unlock", rel }, ct, NetworkTimeout).ConfigureAwait(false);
+                if (unlock.Success) FileUtil.SetReadOnly(ToFullPath(rel), true);
+                else result.Warnings.Add($"{PathList.Name(rel)} was checked in, but its check-out couldn't be released: {GitErrorClassifier.Classify(unlock, "release the check-out").Message}");
+            }
+            result.Succeeded.AddRange(all);
+
+            result.Notes.Add(changed.Count > 0
+                ? $"{requesters} needed {PathList.Format(all)}, so your last saved version was checked in and your check-out was released.\n\n" +
+                  "Changes you hadn't saved in SolidWorks were NOT included. If you had any, use Save As to keep a copy outside the vault, then talk to whoever needs the file."
+                : $"{requesters} needed {PathList.Format(all)}. You had no saved changes, so your check-out was simply released.");
+
+            if (changed.Count > 0)
+            {
+                var versions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var rel in changed) versions[rel] = await CountCommitsAsync("HEAD", ct, "--no-merges", rel).ConfigureAwait(false);
+                await NotifyAsync(new VaultEvent(VaultEventKind.CheckedIn, UserDisplayName, changed) { Comment = comment, Versions = versions }, result).ConfigureAwait(false);
+            }
+            var releasedOnly = all.Except(changed, StringComparer.OrdinalIgnoreCase).ToList();
+            if (releasedOnly.Count > 0)
+            {
+                await NotifyAsync(new VaultEvent(VaultEventKind.UndoCheckOut, UserDisplayName, releasedOnly), result).ConfigureAwait(false);
+            }
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<bool> IsUncommittedAsync(string relativePath, CancellationToken ct) =>
+        !(await RunAsync(new[] { "diff", "--quiet", "HEAD", "--", relativePath }, ct).ConfigureAwait(false)).Success;
 
     private PdmException FrozenError(string rel, FrozenEntry freeze) =>
         new FrozenFileException(rel, Config.DisplayNameFor(freeze.By), freeze.At, freeze.Reason, IsAdmin);
