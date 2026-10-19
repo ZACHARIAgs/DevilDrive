@@ -21,6 +21,9 @@ public enum VaultEventKind
     CheckInRequested,
     MilestoneCreated,
     GuardTampered,
+    ReviewSubmitted,
+    ReviewRejected,
+    ReviewWithdrawn,
 }
 
 public sealed class VaultEvent
@@ -124,6 +127,17 @@ public sealed class DiscordWebhookNotifier : INotifier
             case VaultEventKind.MilestoneCreated:
                 message = $"\U0001F3C1 **{user}** (admin) created the milestone **{Escape(e.Files.FirstOrDefault() ?? "")}**. Anyone can view the vault exactly as it is now.";
                 if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.ReviewSubmitted:
+                message = $"\U0001F4DD **{user}** submitted {files} for review. An admin can approve (release) or reject it.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.ReviewRejected:
+                message = $"❌ **{user}** (admin) rejected {files} (submitted by **{Escape(e.PreviousOwner ?? "someone")}**). It can be edited again.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.ReviewWithdrawn:
+                message = $"↩️ **{user}** withdrew {files} from review.";
                 break;
             case VaultEventKind.GuardTampered:
                 message = $"\U0001F6A8 **Vault guard alert:** the vault guard was {e.Comment ?? "changed"} (last change by {Escape(e.PreviousOwner ?? "someone")}). " +

@@ -85,6 +85,15 @@ public interface IVaultService
     /// <summary>Downloads specific files even if their folder isn't chosen.</summary>
     Task DownloadAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
+    /// <summary>Submit files for review before release (the submitter holds them meanwhile).</summary>
+    Task<OperationResult> SubmitForReviewAsync(IEnumerable<string> paths, string note, IProgress<string>? progress = null, CancellationToken ct = default);
+    Task<OperationResult> WithdrawReviewAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
+    /// <summary>Admin: approve and release (freeze with the next revision).</summary>
+    Task<OperationResult> ApproveReviewAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? revisions = null);
+    /// <summary>Admin: reject with a reason.</summary>
+    Task<OperationResult> RejectReviewAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default);
+
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);
 }

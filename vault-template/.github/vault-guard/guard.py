@@ -10,6 +10,7 @@ commands instead of the app. It checks the push against the vault rules:
   * nobody adds admin check-in requests, or removes requests made of someone else;
   * non-admins don't change frozen files, or files someone else has checked out;
   * only admins create, move or delete milestones (milestone/* tags);
+  * reviews: non-admins only submit or withdraw their own, and nobody but admins changes a file in review;
   * (warning only) files saved in a newer SolidWorks than the team's version, force pushes.
 
 A push that breaks a rule is undone straight away with a new commit that puts every file it
@@ -27,6 +28,7 @@ ZERO = "0" * 40
 ADMIN_ONLY_FILES = ("pdm.json", ".pdm/frozen.json")
 ADMIN_ONLY_PREFIXES = (".github/",)
 REQUESTS = ".pdm/checkin-requests.json"
+REVIEWS = ".pdm/reviews.json"
 FROZEN = ".pdm/frozen.json"
 INDEX_PREFIX = ".pdm/index/"
 
@@ -96,6 +98,14 @@ def request_keys(text):
     return {
         (str(r.get("path", "")).lower(), str(r.get("owner", "")).lower())
         for r in load_json(text).get("requests", [])
+        if isinstance(r, dict)
+    }
+
+
+def review_keys(text):
+    return {
+        (str(r.get("path", "")).lower(), str(r.get("submittedBy", "")).lower())
+        for r in load_json(text).get("reviews", [])
         if isinstance(r, dict)
     }
 
@@ -218,6 +228,16 @@ def main():
                 violations.append("added an admin check-in request")
             if [key for key in old - new if key[1] != actor.lower()]:
                 violations.append("removed a check-in request made of someone else")
+        if REVIEWS in changed:
+            old, new = review_keys(show(before, REVIEWS)), review_keys(show(after, REVIEWS))
+            if [key for key in new - old if key[1] != actor.lower()]:
+                violations.append("submitted a review in someone else's name")
+            if [key for key in old - new if key[1] != actor.lower()]:
+                violations.append("removed someone else's review (only admins approve or reject)")
+        in_review = {key[0] for key in review_keys(show(before, REVIEWS))} & {key[0] for key in review_keys(show(after, REVIEWS))}
+        for path in changed:
+            if path.lower() in in_review:
+                violations.append(f"changed {path} while it is in review")
 
     frozen_before, frozen_after = frozen_paths(show(before, FROZEN)), frozen_paths(show(after, FROZEN))
     for path in changed:

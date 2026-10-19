@@ -29,6 +29,7 @@ internal sealed class VaultPane : UserControl
     private static readonly (Color Back, Color Fore) PurpleBadge = (Color.FromArgb(0xF1, 0xE8, 0xFD), Color.FromArgb(0x6D, 0x28, 0xD9));
     private static readonly (Color Back, Color Fore) GrayBadge = (Color.FromArgb(0xEE, 0xF0, 0xF3), Color.FromArgb(0x4B, 0x55, 0x63));
     private static readonly (Color Back, Color Fore) SlateBadge = (Color.FromArgb(0xE2, 0xE8, 0xF0), Color.FromArgb(0x33, 0x41, 0x55));
+    private static readonly (Color Back, Color Fore) TealBadge = (Color.FromArgb(0xCC, 0xFB, 0xF1), Color.FromArgb(0x0F, 0x76, 0x6E));
 
     private readonly SolidWorksSession _sw;
     private readonly Timer _timer = new Timer { Interval = 1000 };
@@ -45,6 +46,10 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _freeze;
     private readonly ModernButton _unfreeze;
     private readonly ModernButton _requestCheckIn;
+    private readonly ModernButton _submitReview;
+    private readonly ModernButton _withdrawReview;
+    private readonly ModernButton _approveReview;
+    private readonly ModernButton _rejectReview;
     private readonly ModernButton _rename;
     private readonly ModernButton _downloadRefs;
     private readonly ModernButton _watch;
@@ -102,6 +107,10 @@ internal sealed class VaultPane : UserControl
         _requestCheckIn = new ModernButton("Request Check-In (admin)", "");
         _rename = new ModernButton("Rename / Move", "");
         _downloadRefs = new ModernButton("Download missing parts", "\uE896");
+        _submitReview = new ModernButton("Submit for review", "\uE8FB");
+        _withdrawReview = new ModernButton("Withdraw from review", "");
+        _approveReview = new ModernButton("Approve & release (admin)", "");
+        _rejectReview = new ModernButton("Reject (admin)", "");
         _watch = new ModernButton("Notify me when it's free", "\uEA8F");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
@@ -112,7 +121,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _downloadRefs, _checkIn, _checkOut, _undo, _watch, _rename, _requestCheckIn, _freeze, _unfreeze,
+            _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp, _rebuildIndex,
             _status,
@@ -127,6 +136,10 @@ internal sealed class VaultPane : UserControl
         _unfreeze.Click += async (_, _) => await UnfreezeAsync();
         _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
         _rename.Click += async (_, _) => await RenameAsync();
+        _submitReview.Click += async (_, _) => await SubmitReviewAsync();
+        _withdrawReview.Click += async (_, _) => await WithdrawReviewAsync();
+        _approveReview.Click += async (_, _) => await ApproveReviewAsync();
+        _rejectReview.Click += async (_, _) => await RejectReviewAsync();
         _downloadRefs.Click += async (_, _) => await DownloadMissingPartsAsync();
         _watch.Click += (_, _) => ToggleWatch();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
@@ -321,6 +334,11 @@ internal sealed class VaultPane : UserControl
         _freeze.Visible = isAdmin && file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
         _unfreeze.Visible = isAdmin && state == FileState.Frozen;
         _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
+        _submitReview.Visible = file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
+        var mySubmission = string.Equals(file?.Review?.SubmittedBy, _vault?.GitHubLogin, StringComparison.OrdinalIgnoreCase);
+        _withdrawReview.Visible = state == FileState.InReview && (mySubmission || isAdmin);
+        _approveReview.Visible = _rejectReview.Visible = isAdmin && state == FileState.InReview;
+        _approveReview.Primary = _approveReview.Visible;
         _downloadRefs.Visible = _missingRefs.Count > 0;
         _watch.Visible = state == FileState.CheckedOutByOther;
         if (_watch.Visible && _vault != null && file != null)
@@ -337,6 +355,7 @@ internal sealed class VaultPane : UserControl
         var editable = ready && !NewerThanTeam && !viewingMilestone;
         _checkIn.Enabled = _checkOut.Enabled = _freeze.Enabled = _rename.Enabled = editable;
         _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready && !viewingMilestone;
+        _submitReview.Enabled = _withdrawReview.Enabled = _approveReview.Enabled = _rejectReview.Enabled = ready && !viewingMilestone;
         _getLatest.Enabled = ready && !viewingMilestone;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
@@ -358,6 +377,7 @@ internal sealed class VaultPane : UserControl
             FileState.Modified => ("Edited, not checked in", OrangeBadge),
             FileState.NotInVault => ("New, not in vault yet", PurpleBadge),
             FileState.Frozen => (file.Revision != null ? $"Frozen \u2022 Rev {file.Revision}" : "Frozen", SlateBadge),
+            FileState.InReview => ("In review", TealBadge),
             _ => (file.State.ToString(), GrayBadge),
         };
 
@@ -385,6 +405,16 @@ internal sealed class VaultPane : UserControl
             if (file.Freeze.Reason.Length > 0) lines.Add($"“{file.Freeze.Reason}”");
             lines.Add(_vault?.IsAdmin == true ? "Unfreeze it if it really needs to change." : "It can't be changed. Ask an admin if it needs to.");
             if (file.FreezeLockMissing) lines.Add("Warning: the freeze lock is missing. An admin should freeze it again.");
+        }
+
+        if (file.State == FileState.InReview && file.Review != null)
+        {
+            lines.Clear();
+            lines.Add($"Submitted for review by {file.ReviewSubmittedBy} on {file.Review.SubmittedAt.LocalDateTime:MMM d, h:mm tt}");
+            if (file.Review.Note.Length > 0) lines.Add($"\u201C{file.Review.Note}\u201D");
+            lines.Add(_vault?.IsAdmin == true
+                ? "Approve to release it (freeze with the next revision), or reject it with a reason."
+                : "Nobody can change it until an admin approves or rejects it.");
         }
 
         var index = file.Index;
@@ -724,44 +754,147 @@ internal sealed class VaultPane : UserControl
 
         await RunAsync("Freezing…", async progress =>
         {
-            // Releasing a drawing also saves "<name> Rev X.pdf" next to it, checked in and frozen with the same revision.
-            var drawings = targets.Where(p => Path.GetExtension(p).Equals(".slddrw", StringComparison.OrdinalIgnoreCase)).ToList();
-            var revisions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var pdfs = new List<string>();
-            var pdfProblems = new List<string>();
-            if (drawings.Count > 0)
-            {
-                var next = await _vault.GetNextRevisionsAsync(drawings);
-                foreach (var drawing in drawings)
-                {
-                    var revision = next[_vault.ToRelativePath(drawing)];
-                    var pdf = Path.Combine(Path.GetDirectoryName(drawing)!, $"{Path.GetFileNameWithoutExtension(drawing)} Rev {revision}.pdf");
-                    progress.Report($"Saving {Path.GetFileName(pdf)}…");
-                    try
-                    {
-                        _sw.ExportPdf(drawing, pdf);
-                        revisions[drawing] = revision;
-                        revisions[pdf] = revision;
-                        pdfs.Add(pdf);
-                    }
-                    catch (PdmException ex)
-                    {
-                        pdfProblems.Add(ex.Message);
-                    }
-                }
-                if (pdfs.Count > 0)
-                {
-                    progress.Report("Checking in the PDFs…");
-                    await _vault.CheckInAsync(pdfs, $"Drawing PDF for release: {reason}", progress: progress);
-                }
-            }
-
+            var (pdfs, revisions, pdfProblems) = await SaveReleasePdfsAsync(targets, reason, progress);
             var result = await _vault.FreezeAsync(targets.Concat(pdfs).ToList(), reason, progress,
                 revisions: revisions.ToDictionary(p => _vault.ToRelativePath(p.Key), p => p.Value, StringComparer.OrdinalIgnoreCase));
             result.Warnings.AddRange(pdfProblems.Select(p => p + " The drawing was still frozen, without a PDF."));
             _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
             return Report(result, "Froze");
         });
+    }
+
+    /// <summary>
+    /// Releasing a drawing also saves "&lt;name&gt; Rev X.pdf" next to it and checks it in, so it can be
+    /// frozen with the same revision. Returns the PDFs, the revision for each drawing and PDF, and problems.
+    /// </summary>
+    private async Task<(List<string> Pdfs, Dictionary<string, string> Revisions, List<string> Problems)> SaveReleasePdfsAsync(
+        IReadOnlyList<string> targets, string reason, IProgress<string> progress)
+    {
+        var drawings = targets.Where(p => Path.GetExtension(p).Equals(".slddrw", StringComparison.OrdinalIgnoreCase)).ToList();
+        var revisions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var pdfs = new List<string>();
+        var problems = new List<string>();
+        if (drawings.Count == 0 || _vault == null) return (pdfs, revisions, problems);
+
+        var next = await _vault.GetNextRevisionsAsync(drawings);
+        foreach (var drawing in drawings)
+        {
+            var revision = next[_vault.ToRelativePath(drawing)];
+            var pdf = Path.Combine(Path.GetDirectoryName(drawing)!, $"{Path.GetFileNameWithoutExtension(drawing)} Rev {revision}.pdf");
+            progress.Report($"Saving {Path.GetFileName(pdf)}\u2026");
+            try
+            {
+                _sw.ExportPdf(drawing, pdf);
+                revisions[drawing] = revision;
+                revisions[pdf] = revision;
+                pdfs.Add(pdf);
+            }
+            catch (PdmException ex)
+            {
+                problems.Add(ex.Message);
+            }
+        }
+        if (pdfs.Count > 0)
+        {
+            progress.Report("Checking in the PDFs\u2026");
+            await _vault.CheckInAsync(pdfs, $"Drawing PDF for release: {reason}", progress: progress);
+        }
+        return (pdfs, revisions, problems);
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        var top = _currentPath;
+        if (top == null || _vault == null) return;
+
+        // Releasing an assembly usually means its parts too: offer them, unticked.
+        var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
+        foreach (var path in _sw.GetReferences(top).Where(IsInVault).OrderBy(Path.GetFileName))
+        {
+            var file = FileAt(path);
+            if (file == null || !file.IsLockable) continue;
+            var canSubmit = !file.HasLocalChanges && file.State is FileState.Available or FileState.CheckedOutByMe;
+            var label = Path.GetFileName(path) + (file.State switch
+            {
+                FileState.Frozen => "  (frozen)",
+                FileState.InReview => "  (already in review)",
+                FileState.CheckedOutByOther => $"  (checked out by {file.CheckedOutBy})",
+                _ when file.HasLocalChanges => "  (has changes, check in first)",
+                _ => "",
+            });
+            items.Add(new PickItem(path, label, false, !canSubmit));
+        }
+
+        using var picker = new FilePickerForm("Submit for review",
+            "Nobody can change these files while they're in review. An admin approves (releases) or rejects them.", items, "Submit",
+            askComment: true, askKeep: false, commentLabel: "Note to the reviewer (required): what should they check?", defaultComment: "Ready for release");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var targets = picker.SelectedPaths;
+        var note = picker.Comment;
+        await RunAsync("Submitting for review\u2026", async progress =>
+        {
+            var result = await _vault.SubmitForReviewAsync(targets, note, progress);
+            _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
+            return Report(result, "Submitted for review:");
+        });
+    }
+
+    private async Task WithdrawReviewAsync()
+    {
+        var top = _currentPath;
+        if (top == null || _vault == null) return;
+        if (MessageBox.Show(_sw.MainWindow, $"Take {Path.GetFileName(top)} out of review? It can then be edited again.", "Capstone PDM",
+                MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        await RunAsync("Withdrawing\u2026", async progress => Report(await _vault.WithdrawReviewAsync(new[] { top }, progress), "Withdrew"));
+    }
+
+    private async Task ApproveReviewAsync()
+    {
+        var top = _currentPath;
+        if (top == null || _vault == null) return;
+        var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
+        // Parts submitted along with this assembly can be approved together.
+        foreach (var path in _sw.GetReferences(top).Where(IsInVault).Where(p => FileAt(p)?.State == FileState.InReview).OrderBy(Path.GetFileName))
+        {
+            items.Add(new PickItem(path, $"{Path.GetFileName(path)}  (submitted by {FileAt(path)!.ReviewSubmittedBy})", true));
+        }
+
+        using var picker = new FilePickerForm("Approve & release (admin)",
+            "Approving freezes these files with the next revision letter. Drawings also get a PDF saved and frozen with them.", items, "Approve",
+            askComment: true, askKeep: false, commentLabel: "Release note (required):", defaultComment: "Approved for release");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var targets = picker.SelectedPaths;
+        var reason = picker.Comment;
+
+        await RunAsync("Approving\u2026", async progress =>
+        {
+            var (pdfs, revisions, pdfProblems) = await SaveReleasePdfsAsync(targets, reason, progress);
+            var relativeRevisions = revisions.ToDictionary(p => _vault.ToRelativePath(p.Key), p => p.Value, StringComparer.OrdinalIgnoreCase);
+            var result = await _vault.ApproveReviewAsync(targets, reason, progress, revisions: relativeRevisions);
+            if (pdfs.Count > 0)
+            {
+                var frozenPdfs = await _vault.FreezeAsync(pdfs, reason, progress, revisions: relativeRevisions);
+                result.Succeeded.AddRange(frozenPdfs.Succeeded);
+                result.Failures.AddRange(frozenPdfs.Failures);
+            }
+            result.Warnings.AddRange(pdfProblems.Select(p => p + " The drawing was still released, without a PDF."));
+            _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
+            return Report(result, "Approved and released");
+        });
+    }
+
+    private async Task RejectReviewAsync()
+    {
+        var top = _currentPath;
+        var file = CurrentFile;
+        if (top == null || _vault == null || file == null) return;
+        using var picker = new FilePickerForm("Reject (admin)",
+            $"{file.ReviewSubmittedBy} will be told why, and the file can be edited again.",
+            new[] { new PickItem(top, Path.GetFileName(top), true, isLocked: false) }, "Reject",
+            askComment: true, askKeep: false, commentLabel: "Reason (required): what needs to change?", defaultComment: "");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var reason = picker.Comment;
+        await RunAsync("Rejecting\u2026", async progress => Report(await _vault.RejectReviewAsync(new[] { top }, reason, progress), "Rejected"));
     }
 
     /// <summary>

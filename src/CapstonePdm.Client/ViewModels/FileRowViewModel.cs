@@ -14,6 +14,7 @@ public sealed class FileRowViewModel : ViewModelBase
     private static readonly Brush Purple = Frozen(0x6A, 0x1B, 0x9A);
     private static readonly Brush Gray = Frozen(0x75, 0x75, 0x75);
     private static readonly Brush Slate = Frozen(0x33, 0x41, 0x55);
+    private static readonly Brush Teal = Frozen(0x0F, 0x76, 0x6E);
 
     public FileRowViewModel(VaultFile file)
     {
@@ -30,7 +31,7 @@ public sealed class FileRowViewModel : ViewModelBase
     public string Folder => File.Folder.Length == 0 ? "(vault root)" : File.Folder.Replace('/', '\\');
     public string StateGlyph => "●";
     public int StateSort => (int)File.State;
-    public string? CheckedOutBy => File.State == FileState.Frozen ? "Frozen: " + File.FrozenBy : File.CheckedOutBy;
+    public string? CheckedOutBy => File.State == FileState.Frozen ? "Frozen: " + File.FrozenBy : File.State == FileState.InReview ? "In review: " + File.ReviewSubmittedBy : File.CheckedOutBy;
     public DateTime? CheckedOutSince => File.State == FileState.Frozen ? File.Freeze?.At.LocalDateTime : File.Lock?.LockedAt?.LocalDateTime;
     public int Version => File.Version;
     public string VersionText => File.Version > 0 ? File.Version.ToString() : "—";
@@ -55,6 +56,7 @@ public sealed class FileRowViewModel : ViewModelBase
                 FileState.ModifiedWithoutCheckOut => "Edited WITHOUT check-out!",
                 FileState.NotInVault => "New, not in vault yet",
                 FileState.MissingLocally => "Deleted on this PC",
+                FileState.InReview => $"In review (submitted by {File.ReviewSubmittedBy})" + (string.IsNullOrWhiteSpace(File.Review?.Note) ? "" : $": {File.Review!.Note}"),
                 FileState.Frozen => (File.Revision != null ? $"Frozen (Rev {File.Revision}) by " : "Frozen by ") + $"{File.FrozenBy}: {File.Freeze?.Reason}" + (File.FreezeLockMissing ? " (lock missing, freeze again!)" : ""),
                 _ => File.State.ToString(),
             };
@@ -76,6 +78,7 @@ public sealed class FileRowViewModel : ViewModelBase
         FileState.Modified => Orange,
         FileState.NotInVault => Purple,
         FileState.Frozen => Slate,
+        FileState.InReview => Teal,
         _ => Gray,
     };
 

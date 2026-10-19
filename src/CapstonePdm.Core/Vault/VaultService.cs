@@ -226,6 +226,7 @@ public sealed class VaultService : IVaultService
         var latest = await GetLatestVersionsAsync(ct).ConfigureAwait(false);
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
+        var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
         var index = VaultIndex.ReadAll(VaultRoot);
         var usedIn = VaultIndex.WhereUsed(index);
         var locks = _lastLocks;
@@ -260,6 +261,8 @@ public sealed class VaultService : IVaultService
 
             var freeze = frozen.Find(path);
             if (freeze != null) state = FileState.Frozen;
+            var review = freeze == null ? reviews.Find(path) : null;
+            if (review != null) state = FileState.InReview;
 
             // A request only counts while the person it was made of still holds the check-out.
             var request = requests.Find(path);
@@ -285,6 +288,8 @@ public sealed class VaultService : IVaultService
                 FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
                 Revision = frozen.RevisionOf(path),
                 FreezeLockMissing = freeze != null && _locksKnown && fileLock == null,
+                Review = review,
+                ReviewSubmittedBy = review == null ? null : Config.DisplayNameFor(review.SubmittedBy),
                 CheckInRequest = request,
                 CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
                 Index = index.TryGetValue(path, out var indexEntry) ? indexEntry : null,
@@ -463,6 +468,14 @@ public sealed class VaultService : IVaultService
             result.Fail(rel, FrozenError(rel, freeze));
             targets.Remove(rel);
         }
+        var inReview = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+        foreach (var rel in targets.ToList())
+        {
+            var review = inReview.Find(rel);
+            if (review == null) continue;
+            result.Fail(rel, InReviewError(rel, review));
+            targets.Remove(rel);
+        }
         if (targets.Count == 0) return result;
 
         // With "only download my folders", a file may be just a placeholder: get the real file before anyone edits it.
@@ -591,6 +604,12 @@ public sealed class VaultService : IVaultService
         {
             var freeze = frozen.Find(rel);
             if (freeze != null) throw FrozenError(rel, freeze);
+        }
+        var reviewsNow = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+        foreach (var rel in relatives)
+        {
+            var review = reviewsNow.Find(rel);
+            if (review != null) throw InReviewError(rel, review);
         }
 
         // Team settings and the frozen list are admin-only, so nobody can make themselves admin or unfreeze files.
@@ -748,6 +767,7 @@ public sealed class VaultService : IVaultService
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
         var locks = relatives.Any(lockable.Contains) ? await GetLocksAsync(ct).ConfigureAwait(false) : Array.Empty<LockInfo>();
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+        var reviewList = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
 
         var inUse = relatives.Where(r => changes.ContainsKey(r) && FileUtil.IsInUse(ToFullPath(r))).ToList();
         if (inUse.Count > 0) throw new FileInUseException(inUse, "Close them in SolidWorks (without saving), then try again.");
@@ -761,11 +781,13 @@ public sealed class VaultService : IVaultService
             changes.TryGetValue(rel, out var change);
 
             // A frozen file's lock IS the freeze: never release it here. Stray local edits can still be thrown away.
-            if (frozen.Find(rel) != null)
+            if (frozen.Find(rel) != null || reviewList.Find(rel) != null)
             {
                 if (change == null)
                 {
-                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} is frozen, not checked out, so there's nothing to undo."));
+                    result.Fail(rel, new PdmException(frozen.Find(rel) != null
+                        ? $"{PathList.Name(rel)} is frozen, not checked out, so there's nothing to undo."
+                        : $"{PathList.Name(rel)} is in review, not checked out. Use Withdraw from Review to take it back."));
                     continue;
                 }
                 fileLock = null;
@@ -905,6 +927,10 @@ public sealed class VaultService : IVaultService
             {
                 throw new PdmException($"{PathList.Name(rel)} is frozen, not checked out. Use Unfreeze to make it editable again.");
             }
+            if (ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false)).Find(rel) != null)
+            {
+                throw new PdmException($"{PathList.Name(rel)} is in review, not checked out. Approve or reject the review instead.");
+            }
             var fileLock = FindLock(await GetLocksAsync(ct).ConfigureAwait(false), rel)
                            ?? throw new PdmException($"{PathList.Name(rel)} isn't checked out by anyone.");
 
@@ -941,78 +967,84 @@ public sealed class VaultService : IVaultService
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var result = new OperationResult();
-            var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
-            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
-            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
-            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
-            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
-
-            progress?.Report("Freezing…");
-            var toFreeze = new List<string>();
-            foreach (var rel in relatives)
-            {
-                var name = PathList.Name(rel);
-                if (!lockable.Contains(rel))
-                {
-                    result.Fail(rel, new PdmException($"{name} isn't a lockable (CAD) file, so it can't be frozen."));
-                    continue;
-                }
-                if (frozen.Find(rel) != null)
-                {
-                    result.Fail(rel, new PdmException($"{name} is already frozen."));
-                    continue;
-                }
-                if (changes.ContainsKey(rel))
-                {
-                    result.Fail(rel, new PdmException($"{name} has changes on this PC that aren't in the vault. Check it in (or undo) before freezing it."));
-                    continue;
-                }
-
-                var fileLock = FindLock(locks, rel);
-                if (fileLock != null && !fileLock.IsMine)
-                {
-                    result.Fail(rel, new PdmException($"{name} is checked out by {Config.DisplayNameFor(fileLock.Owner)}. Ask them to check it in before freezing it."));
-                    continue;
-                }
-                if (fileLock == null)
-                {
-                    var lockResult = await RunAsync(new[] { "lfs", "lock", "--json", rel }, ct, NetworkTimeout).ConfigureAwait(false);
-                    if (!lockResult.Success)
-                    {
-                        result.Fail(rel, GitErrorClassifier.Classify(lockResult, "freeze " + name));
-                        continue;
-                    }
-                }
-                toFreeze.Add(rel);
-            }
-            if (toFreeze.Count == 0) return result;
-
-            var by = GitHubLogin ?? UserName;
-            var given = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var rel in toFreeze)
-            {
-                // Each freeze is a release: the next revision letter, unless one is given (e.g. a drawing's PDF matches the drawing).
-                var revision = revisions != null && revisions.TryGetValue(rel, out var forced) && forced.Length > 0
-                    ? forced
-                    : Revisions.Next(frozen.RevisionOf(rel));
-                given[rel] = revision;
-                frozen.Revisions[rel] = revision;
-                frozen.Files.Add(new FrozenEntry { Path = rel, By = by, At = DateTimeOffset.Now, Reason = reason, Revision = revision });
-                FileUtil.SetReadOnly(ToFullPath(rel), true);
-            }
-            var summary = string.Join(", ", toFreeze.Select(r => $"{PathList.Name(r)} Rev {given[r]}"));
-            await SaveFrozenListAsync(frozen, $"Froze {summary}: {reason}", progress, ct).ConfigureAwait(false);
-            result.Succeeded.AddRange(toFreeze);
-            result.Notes.Add($"Released as: {summary}.");
-
-            await NotifyAsync(new VaultEvent(VaultEventKind.Frozen, UserDisplayName, toFreeze) { Comment = reason, Revisions = given }, result).ConfigureAwait(false);
-            return result;
+            return await FreezeCoreAsync(relatives, reason, progress, ct, revisions).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task<OperationResult> FreezeCoreAsync(IReadOnlyList<string> relatives, string reason, IProgress<string>? progress, CancellationToken ct,
+        IReadOnlyDictionary<string, string>? revisions)
+    {
+        var result = new OperationResult();
+        var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
+        await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+        var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+        var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+        var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+
+        progress?.Report("Freezing…");
+        var toFreeze = new List<string>();
+        foreach (var rel in relatives)
+        {
+            var name = PathList.Name(rel);
+            if (!lockable.Contains(rel))
+            {
+                result.Fail(rel, new PdmException($"{name} isn't a lockable (CAD) file, so it can't be frozen."));
+                continue;
+            }
+            if (frozen.Find(rel) != null)
+            {
+                result.Fail(rel, new PdmException($"{name} is already frozen."));
+                continue;
+            }
+            if (changes.ContainsKey(rel))
+            {
+                result.Fail(rel, new PdmException($"{name} has changes on this PC that aren't in the vault. Check it in (or undo) before freezing it."));
+                continue;
+            }
+
+            var fileLock = FindLock(locks, rel);
+            if (fileLock != null && !fileLock.IsMine)
+            {
+                result.Fail(rel, new PdmException($"{name} is checked out by {Config.DisplayNameFor(fileLock.Owner)}. Ask them to check it in before freezing it."));
+                continue;
+            }
+            if (fileLock == null)
+            {
+                var lockResult = await RunAsync(new[] { "lfs", "lock", "--json", rel }, ct, NetworkTimeout).ConfigureAwait(false);
+                if (!lockResult.Success)
+                {
+                    result.Fail(rel, GitErrorClassifier.Classify(lockResult, "freeze " + name));
+                    continue;
+                }
+            }
+            toFreeze.Add(rel);
+        }
+        if (toFreeze.Count == 0) return result;
+
+        var by = GitHubLogin ?? UserName;
+        var given = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in toFreeze)
+        {
+            // Each freeze is a release: the next revision letter, unless one is given (e.g. a drawing's PDF matches the drawing).
+            var revision = revisions != null && revisions.TryGetValue(rel, out var forced) && forced.Length > 0
+                ? forced
+                : Revisions.Next(frozen.RevisionOf(rel));
+            given[rel] = revision;
+            frozen.Revisions[rel] = revision;
+            frozen.Files.Add(new FrozenEntry { Path = rel, By = by, At = DateTimeOffset.Now, Reason = reason, Revision = revision });
+            FileUtil.SetReadOnly(ToFullPath(rel), true);
+        }
+        var summary = string.Join(", ", toFreeze.Select(r => $"{PathList.Name(r)} Rev {given[r]}"));
+        await SaveFrozenListAsync(frozen, $"Froze {summary}: {reason}", progress, ct).ConfigureAwait(false);
+        result.Succeeded.AddRange(toFreeze);
+        result.Notes.Add($"Released as: {summary}.");
+
+        await NotifyAsync(new VaultEvent(VaultEventKind.Frozen, UserDisplayName, toFreeze) { Comment = reason, Revisions = given }, result).ConfigureAwait(false);
+        return result;
     }
 
     /// <summary>Removes files from the frozen list and releases the freeze lock (forcing it if another admin froze it).</summary>
@@ -1135,6 +1167,169 @@ public sealed class VaultService : IVaultService
             throw PushRejectedException.NotSent(ex);
         }
     }
+
+    // ---------------------------------------------------------------- Review before release
+
+    /// <summary>
+    /// Submits files for review before release. The submitter takes (or keeps) each file's lock, so
+    /// nobody can change it while it's reviewed; an admin then approves (releases) or rejects it.
+    /// </summary>
+    public async Task<OperationResult> SubmitForReviewAsync(IEnumerable<string> paths, string note, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var relatives = Normalize(paths);
+        note = (note ?? "").Trim();
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            await VerifyIdentityAsync(ct).ConfigureAwait(false);
+            if (GitHubLogin == null) throw new PdmException("Capstone PDM couldn't confirm your GitHub account (are you online?), so it can't submit for review yet.");
+
+            var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
+            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+            var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+
+            var submitted = new List<string>();
+            foreach (var rel in relatives)
+            {
+                var name = PathList.Name(rel);
+                PdmException? problem =
+                    !lockable.Contains(rel) ? new PdmException($"{name} isn't a lockable (CAD) file, so it can't go through review.")
+                    : frozen.Find(rel) != null ? new PdmException($"{name} is already released (frozen).")
+                    : reviews.Find(rel) != null ? new PdmException($"{name} is already in review.")
+                    : changes.ContainsKey(rel) ? new PdmException($"{name} has changes on this PC that aren't checked in. Check it in first, so the reviewer sees your latest version.")
+                    : FindLock(locks, rel) is LockInfo l && !l.IsMine ? new LockHeldException(rel, Config.DisplayNameFor(l.Owner), l.LockedAt)
+                    : null;
+                if (problem != null)
+                {
+                    result.Fail(rel, problem);
+                    continue;
+                }
+                if (FindLock(locks, rel) == null)
+                {
+                    var take = await RunAsync(new[] { "lfs", "lock", "--json", rel }, ct, NetworkTimeout).ConfigureAwait(false);
+                    if (!take.Success)
+                    {
+                        result.Fail(rel, GitErrorClassifier.Classify(take, "submit " + name + " for review"));
+                        continue;
+                    }
+                }
+                FileUtil.SetReadOnly(ToFullPath(rel), true);
+                reviews.Reviews.Add(new ReviewEntry { Path = rel, SubmittedBy = GitHubLogin, SubmittedAt = DateTimeOffset.Now, Note = note });
+                submitted.Add(rel);
+            }
+            if (submitted.Count == 0) return result;
+
+            await SaveReviewsAsync(reviews, $"Submitted {PathList.Format(submitted)} for review", progress, ct).ConfigureAwait(false);
+            result.Succeeded.AddRange(submitted);
+            await NotifyAsync(new VaultEvent(VaultEventKind.ReviewSubmitted, UserDisplayName, submitted) { Comment = note }, result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Takes your own files back out of review (admins can withdraw anyone's).</summary>
+    public async Task<OperationResult> WithdrawReviewAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default) =>
+        await EndReviewAsync(Normalize(paths), approve: false, reason: "", withdraw: true, progress, ct).ConfigureAwait(false);
+
+    /// <summary>Admin: approves files in review and releases them (freeze with the next revision letter).</summary>
+    public async Task<OperationResult> ApproveReviewAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? revisions = null)
+    {
+        RequireAdmin("approve reviews");
+        if (string.IsNullOrWhiteSpace(reason)) throw new PdmException("Enter a release note, for example \"Approved for production\".");
+        return await EndReviewAsync(Normalize(paths), approve: true, reason.Trim(), withdraw: false, progress, ct, revisions).ConfigureAwait(false);
+    }
+
+    /// <summary>Admin: rejects files in review with a reason; they can be edited again.</summary>
+    public async Task<OperationResult> RejectReviewAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        RequireAdmin("reject reviews");
+        if (string.IsNullOrWhiteSpace(reason)) throw new PdmException("Enter a reason, so the submitter knows what to change.");
+        return await EndReviewAsync(Normalize(paths), approve: false, reason.Trim(), withdraw: false, progress, ct).ConfigureAwait(false);
+    }
+
+    private async Task<OperationResult> EndReviewAsync(IReadOnlyList<string> relatives, bool approve, string reason, bool withdraw,
+        IProgress<string>? progress, CancellationToken ct, IReadOnlyDictionary<string, string>? revisions = null)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            await VerifyIdentityAsync(ct).ConfigureAwait(false);
+            var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+
+            var ended = new List<ReviewEntry>();
+            foreach (var rel in relatives)
+            {
+                var entry = reviews.Find(rel);
+                if (entry == null)
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} isn't in review."));
+                    continue;
+                }
+                if (withdraw && !IsAdmin && !string.Equals(entry.SubmittedBy, GitHubLogin, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} was submitted by {Config.DisplayNameFor(entry.SubmittedBy)}; only they or an admin can withdraw it."));
+                    continue;
+                }
+                reviews.Reviews.Remove(entry);
+                ended.Add(entry);
+            }
+            if (ended.Count == 0) return result;
+
+            var paths = ended.Select(e => e.Path).ToList();
+            var what = approve ? "Approved" : withdraw ? "Withdrew from review" : "Rejected";
+            await SaveReviewsAsync(reviews, $"{what} {PathList.Format(paths)}" + (reason.Length > 0 ? $": {reason}" : ""), progress, ct).ConfigureAwait(false);
+
+            // Release the submitter's hold on each file.
+            foreach (var path in paths)
+            {
+                var fileLock = FindLock(locks, path);
+                if (fileLock == null) continue;
+                var args = fileLock.IsMine ? new[] { "lfs", "unlock", path } : new[] { "lfs", "unlock", "--force", "--id", fileLock.Id };
+                var unlock = await RunAsync(args, ct, NetworkTimeout).ConfigureAwait(false);
+                if (!unlock.Success) result.Warnings.Add($"{PathList.Name(path)}: {GitErrorClassifier.Classify(unlock, "release the review hold").Message}");
+            }
+
+            if (approve)
+            {
+                var freeze = await FreezeCoreAsync(paths, reason, progress, ct, revisions).ConfigureAwait(false);
+                freeze.Warnings.InsertRange(0, result.Warnings);
+                freeze.Failures.InsertRange(0, result.Failures);
+                return freeze;
+            }
+
+            result.Succeeded.AddRange(paths);
+            var submitters = string.Join(", ", ended.Select(e => Config.DisplayNameFor(e.SubmittedBy)).Distinct());
+            await NotifyAsync(withdraw
+                ? new VaultEvent(VaultEventKind.ReviewWithdrawn, UserDisplayName, paths)
+                : new VaultEvent(VaultEventKind.ReviewRejected, UserDisplayName, paths) { Comment = reason, PreviousOwner = submitters }, result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task SaveReviewsAsync(ReviewList reviews, string message, IProgress<string>? progress, CancellationToken ct)
+    {
+        WriteVaultText(ReviewList.RelativePath, reviews.Serialize());
+        await CommitAndPushAsync(new[] { ReviewList.RelativePath }, message, progress, ct).ConfigureAwait(false);
+    }
+
+    private PdmException InReviewError(string rel, ReviewEntry review) =>
+        new PdmException($"{PathList.Name(rel)} is in review (submitted by {Config.DisplayNameFor(review.SubmittedBy)}), so it can't be changed right now. " +
+                         "An admin approves or rejects it, or the submitter can withdraw it.");
 
     // ---------------------------------------------------------------- Admin check-in requests
 

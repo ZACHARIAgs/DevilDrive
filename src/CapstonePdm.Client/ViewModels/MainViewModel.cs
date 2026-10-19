@@ -61,6 +61,10 @@ public sealed class MainViewModel : ViewModelBase
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
         Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
+        SubmitReviewCommand = new RelayCommand(async () => await SubmitReviewAsync(), () => CanEdit && SubmitTargets().Count > 0);
+        WithdrawReviewCommand = new RelayCommand(async () => await WithdrawReviewAsync(), () => CanEdit && WithdrawTargets().Count > 0);
+        ApproveReviewCommand = new RelayCommand(async () => await ApproveReviewAsync(), () => CanEdit && IsAdmin && InReviewSelected().Count > 0);
+        RejectReviewCommand = new RelayCommand(async () => await RejectReviewAsync(), () => CanEdit && IsAdmin && InReviewSelected().Count > 0);
         WatchCommand = new RelayCommand(ToggleWatch, () => _vault != null && SingleSelected?.File.State is FileState.CheckedOutByOther);
         DownloadCommand = new RelayCommand(async () => await DownloadAsync(), () => CanEdit && _selected.Any(r => r.File.NotDownloaded));
         UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
@@ -88,6 +92,10 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand Open3DCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand WatchCommand { get; }
+    public ICommand SubmitReviewCommand { get; }
+    public ICommand WithdrawReviewCommand { get; }
+    public ICommand ApproveReviewCommand { get; }
+    public ICommand RejectReviewCommand { get; }
 
     private VaultSnapshot? _snapshot;
 
@@ -177,6 +185,51 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private List<FileRowViewModel> SubmitTargets() =>
+        _selected.Where(r => r.File.IsLockable && !r.File.HasLocalChanges && r.File.State is FileState.Available or FileState.CheckedOutByMe).ToList();
+
+    private List<FileRowViewModel> InReviewSelected() => _selected.Where(r => r.File.State == FileState.InReview).ToList();
+
+    private List<FileRowViewModel> WithdrawTargets() =>
+        InReviewSelected().Where(r => IsAdmin || string.Equals(r.File.Review?.SubmittedBy, _vault?.GitHubLogin, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private Task SubmitReviewAsync()
+    {
+        var targets = SubmitTargets().Select(r => r.Path).ToList();
+        var request = _dialogs.AskCheckIn("Submit for Review", "Submit", targets, "Ready for release",
+            allowKeepCheckedOut: false, prompt: "Note to the reviewer (required): what should they check?",
+            footnote: "Nobody can change these files while they're in review. An admin approves (releases) or rejects them.");
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Submitting for review\u2026", async (vault, progress) =>
+            Report(await vault.SubmitForReviewAsync(targets, request.Comment, progress), "Submitted for review:"));
+    }
+
+    private Task WithdrawReviewAsync()
+    {
+        var targets = WithdrawTargets().Select(r => r.Path).ToList();
+        if (!_dialogs.Confirm("Withdraw from Review", $"Take {PathList.Format(targets)} out of review? It can then be edited again.")) return Task.CompletedTask;
+        return RunAsync("Withdrawing\u2026", async (vault, progress) => Report(await vault.WithdrawReviewAsync(targets, progress), "Withdrew"));
+    }
+
+    private Task ApproveReviewAsync()
+    {
+        var targets = InReviewSelected().Select(r => r.Path).ToList();
+        var request = _dialogs.AskCheckIn("Approve & Release (admin)", "Approve", targets, "Approved for release",
+            allowKeepCheckedOut: false, prompt: "Release note (required):",
+            footnote: "Approving freezes these files with the next revision letter. Approve drawings from the SolidWorks pane to also save their PDFs.");
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Approving\u2026", async (vault, progress) => Report(await vault.ApproveReviewAsync(targets, request.Comment, progress), "Approved and released"));
+    }
+
+    private Task RejectReviewAsync()
+    {
+        var targets = InReviewSelected().Select(r => r.Path).ToList();
+        var request = _dialogs.AskCheckIn("Reject (admin)", "Reject", targets, "",
+            allowKeepCheckedOut: false, prompt: "Reason (required): what needs to change?");
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Rejecting\u2026", async (vault, progress) => Report(await vault.RejectReviewAsync(targets, request.Comment, progress), "Rejected"));
+    }
+
     private void ToggleWatch()
     {
         var row = SingleSelected;
@@ -246,6 +299,11 @@ public sealed class MainViewModel : ViewModelBase
         {
             facts.Add(new PropertyRow("Frozen", $"{f.FrozenBy}, {f.Freeze.At.LocalDateTime:MMM d, yyyy}"));
             if (f.Freeze.Reason.Length > 0) facts.Add(new PropertyRow("Reason", f.Freeze.Reason));
+        }
+        if (f.State == FileState.InReview && f.Review != null)
+        {
+            facts.Add(new PropertyRow("In review", $"submitted by {f.ReviewSubmittedBy}, {f.Review.SubmittedAt.LocalDateTime:MMM d, h:mm tt}"));
+            if (f.Review.Note.Length > 0) facts.Add(new PropertyRow("Note", f.Review.Note));
         }
         if (f.CheckInRequest != null)
         {
@@ -502,6 +560,11 @@ public sealed class MainViewModel : ViewModelBase
             lines.Add("Couldn't read check-outs from the vault: " + snapshot.ConnectionProblem);
             if (brush != ErrorBrush) brush = WarningBrush;
         }
+        var waiting = snapshot.Files.Count(f => f.State == FileState.InReview);
+        if (IsAdmin && waiting > 0)
+        {
+            lines.Add($"{waiting} file(s) are waiting for your review. Filter by \"In review\", then right-click and choose Approve & Release or Reject.");
+        }
         HasSetupProblems = snapshot.SetupProblems.Count > 0;
         if (HasSetupProblems)
         {
@@ -561,6 +624,7 @@ public sealed class MainViewModel : ViewModelBase
             4 => f.IsOutdated,
             5 => f.State == FileState.Frozen,
             6 => f.NotDownloaded,
+            7 => f.State == FileState.InReview,
             _ => true,
         };
     }

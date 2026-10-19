@@ -20,6 +20,8 @@ public enum FileState
     MissingLocally,
     /// <summary>An admin froze it (e.g. released for production). Nobody can check it out until an admin unfreezes it.</summary>
     Frozen,
+    /// <summary>Submitted for review before release. Its submitter holds it until an admin approves (releases) or rejects it.</summary>
+    InReview,
 }
 
 public sealed class LockInfo
@@ -120,6 +122,11 @@ public sealed class VaultFile
 
     /// <summary>Only a small placeholder is on this PC (its folder isn't in "only download my folders"). Download it before opening.</summary>
     public bool NotDownloaded { get; set; }
+
+    /// <summary>Set while the file is waiting for review.</summary>
+    public ReviewEntry? Review { get; set; }
+    /// <summary>Display name of whoever submitted it for review.</summary>
+    public string? ReviewSubmittedBy { get; set; }
 
     /// <summary>Drawings that show this part/assembly (from the index).</summary>
     public IReadOnlyList<string> Drawings { get; set; } = Array.Empty<string>();

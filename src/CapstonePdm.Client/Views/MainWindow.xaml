@@ -44,7 +44,12 @@
                     </StackPanel>
                 </Button>
                 <Separator />
-                <Button Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one.">
+                <Button Command="{Binding SubmitReviewCommand}" ToolTip="Ask an admin to review and release the selected files.">
+                    <StackPanel MinWidth="70">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8FB;" Foreground="#0F766E" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Review&#x2026;" />
+                    </StackPanel>
+                </Button>                <Button Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one.">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE81C;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="History&#x2026;" />
@@ -145,6 +150,7 @@
                 <ComboBoxItem Content="Newer version in vault" />
                 <ComboBoxItem Content="Frozen" />
                 <ComboBoxItem Content="Not downloaded" />
+                <ComboBoxItem Content="In review" />
             </ComboBox>
             <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" />
         </DockPanel>
@@ -183,7 +189,13 @@
                         <MenuItem Header="Check In&#x2026;" Command="{Binding CheckInCommand}" />
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
                         <Separator />
-                        <MenuItem Header="Download" Command="{Binding DownloadCommand}" />
+                        <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
+                    <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />
+                    <MenuItem Header="Approve &amp; Release&#x2026; (admin)" Command="{Binding ApproveReviewCommand}"
+                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                    <MenuItem Header="Reject&#x2026; (admin)" Command="{Binding RejectReviewCommand}"
+                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                    <Separator />                    <MenuItem Header="Download" Command="{Binding DownloadCommand}" />
                     <MenuItem Header="Notify Me When It's Free (on/off)" Command="{Binding WatchCommand}" />
                     <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" />
                         <MenuItem Header="Open" Command="{Binding OpenCommand}" />

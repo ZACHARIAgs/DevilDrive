@@ -493,6 +493,40 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task FileInReview_ShowsWhoSubmitted_AndCantBeCheckedOutOrIn()
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm"));
+        Write(_alice, ".pdm/reviews.json",
+            "{ \"reviews\": [ { \"path\": \"frame.sldprt\", \"submittedBy\": \"alice-gh\", \"submittedAt\": \"2026-10-19T10:00:00+00:00\", \"note\": \"Ready for release\" } ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Submitted frame for review");
+        Git(_alice, "push", "-q");
+
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        var file = await bob.GetFileAsync("frame.sldprt");
+        Assert.Equal(FileState.InReview, file!.State);
+        Assert.Equal("alice-gh", file.ReviewSubmittedBy);
+        Assert.Equal("Ready for release", file.Review!.Note);
+
+        var checkOut = await bob.CheckOutAsync(new[] { "frame.sldprt" });
+        Assert.Contains("in review", checkOut.Failures.Single().Error.Message);
+
+        File.SetAttributes(Path.Combine(_bob, "frame.sldprt"), FileAttributes.Normal);
+        Write(_bob, "frame.sldprt", "edited anyway");
+        var checkIn = await Assert.ThrowsAsync<PdmException>(() => bob.CheckInAsync(new[] { "frame.sldprt" }, "sneaky"));
+        Assert.Contains("in review", checkIn.Message);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotApproveOrReject()
+    {
+        var bob = await Open(_bob, "bob-gh");
+        await Assert.ThrowsAsync<PdmException>(() => bob.ApproveReviewAsync(new[] { "frame.sldprt" }, "ok"));
+        await Assert.ThrowsAsync<PdmException>(() => bob.RejectReviewAsync(new[] { "frame.sldprt" }, "no"));
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);

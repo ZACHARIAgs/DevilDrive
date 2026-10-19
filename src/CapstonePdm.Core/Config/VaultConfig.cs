@@ -93,7 +93,7 @@ public sealed class NotifySettings
         VaultEventKind.CheckedIn or VaultEventKind.CheckInRequested or VaultEventKind.MilestoneCreated => CheckIn,
         VaultEventKind.UndoCheckOut => UndoCheckOut,
         VaultEventKind.LockBroken => BreakLock,
-        VaultEventKind.Frozen or VaultEventKind.Unfrozen => Freeze,
+        VaultEventKind.Frozen or VaultEventKind.Unfrozen or VaultEventKind.ReviewSubmitted or VaultEventKind.ReviewRejected or VaultEventKind.ReviewWithdrawn => Freeze,
         _ => true,
     };
 }
