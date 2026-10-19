@@ -19,7 +19,29 @@ public partial class MainWindow : Window, IDialogs
         DataContext = _vm;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e) => await _vm.InitializeAsync();
+    /// <summary>A file to select once the vault is loaded ("Show in Capstone PDM" from File Explorer).</summary>
+    public string? PendingSelection { get; set; }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        await _vm.InitializeAsync();
+        if (PendingSelection == null || _vm.Vault == null) return;
+        try
+        {
+            var relative = _vm.Vault.ToRelativePath(PendingSelection);
+            var row = FilesGrid.Items.Cast<FileRowViewModel>().FirstOrDefault(r => string.Equals(r.Path, relative, System.StringComparison.OrdinalIgnoreCase));
+            if (row != null)
+            {
+                FilesGrid.SelectedItem = row;
+                FilesGrid.ScrollIntoView(row);
+                FilesGrid.Focus();
+            }
+        }
+        catch (CapstonePdm.Core.Errors.PdmException)
+        {
+            // Not inside the vault; just show the app.
+        }
+    }
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
         _vm.SelectedFiles = FilesGrid.SelectedItems.Cast<FileRowViewModel>().ToList();
@@ -49,10 +71,10 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? new CheckInRequest(dialog.Comment, dialog.KeepCheckedOut) : null;
     }
 
-    public SettingsRequest? AskSettings(string vaultPath, string signedInAs)
+    public SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu)
     {
-        var dialog = new SettingsWindow(vaultPath, signedInAs) { Owner = this };
-        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath) : null;
+        var dialog = new SettingsWindow(vaultPath, signedInAs, explorerMenu) { Owner = this };
+        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath, dialog.ExplorerMenu) : null;
     }
 
     public void ShowHistory(string relativePath) => new HistoryWindow(_vm, this, relativePath) { Owner = this }.ShowDialog();

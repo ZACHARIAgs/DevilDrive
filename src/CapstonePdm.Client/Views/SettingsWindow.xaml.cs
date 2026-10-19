@@ -6,14 +6,16 @@ namespace CapstonePdm.Client.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(string vaultPath, string signedInAs)
+    public SettingsWindow(string vaultPath, string signedInAs, bool explorerMenu)
     {
         InitializeComponent();
         VaultPathBox.Text = vaultPath;
         SignedInText.Text = signedInAs;
+        ExplorerMenuBox.IsChecked = explorerMenu;
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();
+    public bool ExplorerMenu => ExplorerMenuBox.IsChecked == true;
 
     private void OnBrowse(object sender, RoutedEventArgs e)
     {

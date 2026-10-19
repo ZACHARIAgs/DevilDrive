@@ -17,6 +17,8 @@
                    Text="Checked with GitHub using your saved sign-in, so it can't be changed here. Admin rights come from this account." />
         <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
 
+        <CheckBox x:Name="ExplorerMenuBox" Margin="0,16,0,0" Content="Show Capstone PDM in File Explorer's right-click menu (Windows 11: under &quot;Show more options&quot;)" />
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Style="{StaticResource DialogButton}" Content="Save" IsDefault="True" Click="OnSave" />
             <Button Style="{StaticResource DialogButton}" Content="Cancel" IsCancel="True" />

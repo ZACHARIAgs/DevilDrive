@@ -11,6 +11,9 @@ public sealed class UserSettings
 
     public string VaultPath { get; set; } = DefaultVaultPath;
 
+    /// <summary>Show the Capstone PDM submenu in File Explorer's right-click menu.</summary>
+    public bool ExplorerMenu { get; set; } = true;
+
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CapstonePDM", "settings.json");
 

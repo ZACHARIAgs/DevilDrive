@@ -650,12 +650,14 @@ public sealed class MainViewModel : ViewModelBase
         var signedInAs = _vault == null ? "No vault open"
             : _vault.GitHubLogin == null ? "Not verified yet (are you online and signed in to GitHub?)"
             : $"{_vault.GitHubLogin}{(_vault.IsAdmin ? " (vault admin)" : "")}, verified with GitHub";
-        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs);
+        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu);
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
         settings.VaultPath = request.VaultPath;
+        settings.ExplorerMenu = request.ExplorerMenu;
         settings.Save();
+        App.UpdateExplorerMenu(settings);
 
         if (pathChanged || _vault == null) await OpenVaultAsync(request.VaultPath);
     }
