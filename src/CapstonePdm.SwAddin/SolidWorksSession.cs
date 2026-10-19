@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using CapstonePdm.Core.Errors;
+using CapstonePdm.Core.Vault;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 
@@ -114,14 +115,17 @@ internal sealed class SolidWorksSession
         return ext.Equals(".sldasm", StringComparison.OrdinalIgnoreCase) || ext.Equals(".slddrw", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Every file this document references, all levels down (parts in an assembly, models in a drawing).</summary>
-    public List<string> GetReferences(string path)
+    /// <summary>
+    /// Files this document references (parts in an assembly, models in a drawing, base parts of a
+    /// derived part). All levels down by default; <paramref name="allLevels"/> false gives direct references only.
+    /// </summary>
+    public List<string> GetReferences(string path, bool allLevels = true, bool includeParts = false)
     {
         var result = new List<string>();
-        if (!HasReferences(path)) return result;
+        if (!HasReferences(path) && !(includeParts && DocumentType(path) == swDocumentTypes_e.swDocPART)) return result;
 
         // Returns pairs: file name, full path.
-        if (_sw.GetDocumentDependencies2(path, true, true, false) is Array pairs)
+        if (_sw.GetDocumentDependencies2(path, allLevels, true, false) is Array pairs)
         {
             for (var i = 1; i < pairs.Length; i += 2)
             {
@@ -130,6 +134,96 @@ internal sealed class SolidWorksSession
             }
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Custom properties of an open document (file-level, then the active configuration's), plus a part's material.</summary>
+    public Dictionary<string, string> ReadProperties(IModelDoc2 doc)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void ReadFrom(string configuration, bool overwrite)
+        {
+            var manager = doc.Extension.get_CustomPropertyManager(configuration);
+            if (manager == null || !(manager.GetNames() is Array names)) return;
+            foreach (var item in names)
+            {
+                var name = item?.ToString();
+                if (string.IsNullOrEmpty(name) || (!overwrite && properties.ContainsKey(name!))) continue;
+                manager.Get5(name, false, out var value, out var resolved, out _);
+                var text = string.IsNullOrEmpty(resolved) ? value : resolved;
+                if (!string.IsNullOrWhiteSpace(text)) properties[name!] = text;
+            }
+        }
+
+        try
+        {
+            ReadFrom("", overwrite: true);
+            var configuration = doc.ConfigurationManager?.ActiveConfiguration?.Name;
+            if (!string.IsNullOrEmpty(configuration)) ReadFrom(configuration!, overwrite: true);
+
+            if (doc.GetType() == (int)swDocumentTypes_e.swDocPART && doc is IPartDoc part)
+            {
+                var material = part.GetMaterialPropertyName2(configuration ?? "", out _);
+                if (!string.IsNullOrWhiteSpace(material)) properties["Material"] = material;
+            }
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write($"Couldn't read properties of {doc.GetPathName()}: {ex.Message}");
+        }
+        return properties;
+    }
+
+    /// <summary>Reads properties from a file, opening it invisibly and read-only if it isn't open already.</summary>
+    public Dictionary<string, string>? ReadPropertiesFromFile(string path)
+    {
+        var doc = FindOpen(path);
+        var openedHere = false;
+        if (doc == null)
+        {
+            var type = DocumentType(path);
+            if (type == swDocumentTypes_e.swDocNONE || !File.Exists(path)) return null;
+
+            var options = (int)(swOpenDocOptions_e.swOpenDocOptions_Silent | swOpenDocOptions_e.swOpenDocOptions_ReadOnly);
+            if (type == swDocumentTypes_e.swDocASSEMBLY)
+            {
+                options |= (int)(swOpenDocOptions_e.swOpenDocOptions_OverrideDefaultLoadLightweight | swOpenDocOptions_e.swOpenDocOptions_LoadLightweight);
+            }
+            _sw.DocumentVisible(false, (int)type);
+            try
+            {
+                int errors = 0, warnings = 0;
+                doc = _sw.OpenDoc6(path, (int)type, options, "", ref errors, ref warnings);
+                openedHere = doc != null;
+            }
+            finally
+            {
+                _sw.DocumentVisible(true, (int)type);
+            }
+            if (doc == null) return null;
+        }
+
+        try
+        {
+            return ReadProperties(doc);
+        }
+        finally
+        {
+            if (openedHere) _sw.CloseDoc(path);
+        }
+    }
+
+    /// <summary>Builds the vault index entry for a file: saved-in version, direct references, properties.</summary>
+    public IndexEntry BuildIndexEntry(string fullPath, string vaultRoot, Dictionary<string, string>? properties)
+    {
+        var entry = new IndexEntry { SavedIn = SavedInYear(fullPath) };
+        var prefix = vaultRoot.TrimEnd('\\') + "\\";
+        foreach (var reference in GetReferences(fullPath, allLevels: false, includeParts: true))
+        {
+            if (reference.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) entry.References.Add(reference.Substring(prefix.Length).Replace('\\', '/'));
+            else entry.ExternalReferences.Add(reference);
+        }
+        if (properties != null) entry.Properties = new Dictionary<string, string>(properties, StringComparer.OrdinalIgnoreCase);
+        return entry;
     }
 
     /// <summary>Documents open in their own window (not parts loaded only as assembly components).</summary>
@@ -251,7 +345,7 @@ internal sealed class SolidWorksSession
         }
     }
 
-    private static swDocumentTypes_e DocumentType(string path)
+    public static swDocumentTypes_e DocumentType(string path)
     {
         switch (Path.GetExtension(path).ToLowerInvariant())
         {

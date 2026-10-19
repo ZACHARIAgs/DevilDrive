@@ -187,6 +187,8 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="230" />
+                    <DataGridTextColumn Header="Part Number" Binding="{Binding PartNumber}" Width="100" />
+                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="170" />
                     <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="250" SortMemberPath="StateSort" />
                     <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="130" />
                     <DataGridTextColumn Header="Since" Binding="{Binding CheckedOutSince, StringFormat='{}{0:ddd MMM d, h:mm tt}'}" Width="130" />
@@ -194,6 +196,7 @@
                     <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="*" MinWidth="180" />
                     <DataGridTextColumn Header="Checked In By" Binding="{Binding LastCheckedInBy}" Width="120" />
                     <DataGridTextColumn Header="Checked In" Binding="{Binding LastCheckIn, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="115" />
+                    <DataGridTextColumn Header="Material" Binding="{Binding Material}" Width="120" />
                     <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="180" />
                 </DataGrid.Columns>
             </DataGrid>

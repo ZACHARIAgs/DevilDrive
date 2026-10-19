@@ -150,7 +150,39 @@ public sealed class MainViewModel : ViewModelBase
         }
         facts.Add(new PropertyRow("Folder", row.Folder));
 
-        return new DetailsViewModel(row) { Facts = facts };
+        var index = f.Index;
+        var team = _vault?.Config.SolidWorksVersion;
+        var warnings = new List<string>();
+        if (index?.SavedIn != null)
+        {
+            facts.Add(new PropertyRow("Saved in", $"SolidWorks {index.SavedIn}"));
+            if (team != null && index.SavedIn > team) warnings.Add($"Saved in SolidWorks {index.SavedIn}, newer than the team's {team}: teammates on {team} can't open it.");
+        }
+        if (index != null && index.ExternalReferences.Count > 0)
+        {
+            warnings.Add("References files outside the vault, which teammates won't have:\n" + string.Join("\n", index.ExternalReferences));
+        }
+
+        return new DetailsViewModel(row)
+        {
+            Facts = facts,
+            Warnings = warnings,
+            Properties = index?.Properties.OrderBy(p => p.Key).Select(p => new PropertyRow(p.Key, p.Value)).ToList() ?? new List<PropertyRow>(),
+            Contains = index?.References.OrderBy(r => r).ToList() ?? new List<string>(),
+            WhereUsed = f.UsedIn.OrderBy(r => r).ToList(),
+            IndexNote = index != null
+                ? $"Properties and references as of {index.UpdatedAt.LocalDateTime:MMM d, h:mm tt} ({index.UpdatedBy}). They update when the file is checked in from SolidWorks."
+                : IsCadFile(f.RelativePath)
+                    ? "No properties or references recorded yet. They're filled in when the file is checked in from SolidWorks, or with Rebuild Index in the SolidWorks pane."
+                    : "",
+        };
+    }
+
+    private static bool IsCadFile(string path)
+    {
+        var ext = System.IO.Path.GetExtension(path);
+        return ext.Equals(".sldprt", StringComparison.OrdinalIgnoreCase) || ext.Equals(".sldasm", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".slddrw", StringComparison.OrdinalIgnoreCase);
     }
 
     private FileRowViewModel? SingleSelected => _selected.Count == 1 ? _selected[0] : null;
@@ -358,9 +390,16 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(WindowTitle));
     }
 
+    /// <summary>Search looks at the path and every SolidWorks property (part number, description, material, ...).</summary>
+    private bool MatchesSearch(FileRowViewModel row)
+    {
+        bool Has(string? text) => text != null && text.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+        return Has(row.Path) || (row.File.Index?.Properties.Values.Any(Has) ?? false);
+    }
+
     private bool MatchesFilter(FileRowViewModel row)
     {
-        if (SearchText.Length > 0 && row.Path.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) < 0) return false;
+        if (SearchText.Length > 0 && !MatchesSearch(row)) return false;
         var f = row.File;
         return FilterIndex switch
         {

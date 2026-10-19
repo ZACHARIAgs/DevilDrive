@@ -32,6 +32,9 @@ public sealed class FileRowViewModel : ViewModelBase
     public int Version => File.Version;
     public string VersionText => File.Version > 0 ? File.Version.ToString() : "—";
     public string LastComment => File.LatestVersion?.CommentFirstLine ?? "";
+    public string PartNumber => File.Index?.GetProperty(IndexEntry.PartNumberNames) ?? "";
+    public string Description => File.Index?.GetProperty(IndexEntry.DescriptionNames) ?? "";
+    public string Material => File.Index?.GetProperty(IndexEntry.MaterialNames) ?? "";
     public string LastCheckedInBy => File.LatestVersion?.Author ?? "";
     public DateTime? LastCheckIn => File.LatestVersion?.Date.LocalDateTime;
 

@@ -25,7 +25,7 @@ public interface IVaultService
 
     Task<GetLatestResult> GetLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default);
     Task<OperationResult> CheckOutAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
-    Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default);
+    Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null);
     Task<OperationResult> UndoCheckOutAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
     Task<IReadOnlyList<FileVersion>> GetHistoryAsync(string path, CancellationToken ct = default);
@@ -47,6 +47,9 @@ public interface IVaultService
     /// version and releases the check-out. Clients call it when a snapshot reports CheckInRequestsForMe.
     /// </summary>
     Task<OperationResult> ProcessCheckInRequestsAsync(IProgress<string>? progress = null, CancellationToken ct = default);
+
+    /// <summary>Saves index entries (references, properties, saved-in version) recorded by the SolidWorks add-in.</summary>
+    Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default);
 
     Task SetGitHubLoginAsync(string login, CancellationToken ct = default);
     string ToRelativePath(string path);

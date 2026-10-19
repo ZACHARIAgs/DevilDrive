@@ -110,6 +110,11 @@ public sealed class VaultFile
     public AdminCheckInRequest? CheckInRequest { get; set; }
     /// <summary>Display name of the admin who asked.</summary>
     public string? CheckInRequestedBy { get; set; }
+
+    /// <summary>References, properties and saved-in version recorded by the SolidWorks add-in (null if not indexed).</summary>
+    public IndexEntry? Index { get; set; }
+    /// <summary>Files that reference this one (from the index): the assemblies and drawings that would be affected by changing it.</summary>
+    public IReadOnlyList<string> UsedIn { get; set; } = Array.Empty<string>();
 }
 
 public sealed class VaultSnapshot

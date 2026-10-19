@@ -192,6 +192,8 @@ public sealed class VaultService : IVaultService
         var latest = await GetLatestVersionsAsync(ct).ConfigureAwait(false);
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
+        var index = VaultIndex.ReadAll(VaultRoot);
+        var usedIn = VaultIndex.WhereUsed(index);
         var locks = _lastLocks;
 
         if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
@@ -250,6 +252,8 @@ public sealed class VaultService : IVaultService
                 FreezeLockMissing = freeze != null && _locksKnown && fileLock == null,
                 CheckInRequest = request,
                 CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
+                Index = index.TryGetValue(path, out var indexEntry) ? indexEntry : null,
+                UsedIn = usedIn.TryGetValue(path, out var parents) ? parents : (IReadOnlyList<string>)Array.Empty<string>(),
             });
         }
 
@@ -472,13 +476,13 @@ public sealed class VaultService : IVaultService
 
     // ---------------------------------------------------------------- Check In
 
-    public async Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null)
     {
         var relatives = Normalize(paths);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await CheckInCoreAsync(relatives, comment, keepCheckedOut, progress, ct).ConfigureAwait(false);
+            return await CheckInCoreAsync(relatives, comment, keepCheckedOut, progress, ct, indexUpdates).ConfigureAwait(false);
         }
         finally
         {
@@ -486,7 +490,7 @@ public sealed class VaultService : IVaultService
         }
     }
 
-    private async Task<OperationResult> CheckInCoreAsync(IReadOnlyList<string> relatives, string comment, bool keepCheckedOut, IProgress<string>? progress, CancellationToken ct)
+    private async Task<OperationResult> CheckInCoreAsync(IReadOnlyList<string> relatives, string comment, bool keepCheckedOut, IProgress<string>? progress, CancellationToken ct, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null)
     {
         if (string.IsNullOrWhiteSpace(comment))
         {
@@ -542,7 +546,9 @@ public sealed class VaultService : IVaultService
         if (changed.Count > 0)
         {
             progress?.Report("Saving the new version…");
-            var pathspec = string.Join("\0", changed) + "\0";
+            // Index entries (from the SolidWorks add-in) for the files being checked in go in the same commit.
+            var commitPaths = changed.Concat(WriteIndexEntries(indexUpdates, changed)).ToList();
+            var pathspec = string.Join("\0", commitPaths) + "\0";
             await RunCheckedAsync("check in", new[] { "add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, TransferTimeout, pathspec).ConfigureAwait(false);
             await RunCheckedAsync("check in", new[] { "commit", "--quiet", "-m", comment, "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, null, pathspec).ConfigureAwait(false);
         }
@@ -574,8 +580,11 @@ public sealed class VaultService : IVaultService
             progress?.Report("Releasing check-outs…");
             foreach (var rel in relatives.Where(lockable.Contains))
             {
-                if (FindLock(locks, rel) == null) continue; // brand-new file, never locked
-                var unlock = await RunAsync(new[] { "lfs", "unlock", rel }, ct, NetworkTimeout).ConfigureAwait(false);
+                var fileLock = FindLock(locks, rel);
+                if (fileLock == null) continue; // brand-new file, never locked
+                // A file that was renamed or deleted can't be unlocked by path any more.
+                var unlockArgs = File.Exists(ToFullPath(rel)) ? new[] { "lfs", "unlock", rel } : new[] { "lfs", "unlock", "--id", fileLock.Id };
+                var unlock = await RunAsync(unlockArgs, ct, NetworkTimeout).ConfigureAwait(false);
                 if (unlock.Success)
                 {
                     FileUtil.SetReadOnly(ToFullPath(rel), true);
@@ -1160,8 +1169,59 @@ public sealed class VaultService : IVaultService
     private PdmException FrozenError(string rel, FrozenEntry freeze) =>
         new FrozenFileException(rel, Config.DisplayNameFor(freeze.By), freeze.At, freeze.Reason, IsAdmin);
 
+    /// <summary>Team settings and admin-managed lists: only admins may check these in.</summary>
     private static bool IsAdminOnlyFile(string rel) =>
-        SamePath(rel, VaultConfig.FileName) || rel.Replace('\\', '/').StartsWith(".pdm/", StringComparison.OrdinalIgnoreCase);
+        SamePath(rel, VaultConfig.FileName) || SamePath(rel, FrozenList.RelativePath) || SamePath(rel, CheckInRequestList.RelativePath);
+
+    /// <summary>Writes (or deletes, for null) index entries for the given files; returns the entry paths to commit.</summary>
+    private List<string> WriteIndexEntries(IReadOnlyDictionary<string, IndexEntry?>? updates, IReadOnlyCollection<string>? onlyFor = null)
+    {
+        var paths = new List<string>();
+        if (updates == null) return paths;
+        foreach (var pair in updates)
+        {
+            var rel = ToRelativePath(pair.Key);
+            if (onlyFor != null && !onlyFor.Contains(rel, StringComparer.OrdinalIgnoreCase)) continue;
+            var entryPath = VaultIndex.PathFor(rel);
+            var full = ToFullPath(entryPath);
+            if (pair.Value == null)
+            {
+                if (!File.Exists(full)) continue;
+                File.Delete(full);
+            }
+            else
+            {
+                pair.Value.UpdatedAt = DateTimeOffset.Now;
+                pair.Value.UpdatedBy = UserDisplayName;
+                WriteVaultText(entryPath, VaultIndex.Serialize(pair.Value));
+            }
+            paths.Add(entryPath);
+        }
+        return paths;
+    }
+
+    /// <summary>
+    /// Saves index entries (references, properties, saved-in version) without checking in any CAD
+    /// file. Used by the SolidWorks add-in's Rebuild Index. Null entries remove a file's entry.
+    /// </summary>
+    public async Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            var paths = WriteIndexEntries(entries);
+            if (paths.Count == 0) return result;
+            await CommitAndPushAsync(paths, $"Updated the vault index ({entries.Count} file(s))", progress, ct).ConfigureAwait(false);
+            result.Succeeded.AddRange(entries.Keys.Select(ToRelativePath));
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     private void RequireAdmin(string what)
     {

@@ -48,6 +48,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
+    private readonly ModernButton _rebuildIndex;
     private readonly CaptionLabel _status;
 
     private VaultService? _vault;
@@ -98,6 +99,7 @@ internal sealed class VaultPane : UserControl
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
+        _rebuildIndex = new ModernButton("Rebuild Index", "\uE895");
         _status = new CaptionLabel();
 
         _layout.Controls.AddRange(new Control[]
@@ -105,7 +107,7 @@ internal sealed class VaultPane : UserControl
             _header, _banner, _card,
             _checkIn, _checkOut, _undo, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
-            _getLatest, _refresh, _openApp,
+            _getLatest, _refresh, _openApp, _rebuildIndex,
             _status,
         });
         Controls.Add(_layout);
@@ -120,6 +122,7 @@ internal sealed class VaultPane : UserControl
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
+        _rebuildIndex.Click += async (_, _) => await RebuildIndexAsync();
         _timer.Tick += async (_, _) => await OnTickAsync();
 
         UpdateView();
@@ -296,6 +299,7 @@ internal sealed class VaultPane : UserControl
         _getLatest.Enabled = ready;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
+        _rebuildIndex.Enabled = ready;
 
         FitWidths();
         _layout.ResumeLayout();
@@ -339,6 +343,16 @@ internal sealed class VaultPane : UserControl
             if (file.Freeze.Reason.Length > 0) lines.Add($"“{file.Freeze.Reason}”");
             lines.Add(_vault?.IsAdmin == true ? "Unfreeze it if it really needs to change." : "It can't be changed. Ask an admin if it needs to.");
             if (file.FreezeLockMissing) lines.Add("Warning: the freeze lock is missing. An admin should freeze it again.");
+        }
+
+        var index = file.Index;
+        var identity = string.Join(" \u2014 ", new[] { index?.GetProperty(IndexEntry.PartNumberNames), index?.GetProperty(IndexEntry.DescriptionNames) }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (identity.Length > 0) lines.Insert(0, identity);
+        if (file.UsedIn.Count > 0) lines.Add("Used in: " + PathList.Format(file.UsedIn, 3));
+        if (index != null && index.ExternalReferences.Count > 0)
+        {
+            lines.Add($"\u26A0 References {index.ExternalReferences.Count} file(s) outside the vault: teammates won't have them.");
         }
 
         if (_vault != null && IsSolidWorksFile(file.RelativePath) && file.ExistsLocally)
@@ -537,10 +551,16 @@ internal sealed class VaultPane : UserControl
         await RunAsync("Checking in…", async progress =>
         {
             progress.Report("Saving and closing files…");
+            // Properties can only be read while documents are open; references and saved-in version come from disk after saving.
+            var properties = targets.Where(IsSolidWorksFile).ToDictionary(
+                p => p,
+                p => { var doc = _sw.FindOpen(p); return doc != null ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties; },
+                StringComparer.OrdinalIgnoreCase);
             var closed = _sw.CloseDocumentsUsing(targets, CloseMode.Save);
             try
             {
-                return Report(await _vault.CheckInAsync(targets, comment, keep, progress), "Checked in");
+                var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
+                return Report(await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index), "Checked in");
             }
             finally
             {
@@ -696,6 +716,39 @@ internal sealed class VaultPane : UserControl
         if (answer != DialogResult.OK) return;
 
         await RunAsync("Unfreezing…", async progress => Report(await _vault.UnfreezeAsync(new[] { top }, progress), "Unfroze"));
+    }
+
+    /// <summary>Reads references, properties and saved-in version of every SolidWorks file in the vault into the index.</summary>
+    private async Task RebuildIndexAsync()
+    {
+        if (_vault == null || _snapshot == null) return;
+        var files = _snapshot.Files.Where(f => f.ExistsLocally && IsSolidWorksFile(f.RelativePath)).ToList();
+        if (files.Count == 0)
+        {
+            SetStatus("No SolidWorks files in the vault yet.");
+            return;
+        }
+
+        var answer = MessageBox.Show(_sw.MainWindow,
+            $"Rebuild the vault index for {files.Count} SolidWorks file(s)?\n\n" +
+            "Each file is opened in the background (read-only) to read its properties and references, so this can take a few minutes. " +
+            "The results show up for everyone: part numbers, descriptions, materials, where-used and saved-in versions.",
+            "Rebuild Index", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (answer != DialogResult.OK) return;
+
+        await RunAsync("Indexing\u2026", async progress =>
+        {
+            var entries = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < files.Count; i++)
+            {
+                progress.Report($"Indexing {i + 1} of {files.Count}: {files[i].Name}");
+                await Task.Delay(1); // let the pane repaint between files
+                var full = _vault.ToFullPath(files[i].RelativePath);
+                entries[files[i].RelativePath] = _sw.BuildIndexEntry(full, _vault.VaultRoot, _sw.ReadPropertiesFromFile(full));
+            }
+            await _vault.UpdateIndexAsync(entries, progress);
+            return $"Indexed {entries.Count} file(s).";
+        });
     }
 
     private async Task GetLatestAsync()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -225,6 +226,46 @@ public sealed class VaultIntegrationTests : IDisposable
         var bob = await Open(_bob);
         var error = await Assert.ThrowsAsync<PdmException>(() => bob.RequestCheckInAsync("frame.sldprt", "please"));
         Assert.Contains("Only vault admins", error.Message);
+    }
+
+    [Fact]
+    public async Task Index_GivesPropertiesAndWhereUsed()
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm", "index"));
+        Write(_alice, ".pdm/index/robot.sldasm.json",
+            "{ \"savedIn\": 2024, \"references\": [ \"frame.sldprt\" ], \"externalReferences\": [ \"D:\\\\Downloads\\\\bolt.sldprt\" ], " +
+            "\"properties\": { \"PartNo\": \"CAP-100\", \"Description\": \"Robot\" } }");
+        Write(_alice, "robot.sldasm", "asm");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Robot assembly");
+        Git(_alice, "push");
+
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        var snapshot = await bob.GetSnapshotAsync(contactVault: false);
+        var robot = snapshot.Files.Single(f => f.RelativePath == "robot.sldasm");
+        var frame = snapshot.Files.Single(f => f.RelativePath == "frame.sldprt");
+
+        Assert.Equal("CAP-100", robot.Index!.GetProperty(IndexEntry.PartNumberNames));
+        Assert.Equal(2024, robot.Index.SavedIn);
+        Assert.Single(robot.Index.ExternalReferences);
+        Assert.Equal(new[] { "robot.sldasm" }, frame.UsedIn);
+    }
+
+    [Fact]
+    public async Task CheckIn_CommitsIndexEntry_WithTheFile()
+    {
+        Write(_bob, "notes.txt", "bob's notes");
+        var bob = await Open(_bob);
+        var entry = new IndexEntry { SavedIn = 2024 };
+        entry.Properties["Description"] = "Test notes";
+        await bob.CheckInAsync(new[] { "notes.txt" }, "notes with index", indexUpdates: new Dictionary<string, IndexEntry?> { ["notes.txt"] = entry });
+
+        var alice = await Open(_alice);
+        await alice.GetLatestAsync();
+        var notes = await alice.GetFileAsync("notes.txt");
+        Assert.Equal("Test notes", notes!.Index!.GetProperty(IndexEntry.DescriptionNames));
+        Assert.Equal("Bob", notes.Index.UpdatedBy);
     }
 
     // ------------------------------------------------------------ helpers
