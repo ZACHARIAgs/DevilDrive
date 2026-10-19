@@ -137,7 +137,7 @@ internal sealed class SolidWorksSession
     }
 
     /// <summary>Custom properties of an open document (file-level, then the active configuration's), plus a part's material.</summary>
-    public Dictionary<string, string> ReadProperties(IModelDoc2 doc)
+    public Dictionary<string, string> ReadProperties(IModelDoc2 doc, string? configurationName = null)
     {
         var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         void ReadFrom(string configuration, bool overwrite)
@@ -157,7 +157,7 @@ internal sealed class SolidWorksSession
         try
         {
             ReadFrom("", overwrite: true);
-            var configuration = doc.ConfigurationManager?.ActiveConfiguration?.Name;
+            var configuration = string.IsNullOrEmpty(configurationName) ? doc.ConfigurationManager?.ActiveConfiguration?.Name : configurationName;
             if (!string.IsNullOrEmpty(configuration)) ReadFrom(configuration!, overwrite: true);
 
             if (doc.GetType() == (int)swDocumentTypes_e.swDocPART && doc is IPartDoc part)
@@ -171,6 +171,44 @@ internal sealed class SolidWorksSession
             AddinLog.Write($"Couldn't read properties of {doc.GetPathName()}: {ex.Message}");
         }
         return properties;
+    }
+
+    /// <summary>
+    /// Flattened, parts-only bill of materials of an open assembly: every part at any level, counted
+    /// per configuration. Suppressed, envelope and excluded-from-BOM components (and everything inside
+    /// them) are left out. Properties come from the loaded part, or are left empty if it's lightweight.
+    /// </summary>
+    public List<BomLine> GetBom(IModelDoc2 assembly)
+    {
+        var lines = new Dictionary<string, BomLine>(StringComparer.OrdinalIgnoreCase);
+        if (!(assembly is IAssemblyDoc asm) || !(asm.GetComponents(false) is Array components)) return new List<BomLine>();
+
+        foreach (var item in components)
+        {
+            if (!(item is IComponent2 component) || Excluded(component)) continue;
+            var path = component.GetPathName() ?? "";
+            if (!Path.GetExtension(path).Equals(".sldprt", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var configuration = component.ReferencedConfiguration ?? "";
+            var key = path + "|" + configuration;
+            if (!lines.TryGetValue(key, out var line))
+            {
+                line = new BomLine { Path = path, Configuration = configuration };
+                if (component.GetModelDoc2() is IModelDoc2 part) line.Properties = ReadProperties(part, configuration);
+                lines[key] = line;
+            }
+            line.Quantity++;
+        }
+        return lines.Values.ToList();
+    }
+
+    private static bool Excluded(IComponent2 component)
+    {
+        for (var c = component; c != null; c = c.GetParent())
+        {
+            if (c.IsSuppressed() || c.ExcludeFromBOM || c.IsEnvelope()) return true;
+        }
+        return false;
     }
 
     /// <summary>Reads properties from a file, opening it invisibly and read-only if it isn't open already.</summary>

@@ -47,6 +47,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _unfreeze;
     private readonly ModernButton _requestCheckIn;
     private readonly ModernButton _submitReview;
+    private readonly ModernButton _exportBom;
     private readonly ModernButton _withdrawReview;
     private readonly ModernButton _approveReview;
     private readonly ModernButton _rejectReview;
@@ -116,6 +117,7 @@ internal sealed class VaultPane : UserControl
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
         _rebuildIndex = new ModernButton("Rebuild Index", "\uE895");
+        _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
 
         _layout.Controls.AddRange(new Control[]
@@ -123,7 +125,7 @@ internal sealed class VaultPane : UserControl
             _header, _banner, _card,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
-            _getLatest, _refresh, _openApp, _rebuildIndex,
+            _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
             _status,
         });
         Controls.Add(_layout);
@@ -146,6 +148,7 @@ internal sealed class VaultPane : UserControl
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
         _rebuildIndex.Click += async (_, _) => await RebuildIndexAsync();
+        _exportBom.Click += (_, _) => ExportBom();
         _timer.Tick += async (_, _) => await OnTickAsync();
 
         UpdateView();
@@ -360,6 +363,8 @@ internal sealed class VaultPane : UserControl
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
         _rebuildIndex.Enabled = ready;
+        _exportBom.Visible = _currentPath != null && Path.GetExtension(_currentPath).Equals(".sldasm", StringComparison.OrdinalIgnoreCase);
+        _exportBom.Enabled = !_busy;
 
         FitWidths();
         _layout.ResumeLayout();
@@ -800,6 +805,71 @@ internal sealed class VaultPane : UserControl
             await _vault.CheckInAsync(pdfs, $"Drawing PDF for release: {reason}", progress: progress);
         }
         return (pdfs, revisions, problems);
+    }
+
+    /// <summary>Saves a flattened, parts-only bill of materials of the open assembly as a CSV file for Excel.</summary>
+    private void ExportBom()
+    {
+        var top = _currentPath;
+        var doc = top != null ? _sw.FindOpen(top) : null;
+        if (top == null || doc == null) return;
+
+        List<BomLine> lines;
+        try
+        {
+            lines = _sw.GetBom(doc);
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write("BOM export failed: " + ex);
+            SetStatus("Couldn't read the assembly's parts: " + ex.Message);
+            return;
+        }
+        if (lines.Count == 0)
+        {
+            SetStatus("This assembly has no parts to list (suppressed and excluded-from-BOM parts are left out).");
+            return;
+        }
+        foreach (var line in lines)
+        {
+            // Lightweight parts aren't loaded: use what the vault index recorded instead.
+            var file = FileAt(line.Path);
+            if (line.Properties.Count == 0 && file?.Index != null) line.Properties = new Dictionary<string, string>(file.Index.Properties, StringComparer.OrdinalIgnoreCase);
+            line.Revision = file?.Revision;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export BOM",
+            Filter = "CSV for Excel (*.csv)|*.csv",
+            FileName = Path.GetFileNameWithoutExtension(top) + " BOM.csv",
+            // Not in the vault folder: an export there would show up as a new file to check in.
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, Bom.ToCsv(lines), new System.Text.UTF8Encoding(true));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus("Couldn't save the BOM: " + ex.Message);
+            return;
+        }
+        var quantity = lines.Sum(l => l.Quantity);
+        SetStatus($"Saved the BOM: {lines.Count} different part(s), {quantity} in total.");
+        if (MessageBox.Show(_sw.MainWindow, $"Saved {Path.GetFileName(dialog.FileName)} ({lines.Count} different parts, {quantity} in total). Open it now?",
+                "Capstone PDM", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Couldn't open it: " + ex.Message);
+            }
+        }
     }
 
     private async Task SubmitReviewAsync()

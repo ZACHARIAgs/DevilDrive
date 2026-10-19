@@ -212,3 +212,24 @@ public class DiscordMessageTests
         Assert.Contains("and 4 more", message);
     }
 }
+
+public class BomTests
+{
+    [Fact]
+    public void Csv_UsesPartNumberOrFileName_QuotesCommas_AndDefusesFormulas()
+    {
+        var lines = new List<BomLine>
+        {
+            new BomLine { Path = @"C:\V\bolt.SLDPRT", Configuration = "M6", Quantity = 8,
+                Properties = new Dictionary<string, string> { ["PartNo"] = "100-02", ["Description"] = "Bolt, hex" } },
+            new BomLine { Path = @"C:\V\plate.SLDPRT", Configuration = "Default", Quantity = 1, Revision = "B",
+                Properties = new Dictionary<string, string> { ["Description"] = "=HYPERLINK(1)" } },
+        };
+
+        var rows = Bom.ToCsv(lines).Split('\n').Select(r => r.TrimEnd('\r')).Where(r => r.Length > 0).ToList();
+
+        Assert.Equal("Item,Part Number,Description,Material,Qty,Revision,Configuration,File", rows[0]);
+        Assert.Equal("1,100-02,\"Bolt, hex\",,8,,M6,bolt.SLDPRT", rows[1]);
+        Assert.Equal("2,plate,'=HYPERLINK(1),,1,B,Default,plate.SLDPRT", rows[2]);
+    }
+}
