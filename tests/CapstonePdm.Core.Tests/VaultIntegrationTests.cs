@@ -301,6 +301,25 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.Null((await bob.GetSnapshotAsync(contactVault: false)).ViewingMilestone);
     }
 
+    [Fact]
+    public async Task CheckIn_OfAMove_RemovesOldPath_AddsNewPath_AndMovesTheIndexEntry()
+    {
+        var bob = await Open(_bob);
+        Directory.CreateDirectory(Path.Combine(_bob, "docs"));
+        File.Move(Path.Combine(_bob, "notes.txt"), Path.Combine(_bob, "docs", "notes.txt"));
+
+        var index = new Dictionary<string, IndexEntry?> { ["notes.txt"] = null, ["docs/notes.txt"] = new IndexEntry { SavedIn = 2024 } };
+        await bob.CheckInAsync(new[] { "notes.txt", "docs/notes.txt" }, "Moved notes into docs", indexUpdates: index);
+
+        var alice = await Open(_alice);
+        await alice.GetLatestAsync();
+        Assert.False(File.Exists(Path.Combine(_alice, "notes.txt")));
+        Assert.Equal("v1", Read(_alice, "docs/notes.txt"));
+        Assert.Equal(2024, (await alice.GetFileAsync("docs/notes.txt"))!.Index!.SavedIn);
+        // History is per path: the move is the file's first version at its new location.
+        Assert.Single(await alice.GetHistoryAsync("docs/notes.txt"));
+    }
+
     // ------------------------------------------------------------ helpers
 
     /// <summary>What an admin's Freeze records in the vault (the lock part needs a real LFS server).</summary>

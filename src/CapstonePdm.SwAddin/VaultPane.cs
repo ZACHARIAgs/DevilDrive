@@ -45,6 +45,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _freeze;
     private readonly ModernButton _unfreeze;
     private readonly ModernButton _requestCheckIn;
+    private readonly ModernButton _rename;
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
@@ -96,6 +97,7 @@ internal sealed class VaultPane : UserControl
         _freeze = new ModernButton("Freeze (admin)", "");
         _unfreeze = new ModernButton("Unfreeze (admin)", "");
         _requestCheckIn = new ModernButton("Request Check-In (admin)", "");
+        _rename = new ModernButton("Rename / Move", "");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
@@ -105,7 +107,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _checkIn, _checkOut, _undo, _requestCheckIn, _freeze, _unfreeze,
+            _checkIn, _checkOut, _undo, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp, _rebuildIndex,
             _status,
@@ -119,6 +121,7 @@ internal sealed class VaultPane : UserControl
         _freeze.Click += async (_, _) => await FreezeAsync();
         _unfreeze.Click += async (_, _) => await UnfreezeAsync();
         _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
+        _rename.Click += async (_, _) => await RenameAsync();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
@@ -290,12 +293,14 @@ internal sealed class VaultPane : UserControl
         _freeze.Visible = isAdmin && file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
         _unfreeze.Visible = isAdmin && state == FileState.Frozen;
         _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
+        _rename.Visible = file != null && file.ExistsLocally && IsSolidWorksFile(file.RelativePath) && !file.HasLocalChanges &&
+                          state is FileState.Available or FileState.CheckedOutByMe;
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
         // Editing in a newer SolidWorks than the team's would save files the others can't open.
         var viewingMilestone = _snapshot?.ViewingMilestone != null;
         var editable = ready && !NewerThanTeam && !viewingMilestone;
-        _checkIn.Enabled = _checkOut.Enabled = _freeze.Enabled = editable;
+        _checkIn.Enabled = _checkOut.Enabled = _freeze.Enabled = _rename.Enabled = editable;
         _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready && !viewingMilestone;
         _getLatest.Enabled = ready && !viewingMilestone;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
@@ -758,6 +763,139 @@ internal sealed class VaultPane : UserControl
         if (answer != DialogResult.OK) return;
 
         await RunAsync("Unfreezing…", async progress => Report(await _vault.UnfreezeAsync(new[] { top }, progress), "Unfroze"));
+    }
+
+    /// <summary>
+    /// Renames/moves the active file and repoints every assembly, drawing and derived part that uses
+    /// it, then checks the renamed file and all of those in together.
+    /// </summary>
+    private async Task RenameAsync()
+    {
+        var oldPath = _currentPath;
+        var file = CurrentFile;
+        if (oldPath == null || _vault == null || _snapshot == null || file == null) return;
+
+        using var form = new RenameForm(oldPath, _vault.VaultRoot);
+        if (form.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var newPath = form.NewPath;
+
+        // Find everything that references this file. Read from the files themselves (not the index) so nothing is missed.
+        SetStatus("Finding files that use it…");
+        var candidates = _snapshot.Files
+            .Where(f => f.ExistsLocally && IsSolidWorksFile(f.RelativePath))
+            .Select(f => _vault.ToFullPath(f.RelativePath))
+            .Where(p => !string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var parents = new List<string>();
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (i % 10 == 0)
+            {
+                SetStatus($"Finding files that use it ({i + 1} of {candidates.Count})…");
+                await Task.Delay(1);
+            }
+            if (_sw.GetReferences(candidates[i], allLevels: false, includeParts: true).Any(r => string.Equals(r, oldPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                parents.Add(candidates[i]);
+            }
+        }
+        SetStatus("");
+
+        var blocked = parents.Select(p => (Path: p, File: FileAt(p)))
+            .Where(x => x.File != null && x.File.State is FileState.CheckedOutByOther or FileState.Frozen or FileState.ModifiedWithoutCheckOut)
+            .ToList();
+        if (blocked.Count > 0)
+        {
+            MessageBox.Show(_sw.MainWindow,
+                "These files use it but can't be updated right now:\n\n" +
+                string.Join("\n", blocked.Select(b => $"• {Path.GetFileName(b.Path)}: " + (b.File!.State switch
+                {
+                    FileState.CheckedOutByOther => $"checked out by {b.File.CheckedOutBy}",
+                    FileState.Frozen => "frozen (an admin must unfreeze it)",
+                    _ => "edited without check-out",
+                }))) +
+                "\n\nNothing was renamed.",
+                "Rename / Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var oldRel = _vault.ToRelativePath(oldPath);
+        var newRel = _vault.ToRelativePath(newPath);
+        var confirm = $"Rename {oldRel}\nto {newRel}?";
+        confirm += parents.Count > 0
+            ? $"\n\nThese {parents.Count} file(s) use it and will be updated and checked in with it:\n" + string.Join("\n", parents.Select(p => "• " + _vault.ToRelativePath(p)))
+            : "\n\nNo other vault files use it.";
+        if (MessageBox.Show(_sw.MainWindow, confirm, "Rename / Move", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+
+        await RunAsync("Renaming…", async progress =>
+        {
+            // 1. Check out the file and every tracked parent (new, never-checked-in parents don't need it).
+            var toCheckOut = new[] { oldPath }.Concat(parents)
+                .Where(p => FileAt(p)?.State is FileState.Available)
+                .ToList();
+            if (toCheckOut.Count > 0)
+            {
+                var checkOut = await _vault.CheckOutAsync(toCheckOut, progress);
+                if (checkOut.Failures.Count > 0) throw checkOut.Failures[0].Error;
+            }
+
+            // 2. Close everything involved so SolidWorks lets go of the files.
+            progress.Report("Closing files…");
+            var involved = new[] { oldPath }.Concat(parents).ToList();
+            var closed = _sw.CloseDocumentsUsing(involved, CloseMode.Save);
+            var replaced = new List<string>();
+            var moved = false;
+            try
+            {
+                // 3. Move the file, then repoint each parent at the new location.
+                progress.Report("Updating references…");
+                Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
+                File.Move(oldPath, newPath);
+                moved = true;
+                foreach (var parent in parents)
+                {
+                    if (!_sw.ReplaceReference(parent, oldPath, newPath))
+                    {
+                        throw new PdmException($"SolidWorks couldn't update the reference in {Path.GetFileName(parent)}.");
+                    }
+                    replaced.Add(parent);
+                }
+            }
+            catch
+            {
+                // Put everything back the way it was.
+                foreach (var parent in replaced) _sw.ReplaceReference(parent, newPath, oldPath);
+                if (moved && File.Exists(newPath) && !File.Exists(oldPath)) File.Move(newPath, oldPath);
+                _sw.Reopen(closed);
+                throw;
+            }
+
+            // 4. Check in the rename (old path removed, new path added) with every updated parent, plus their index entries.
+            var index = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase)
+            {
+                [oldPath] = null,
+                [newPath] = _sw.BuildIndexEntry(newPath, _vault.VaultRoot, file.Index?.Properties),
+            };
+            foreach (var parent in parents) index[parent] = _sw.BuildIndexEntry(parent, _vault.VaultRoot, FileAt(parent)?.Index?.Properties);
+
+            var reopen = new ClosedDocuments(string.Equals(closed.ActivePath, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : closed.ActivePath);
+            reopen.Paths.AddRange(closed.Paths.Select(p => string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : p));
+            try
+            {
+                var result = await _vault.CheckInAsync(new[] { oldPath, newPath }.Concat(parents).ToList(),
+                    $"Renamed {oldRel} to {newRel}", progress: progress, indexUpdates: index);
+                return Report(result, "Renamed");
+            }
+            catch (PdmException ex)
+            {
+                throw new PdmException(ex.Message + "\n\nThe rename is done on this PC but isn't in the vault yet. Select the renamed file and the files " +
+                                       "that use it in Capstone PDM and click Check In to finish.", ex.Detail, ex);
+            }
+            finally
+            {
+                _sw.Reopen(reopen);
+            }
+        });
     }
 
     /// <summary>Reads references, properties and saved-in version of every SolidWorks file in the vault into the index.</summary>

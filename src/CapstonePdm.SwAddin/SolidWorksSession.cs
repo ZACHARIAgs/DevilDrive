@@ -212,6 +212,13 @@ internal sealed class SolidWorksSession
         }
     }
 
+    /// <summary>
+    /// Points a closed assembly/drawing/derived part at a renamed or moved file. Writes the referencing
+    /// file on disk, so it must be closed and checked out.
+    /// </summary>
+    public bool ReplaceReference(string referencingFile, string oldReference, string newReference) =>
+        _sw.ReplaceReferencedDocument(referencingFile, oldReference, newReference);
+
     /// <summary>Saves every sheet of a drawing as a PDF (opening the drawing invisibly if needed).</summary>
     public void ExportPdf(string drawingPath, string pdfPath)
     {
