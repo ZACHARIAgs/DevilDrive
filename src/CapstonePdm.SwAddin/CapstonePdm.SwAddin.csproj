@@ -39,6 +39,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\vault.png" LogicalName="CapstonePdm.SwAddin.vault.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CapstonePdm.Core\CapstonePdm.Core.csproj" />
   </ItemGroup>
 

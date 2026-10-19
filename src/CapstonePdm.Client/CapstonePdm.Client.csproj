@@ -6,7 +6,12 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>CapstonePDM</AssemblyName>
     <RootNamespace>CapstonePdm.Client</RootNamespace>
+    <ApplicationIcon>..\..\assets\vault.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\vault.ico" Link="Assets\vault.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CapstonePdm.Core\CapstonePdm.Core.csproj" />

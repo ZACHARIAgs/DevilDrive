@@ -68,7 +68,15 @@ public sealed class CapstonePdmAddin : ISwAddin
 
     private void CreatePane(ISldWorks sw)
     {
-        _taskPane = sw.CreateTaskpaneView2(PaneIcon.EnsureFile(), Title);
+        try
+        {
+            _taskPane = sw.CreateTaskpaneView3(PaneIcon.EnsurePngFiles(), Title);
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write("Multi-size task pane icon failed, using the basic one: " + ex.Message);
+        }
+        _taskPane ??= sw.CreateTaskpaneView2(PaneIcon.EnsureBmpFile(), Title);
         _pane = new VaultPane(new SolidWorksSession(sw));
         _taskPane.DisplayWindowFromHandlex64(_pane.Handle.ToInt64());
     }

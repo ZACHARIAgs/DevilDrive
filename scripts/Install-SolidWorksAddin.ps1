@@ -68,7 +68,7 @@ if (-not $Elevated) {
             exit $process.ExitCode
         }
         if ($Uninstall) { Write-Host 'Capstone PDM add-in removed.' -ForegroundColor Green }
-        else { Write-Host 'Capstone PDM add-in installed. Start SolidWorks and look for the padlock tab in the Task Pane.' -ForegroundColor Green }
+        else { Write-Host 'Capstone PDM add-in installed. Start SolidWorks and look for the safe icon in the Task Pane.' -ForegroundColor Green }
         exit 0
     }
 }

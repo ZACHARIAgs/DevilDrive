@@ -40,7 +40,7 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 
 Setup offers to install the **Capstone PDM add-in** (SolidWorks 2024 or newer; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
 
-In SolidWorks, click the **padlock tab** in the Task Pane on the right. It shows the state of the document you're looking at, plus buttons:
+In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the state of the document you're looking at, plus buttons:
 
 * **Check Out**: for an assembly or drawing, you can tick the referenced parts to check out at the same time. The document becomes editable right away; there's no need to reopen it.
 * **Check In…**: saves, closes, checks in and reopens the files for you, so you don't have to close them yourself. New parts used by an assembly are pre-ticked, so teammates never get missing references.
