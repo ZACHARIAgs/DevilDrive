@@ -1,0 +1,23 @@
+{
+  // Shared Capstone PDM settings. Admins edit this file and check it in like any other file.
+  "vaultName": "Capstone Vault",
+  "branch": "main",
+
+  // Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.
+  "discordWebhookUrl": "",
+
+  // GitHub usernames allowed to break other people's check-outs.
+  "admins": [ "aturne59-stack" ],
+
+  // GitHub username -> name shown in the vault view and in Discord.
+  // Anyone not listed here is shown by their GitHub username.
+  "team": {
+  },
+
+  "notify": {
+    "checkOut": true,
+    "checkIn": true,
+    "undoCheckOut": true,
+    "breakLock": true
+  }
+}

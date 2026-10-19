@@ -1,0 +1,24 @@
+# Capstone PDM vault rules.
+# These file types are stored with Git LFS and are "lockable": they stay read-only until
+# you check them out, and nobody can check in a file someone else has checked out.
+# Both lower- and upper-case are listed because SolidWorks saves upper-case extensions.
+
+# SolidWorks
+*.sldprt filter=lfs diff=lfs merge=lfs -text lockable
+*.SLDPRT filter=lfs diff=lfs merge=lfs -text lockable
+*.sldasm filter=lfs diff=lfs merge=lfs -text lockable
+*.SLDASM filter=lfs diff=lfs merge=lfs -text lockable
+*.slddrw filter=lfs diff=lfs merge=lfs -text lockable
+*.SLDDRW filter=lfs diff=lfs merge=lfs -text lockable
+
+# Neutral CAD
+*.step filter=lfs diff=lfs merge=lfs -text lockable
+*.STEP filter=lfs diff=lfs merge=lfs -text lockable
+*.stp filter=lfs diff=lfs merge=lfs -text lockable
+*.STP filter=lfs diff=lfs merge=lfs -text lockable
+
+# Drawings and exports
+*.pdf filter=lfs diff=lfs merge=lfs -text lockable
+*.PDF filter=lfs diff=lfs merge=lfs -text lockable
+*.dxf filter=lfs diff=lfs merge=lfs -text lockable
+*.DXF filter=lfs diff=lfs merge=lfs -text lockable

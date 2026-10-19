@@ -1,0 +1,487 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using CapstonePdm.Core.Config;
+using CapstonePdm.Core.Errors;
+using CapstonePdm.Core.Vault;
+
+namespace CapstonePdm.Client.ViewModels;
+
+public sealed class MainViewModel : ViewModelBase
+{
+    private static readonly Brush InfoBrush = Frozen(0xE3, 0xF2, 0xFD);
+    private static readonly Brush WarningBrush = Frozen(0xFF, 0xF3, 0xE0);
+    private static readonly Brush ErrorBrush = Frozen(0xFF, 0xEB, 0xEE);
+
+    private readonly IDialogs _dialogs;
+    private readonly Dictionary<string, FileRowViewModel> _rows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly DispatcherTimer _autoRefresh = new() { Interval = TimeSpan.FromSeconds(60) };
+
+    private VaultService? _vault;
+    private bool _isBusy;
+    private string _statusText = "Starting…";
+    private string _bannerText = "";
+    private Brush _bannerBrush = InfoBrush;
+    private string _searchText = "";
+    private int _filterIndex;
+    private string _infoText = "";
+    private IReadOnlyList<FileRowViewModel> _selected = Array.Empty<FileRowViewModel>();
+
+    public MainViewModel(IDialogs dialogs)
+    {
+        _dialogs = dialogs;
+        FilesView = CollectionViewSource.GetDefaultView(Files);
+        FilesView.Filter = o => o is FileRowViewModel row && MatchesFilter(row);
+        FilesView.SortDescriptions.Add(new SortDescription(nameof(FileRowViewModel.Path), ListSortDirection.Ascending));
+        _autoRefresh.Tick += async (_, _) => await RefreshAsync(quiet: true);
+
+        GetLatestCommand = new RelayCommand(async () => await GetLatestAsync(), () => CanRun);
+        CheckOutCommand = new RelayCommand(async () => await CheckOutAsync(), () => CanRun && CheckOutTargets().Count > 0);
+        CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanRun && CheckInTargets().Count > 0);
+        UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanRun && UndoTargets().Count > 0);
+        HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
+        RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
+        BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanRun && IsAdmin && SingleSelected?.File.Lock != null);
+        OpenCommand = new RelayCommand(OpenSelected, () => SingleSelected?.File.ExistsLocally == true);
+        ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
+        SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
+    }
+
+    public ObservableCollection<FileRowViewModel> Files { get; } = new();
+    public ICollectionView FilesView { get; }
+
+    public ICommand GetLatestCommand { get; }
+    public ICommand CheckOutCommand { get; }
+    public ICommand CheckInCommand { get; }
+    public ICommand UndoCheckOutCommand { get; }
+    public ICommand HistoryCommand { get; }
+    public ICommand RefreshCommand { get; }
+    public ICommand BreakLockCommand { get; }
+    public ICommand OpenCommand { get; }
+    public ICommand ShowInExplorerCommand { get; }
+    public ICommand SettingsCommand { get; }
+
+    public IVaultService? Vault => _vault;
+
+    public IReadOnlyList<FileRowViewModel> SelectedFiles
+    {
+        get => _selected;
+        set
+        {
+            _selected = value;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private FileRowViewModel? SingleSelected => _selected.Count == 1 ? _selected[0] : null;
+    private bool CanRun => _vault != null && !IsBusy;
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (Set(ref _isBusy, value)) CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string StatusText
+    {
+        get => _statusText;
+        private set => Set(ref _statusText, value);
+    }
+
+    public string InfoText
+    {
+        get => _infoText;
+        private set => Set(ref _infoText, value);
+    }
+
+    public string BannerText
+    {
+        get => _bannerText;
+        private set
+        {
+            if (Set(ref _bannerText, value)) OnPropertyChanged(nameof(HasBanner));
+        }
+    }
+
+    public bool HasBanner => BannerText.Length > 0;
+
+    public Brush BannerBrush
+    {
+        get => _bannerBrush;
+        private set => Set(ref _bannerBrush, value);
+    }
+
+    public bool IsAdmin => _vault?.IsAdmin == true;
+
+    public string WindowTitle => _vault == null ? "Capstone PDM" : $"Capstone PDM — {_vault.Config.VaultName} ({_vault.VaultRoot})";
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (Set(ref _searchText, value)) FilesView.Refresh();
+        }
+    }
+
+    /// <summary>0 all, 1 checked out to me, 2 checked out by others, 3 needs attention, 4 updates available.</summary>
+    public int FilterIndex
+    {
+        get => _filterIndex;
+        set
+        {
+            if (Set(ref _filterIndex, value)) FilesView.Refresh();
+        }
+    }
+
+    // ------------------------------------------------------------ startup and refresh
+
+    public async Task InitializeAsync()
+    {
+        await OpenVaultAsync(UserSettings.Load().VaultPath);
+        _autoRefresh.Start();
+    }
+
+    private async Task OpenVaultAsync(string path)
+    {
+        try
+        {
+            StatusText = "Opening vault…";
+            _vault = await VaultService.OpenAsync(path);
+        }
+        catch (PdmException ex)
+        {
+            _vault = null;
+            Files.Clear();
+            _rows.Clear();
+            SetBanner(ex.Message + " Use Settings to choose the vault folder.", ErrorBrush);
+            StatusText = "No vault open";
+            OnPropertyChanged(nameof(WindowTitle));
+            _dialogs.ShowError(ex);
+            return;
+        }
+
+        OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(IsAdmin));
+        await RefreshAsync(quiet: false);
+    }
+
+    public async Task RefreshAsync(bool quiet)
+    {
+        if (_vault == null || IsBusy) return;
+        IsBusy = true;
+        var previousStatus = StatusText;
+        StatusText = "Refreshing…";
+        try
+        {
+            Apply(await _vault.GetSnapshotAsync(contactVault: true));
+            StatusText = quiet ? previousStatus : "Ready";
+        }
+        catch (PdmException ex)
+        {
+            StatusText = "Refresh failed";
+            if (quiet) SetBanner(ex.Message, ErrorBrush);
+            else _dialogs.ShowError(ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void Apply(VaultSnapshot snapshot)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in snapshot.Files)
+        {
+            seen.Add(file.RelativePath);
+            if (_rows.TryGetValue(file.RelativePath, out var row))
+            {
+                row.Update(file);
+            }
+            else
+            {
+                row = new FileRowViewModel(file);
+                _rows[file.RelativePath] = row;
+                Files.Add(row);
+            }
+        }
+        foreach (var gone in _rows.Keys.Where(k => !seen.Contains(k)).ToList())
+        {
+            Files.Remove(_rows[gone]);
+            _rows.Remove(gone);
+        }
+        FilesView.Refresh();
+
+        // Banner: the most important things first.
+        var lines = new List<string>();
+        var brush = InfoBrush;
+        if (snapshot.ConfigProblem != null)
+        {
+            lines.Add(snapshot.ConfigProblem);
+            brush = ErrorBrush;
+        }
+        if (snapshot.IsOffline)
+        {
+            lines.Add("Offline: showing the last known status. " + snapshot.ConnectionProblem);
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
+        else if (snapshot.ConnectionProblem != null)
+        {
+            lines.Add("Couldn't read check-outs from the vault: " + snapshot.ConnectionProblem);
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
+        if (snapshot.PendingCheckIns > 0)
+        {
+            lines.Add($"You have {snapshot.PendingCheckIns} check-in(s) saved on this PC that haven't reached the vault. Select the files and click Check In to send them.");
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
+        var unlocked = snapshot.Files.Count(f => f.State == FileState.ModifiedWithoutCheckOut);
+        if (unlocked > 0)
+        {
+            lines.Add($"{unlocked} file(s) were edited without being checked out. Check them out now (your edits are kept), or use Undo Check Out to throw the edits away.");
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
+        if (snapshot.UpdatesAvailable > 0)
+        {
+            lines.Add($"The vault has {snapshot.UpdatesAvailable} new check-in(s). Click Get Latest.");
+        }
+        SetBanner(string.Join("\n", lines), brush);
+
+        var mine = snapshot.Files.Count(f => f.State == FileState.CheckedOutByMe);
+        InfoText = $"{_vault!.UserDisplayName}{(IsAdmin ? " (admin)" : "")}  •  {mine} checked out to you  •  {snapshot.Files.Count} files  •  refreshed {snapshot.RetrievedAt:h:mm tt}";
+        OnPropertyChanged(nameof(IsAdmin));
+        OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    private bool MatchesFilter(FileRowViewModel row)
+    {
+        if (SearchText.Length > 0 && row.Path.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) < 0) return false;
+        var f = row.File;
+        return FilterIndex switch
+        {
+            1 => f.State == FileState.CheckedOutByMe,
+            2 => f.State == FileState.CheckedOutByOther,
+            3 => f.State is FileState.ModifiedWithoutCheckOut or FileState.NotInVault or FileState.Modified or FileState.MissingLocally || f.IsOutdated,
+            4 => f.IsOutdated,
+            _ => true,
+        };
+    }
+
+    // ------------------------------------------------------------ commands
+
+    private List<FileRowViewModel> CheckOutTargets() =>
+        _selected.Where(r => r.File.IsLockable && r.File.State is FileState.Available or FileState.ModifiedWithoutCheckOut).ToList();
+
+    /// <summary>The selection, or with nothing selected, everything you could check in.</summary>
+    private List<FileRowViewModel> CheckInTargets()
+    {
+        static bool CanCheckIn(FileState s) => s is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified or FileState.MissingLocally;
+        var source = _selected.Count > 0 ? _selected : Files;
+        return source.Where(r => CanCheckIn(r.File.State) || (_selected.Count > 0 && r.File.State == FileState.ModifiedWithoutCheckOut)).ToList();
+    }
+
+    private List<FileRowViewModel> UndoTargets() =>
+        _selected.Where(r => r.File.State is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified or FileState.MissingLocally).ToList();
+
+    private Task GetLatestAsync() => RunAsync("Getting latest…", async (vault, progress) =>
+    {
+        var result = await vault.GetLatestAsync(progress);
+        return result.CheckInsReceived == 0
+            ? "Already up to date."
+            : $"Got latest: {result.UpdatedFiles.Count} file(s) updated.";
+    });
+
+    private Task CheckOutAsync()
+    {
+        var targets = CheckOutTargets().Select(r => r.Path).ToList();
+        return RunAsync("Checking out…", async (vault, progress) =>
+            Report(await vault.CheckOutAsync(targets, progress), "Checked out"));
+    }
+
+    private Task CheckInAsync()
+    {
+        var targets = CheckInTargets().Select(r => r.Path).ToList();
+        var request = _dialogs.AskCheckIn("Check In", "Check In", targets, "", allowKeepCheckedOut: true);
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Checking in…", async (vault, progress) =>
+            Report(await vault.CheckInAsync(targets, request.Comment, request.KeepCheckedOut, progress), "Checked in"));
+    }
+
+    private Task UndoCheckOutAsync()
+    {
+        var targets = UndoTargets().Select(r => r.Path).ToList();
+        var edited = UndoTargets().Where(r => r.File.HasLocalChanges).Select(r => r.Name).ToList();
+        var message = $"Undo check-out of {PathList.Format(targets)}?";
+        if (edited.Count > 0)
+        {
+            message += $"\n\nYour changes to {PathList.Format(edited)} will be thrown away and replaced with the vault version. " +
+                       $"(A backup copy is kept in {FileUtil.BackupRoot}.)";
+        }
+        if (!_dialogs.Confirm("Undo Check Out", message)) return Task.CompletedTask;
+        return RunAsync("Undoing check-out…", async (vault, progress) =>
+            Report(await vault.UndoCheckOutAsync(targets, progress), "Undid check-out"));
+    }
+
+    private Task BreakLockAsync()
+    {
+        var row = SingleSelected;
+        if (row?.File.Lock == null) return Task.CompletedTask;
+        var message = $"Break {row.CheckedOutBy}'s check-out of {row.Name}?\n\n" +
+                      "Only do this if they're unreachable or the check-out is stale. Any changes they haven't checked in won't be in the vault, " +
+                      "and they'll need to check the file out again before checking in. The team will be told in Discord.";
+        if (!_dialogs.Confirm("Break Check-Out (admin)", message)) return Task.CompletedTask;
+        return RunAsync("Breaking check-out…", async (vault, _) =>
+            Report(await vault.BreakLockAsync(row.Path), "Broke check-out"));
+    }
+
+    /// <summary>Called by the History window.</summary>
+    public Task RestoreAsync(string path, FileVersion version, string comment) =>
+        RunAsync($"Restoring version {version.Version}…", async (vault, progress) =>
+            Report(await vault.RestoreVersionAsync(path, version, comment, progress), $"Restored version {version.Version} of"));
+
+    private void ShowHistory()
+    {
+        if (SingleSelected != null) _dialogs.ShowHistory(SingleSelected.Path);
+    }
+
+    private void OpenSelected()
+    {
+        if (_vault == null || SingleSelected == null) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(_vault.ToFullPath(SingleSelected.Path)) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _dialogs.ShowMessage("Open", "Couldn't open the file: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private void ShowInExplorer()
+    {
+        if (_vault == null) return;
+        var args = SingleSelected?.File.ExistsLocally == true
+            ? $"/select,\"{_vault.ToFullPath(SingleSelected.Path)}\""
+            : $"\"{_vault.VaultRoot}\"";
+        Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
+    }
+
+    private async Task OpenSettingsAsync()
+    {
+        var settings = UserSettings.Load();
+        var request = _dialogs.AskSettings(settings.VaultPath, _vault?.GitHubLogin);
+        if (request == null) return;
+
+        var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        settings.VaultPath = request.VaultPath;
+        settings.Save();
+
+        if (pathChanged || _vault == null) await OpenVaultAsync(request.VaultPath);
+        if (_vault != null && request.GitHubLogin.Length > 0 && request.GitHubLogin != _vault.GitHubLogin)
+        {
+            try
+            {
+                await _vault.SetGitHubLoginAsync(request.GitHubLogin);
+            }
+            catch (PdmException ex)
+            {
+                _dialogs.ShowError(ex);
+            }
+            await RefreshAsync(quiet: false);
+        }
+    }
+
+    public Task<IReadOnlyList<FileVersion>> LoadHistoryAsync(string path) =>
+        _vault?.GetHistoryAsync(path) ?? Task.FromResult<IReadOnlyList<FileVersion>>(Array.Empty<FileVersion>());
+
+    // ------------------------------------------------------------ plumbing
+
+    /// <summary>Runs a vault command with busy state and error dialogs, then refreshes the view.</summary>
+    private async Task RunAsync(string busyText, Func<VaultService, IProgress<string>, Task<string>> operation)
+    {
+        if (_vault == null || IsBusy) return;
+        IsBusy = true;
+        StatusText = busyText;
+        var progress = new Progress<string>(s => StatusText = s);
+        var finalStatus = "Ready";
+        try
+        {
+            finalStatus = await operation(_vault, progress);
+        }
+        catch (PdmException ex)
+        {
+            finalStatus = ex.Title;
+            _dialogs.ShowError(ex);
+        }
+        catch (Exception ex)
+        {
+            finalStatus = "Error";
+            _dialogs.ShowError(new PdmException("Something unexpected went wrong: " + ex.Message, ex.ToString()));
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        await RefreshAsync(quiet: true);
+        StatusText = finalStatus;
+    }
+
+    /// <summary>Shows failures and warnings from a multi-file command; returns the status-bar text.</summary>
+    private string Report(OperationResult result, string verb)
+    {
+        var status = result.Succeeded.Count > 0
+            ? $"{verb} {PathList.Format(result.Succeeded)}."
+            : "Nothing was done.";
+
+        if (result.Failures.Count == 1 && result.Succeeded.Count == 0 && result.Warnings.Count == 0)
+        {
+            _dialogs.ShowError(result.Failures[0].Error);
+            return result.Failures[0].Error.Title;
+        }
+
+        var sections = new List<string>();
+        if (result.Failures.Count > 0)
+        {
+            sections.Add("These files had problems:\n" + string.Join("\n", result.Failures.Select(f => $"• {f.Error.Message}")));
+        }
+        if (result.Warnings.Count > 0) sections.Add(string.Join("\n", result.Warnings.Select(w => "• " + w)));
+        if (result.Notes.Count > 0) sections.Add(string.Join("\n", result.Notes));
+
+        if (sections.Count > 0)
+        {
+            var header = result.Succeeded.Count > 0 ? status + "\n\n" : "";
+            _dialogs.ShowMessage(
+                result.Failures.Count > 0 ? "Some files weren't processed" : "Done",
+                header + string.Join("\n\n", sections),
+                isWarning: result.Failures.Count > 0 || result.Warnings.Count > 0);
+        }
+        return status;
+    }
+
+    private void SetBanner(string text, Brush brush)
+    {
+        BannerText = text;
+        BannerBrush = brush;
+    }
+
+    private static Brush Frozen(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+}

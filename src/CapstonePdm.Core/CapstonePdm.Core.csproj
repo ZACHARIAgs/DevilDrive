@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    netstandard2.0 on purpose: the WPF client (.NET 8) and the Phase 2 SolidWorks add-in
+    (.NET Framework 4.8, loaded in-process by SolidWorks) can both reference this library.
+    Keep UI code out of this project.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>CapstonePdm.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CapstonePdm.Core.Tests" />
+  </ItemGroup>
+
+</Project>

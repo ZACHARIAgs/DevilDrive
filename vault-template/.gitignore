@@ -1,0 +1,16 @@
+# SolidWorks temporary / lock files (created while a file is open)
+~$*
+
+# SolidWorks backups
+*.bak
+*.BAK
+*.swbak
+Backup of *
+Backup (*) of *
+
+# Office temp files
+~*.tmp
+
+# Windows
+Thumbs.db
+desktop.ini
