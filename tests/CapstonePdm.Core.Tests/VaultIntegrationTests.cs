@@ -340,6 +340,24 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateVaultSetup_InstallsGuard_AndClearsTheProblems()
+    {
+        var admin = await Open(_alice, "alice-gh", repoAdmin: true);
+        var before = await admin.GetSnapshotAsync(contactVault: true);
+        Assert.Contains(before.SetupProblems, p => p.Contains("vault guard isn't installed"));
+
+        await admin.UpdateVaultSetupAsync();
+
+        var after = await admin.GetSnapshotAsync(contactVault: true);
+        Assert.Empty(after.SetupProblems);
+        Assert.True(File.Exists(Path.Combine(_alice, ".github", "workflows", "vault-guard.yml")));
+        Assert.Contains(".pdm/preview/**", Read(_alice, ".gitattributes"));
+
+        var bob = await Open(_bob);
+        Assert.Empty((await bob.GetSnapshotAsync(contactVault: true)).SetupProblems); // only admins are told
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);

@@ -66,6 +66,9 @@ public interface IVaultService
 
     Task<GetLatestResult> ReturnToLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
+    /// <summary>Admin: install or repair the GitHub vault guard and storage rules.</summary>
+    Task<OperationResult> UpdateVaultSetupAsync(IProgress<string>? progress = null, CancellationToken ct = default);
+
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);
 }

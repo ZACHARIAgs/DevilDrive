@@ -143,6 +143,9 @@ public sealed class VaultSnapshot
 
     /// <summary>Set while this PC shows a milestone instead of the latest files (read-only).</summary>
     public Milestone? ViewingMilestone { get; set; }
+
+    /// <summary>For admins: vault guard missing or changed, storage rules missing. Fixed by Update Vault Setup.</summary>
+    public IReadOnlyList<string> SetupProblems { get; set; } = Array.Empty<string>();
 }
 
 public sealed class FileFailure

@@ -60,6 +60,7 @@ public sealed class MainViewModel : ViewModelBase
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
+        UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
     }
 
     public ObservableCollection<FileRowViewModel> Files { get; } = new();
@@ -80,6 +81,16 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand SettingsCommand { get; }
     public ICommand MilestonesCommand { get; }
     public ICommand ReturnToLatestCommand { get; }
+    public ICommand UpdateVaultSetupCommand { get; }
+
+    private bool _hasSetupProblems;
+
+    /// <summary>Admins only: the vault guard is missing/changed or storage rules are missing.</summary>
+    public bool HasSetupProblems
+    {
+        get => _hasSetupProblems;
+        private set => Set(ref _hasSetupProblems, value);
+    }
 
     public IVaultService? Vault => _vault;
 
@@ -387,6 +398,12 @@ public sealed class MainViewModel : ViewModelBase
             lines.Add("Couldn't read check-outs from the vault: " + snapshot.ConnectionProblem);
             if (brush != ErrorBrush) brush = WarningBrush;
         }
+        HasSetupProblems = snapshot.SetupProblems.Count > 0;
+        if (HasSetupProblems)
+        {
+            lines.Add("Admin: " + string.Join(" ", snapshot.SetupProblems) + " Click Update Vault Setup to fix it.");
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
         if (snapshot.PendingCheckIns > 0)
         {
             lines.Add($"You have {snapshot.PendingCheckIns} check-in(s) saved on this PC that haven't reached the vault. Select the files and click Check In to send them.");
@@ -624,6 +641,18 @@ public sealed class MainViewModel : ViewModelBase
             await vault.ViewMilestoneAsync(milestone.Tag, progress);
             return $"Viewing milestone \u201C{milestone.Name}\u201D (read-only).";
         });
+
+    private Task UpdateVaultSetupAsync()
+    {
+        if (!_dialogs.Confirm("Update Vault Setup (admin)",
+                "Install (or repair) the vault guard and the 3D preview storage rule in the vault?\n\n" +
+                "The vault guard runs on GitHub after every push. It undoes pushes that break the vault rules (for example a non-admin " +
+                "changing pdm.json or a frozen file, even with Git commands) and posts to Discord."))
+        {
+            return Task.CompletedTask;
+        }
+        return RunAsync("Updating vault setup\u2026", async (vault, progress) => Report(await vault.UpdateVaultSetupAsync(progress), "Updated"));
+    }
 
     private Task ReturnToLatestAsync() =>
         RunAsync("Returning to the latest files\u2026", async (vault, progress) =>

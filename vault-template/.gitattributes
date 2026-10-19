@@ -22,3 +22,6 @@
 *.PDF filter=lfs diff=lfs merge=lfs -text lockable
 *.dxf filter=lfs diff=lfs merge=lfs -text lockable
 *.DXF filter=lfs diff=lfs merge=lfs -text lockable
+
+# 3D previews made by the SolidWorks add-in
+.pdm/preview/** filter=lfs diff=lfs merge=lfs -text

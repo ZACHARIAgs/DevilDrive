@@ -58,8 +58,13 @@ try {
         }
     }
 
+    if (-not (Test-Path '.github')) {
+        Copy-Item (Join-Path $template '.github') '.github' -Recurse
+        Write-Host 'Added the vault guard (.github)'
+    }
+
     Invoke-Git config lfs.locksverify true
-    Invoke-Git add .gitattributes .gitignore pdm.json
+    Invoke-Git add .gitattributes .gitignore pdm.json .github
     & git diff --cached --quiet
     if ($LASTEXITCODE -ne 0) { Invoke-Git commit -m 'Initialize Capstone vault (LFS + locking rules, team settings)' }
     Invoke-Git branch -M main

@@ -1,0 +1,40 @@
+# Capstone PDM vault guard: checks every push against the vault rules on GitHub's side and
+# undoes pushes that break them (see .github/vault-guard/guard.py). Managed by Capstone PDM:
+# admins can reinstall it with "Update Vault Setup" if it's changed or removed.
+name: Vault Guard
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vault-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false
+
+      - name: Check this push against the vault rules
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          ACTOR: ${{ github.actor }}
+          FORCED: ${{ github.event.forced }}
+          BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Use the guard as it was before this push, so a push can't change the rules it's judged by.
+          git show "$BEFORE:.github/vault-guard/guard.py" > /tmp/guard.py 2>/dev/null || cp .github/vault-guard/guard.py /tmp/guard.py
+          python3 /tmp/guard.py

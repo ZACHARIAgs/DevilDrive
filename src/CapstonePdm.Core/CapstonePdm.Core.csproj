@@ -18,4 +18,10 @@
     <InternalsVisibleTo Include="CapstonePdm.Core.Tests" />
   </ItemGroup>
 
+  <!-- The vault guard the app installs into vaults (single source: vault-template/.github). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\vault-template\.github\workflows\vault-guard.yml" LogicalName="CapstonePdm.Core.VaultGuard.yml" />
+    <EmbeddedResource Include="..\..\vault-template\.github\vault-guard\guard.py" LogicalName="CapstonePdm.Core.VaultGuard.py" />
+  </ItemGroup>
+
 </Project>

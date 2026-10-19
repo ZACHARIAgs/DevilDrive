@@ -200,6 +200,7 @@ public sealed class VaultService : IVaultService
         }
         snapshot.LocksUnknown = !_locksKnown;
         snapshot.ViewingMilestone = await GetViewingMilestoneAsync(ct).ConfigureAwait(false);
+        if (IsAdmin) snapshot.SetupProblems = await GetSetupProblemsAsync(ct).ConfigureAwait(false);
 
         var tracked = GitParsers.SplitZ((await RunCheckedAsync("list the vault files", new[] { "ls-files", "-z" }, ct).ConfigureAwait(false)).StdOut);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
@@ -1216,7 +1217,8 @@ public sealed class VaultService : IVaultService
 
     /// <summary>Team settings and admin-managed lists: only admins may check these in.</summary>
     private static bool IsAdminOnlyFile(string rel) =>
-        SamePath(rel, VaultConfig.FileName) || SamePath(rel, FrozenList.RelativePath) || SamePath(rel, CheckInRequestList.RelativePath);
+        SamePath(rel, VaultConfig.FileName) || SamePath(rel, FrozenList.RelativePath) || SamePath(rel, CheckInRequestList.RelativePath) ||
+        rel.Replace('\\', '/').StartsWith(".github/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Writes (or deletes, for null) index entries for the given files; returns the entry paths to commit.</summary>
     private List<string> WriteIndexEntries(IReadOnlyDictionary<string, IndexEntry?>? updates, IReadOnlyCollection<string>? onlyFor = null)
@@ -1260,6 +1262,66 @@ public sealed class VaultService : IVaultService
             if (paths.Count == 0) return result;
             await CommitAndPushAsync(paths, $"Updated the vault index ({entries.Count} file(s))", progress, ct).ConfigureAwait(false);
             result.Succeeded.AddRange(entries.Keys.Select(ToRelativePath));
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // ---------------------------------------------------------------- Vault setup (guard, storage rules)
+
+    /// <summary>What's missing or tampered with in the vault's Capstone PDM setup, as the vault (GitHub) has it.</summary>
+    private async Task<List<string>> GetSetupProblemsAsync(CancellationToken ct)
+    {
+        var problems = new List<string>();
+        var workflow = await ReadVaultTextAsync(VaultSetup.GuardWorkflowPath, ct).ConfigureAwait(false);
+        var script = await ReadVaultTextAsync(VaultSetup.GuardScriptPath, ct).ConfigureAwait(false);
+        if (workflow == null || script == null)
+        {
+            problems.Add("The vault guard isn't installed on GitHub, so pushes made with Git commands aren't checked.");
+        }
+        else if (!VaultSetup.SameText(workflow, VaultSetup.GuardWorkflow) || !VaultSetup.SameText(script, VaultSetup.GuardScript))
+        {
+            var last = await RunAsync(new[] { "log", "-1", "--format=%an on %ad", "--date=format:%b %d %H:%M", Upstream, "--", ".github" }, ct).ConfigureAwait(false);
+            problems.Add("The vault guard was changed" + (last.Success && last.StdOut.Trim().Length > 0 ? $" (last change by {last.StdOut.Trim()})" : "") +
+                         ", or this app has a newer version of it.");
+        }
+
+        var attributes = await ReadVaultTextAsync(VaultSetup.AttributesPath, ct).ConfigureAwait(false) ?? "";
+        if (attributes.IndexOf(VaultSetup.PreviewAttributesRule, StringComparison.Ordinal) < 0)
+        {
+            problems.Add("The vault isn't set up to store 3D previews efficiently.");
+        }
+        return problems;
+    }
+
+    /// <summary>Admin: installs or repairs the vault guard and storage rules, then pushes them.</summary>
+    public async Task<OperationResult> UpdateVaultSetupAsync(IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        RequireAdmin("update the vault setup");
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+
+            WriteVaultText(VaultSetup.GuardWorkflowPath, VaultSetup.GuardWorkflow.Replace("\r\n", "\n"));
+            WriteVaultText(VaultSetup.GuardScriptPath, VaultSetup.GuardScript.Replace("\r\n", "\n"));
+            var attributesFile = ToFullPath(VaultSetup.AttributesPath);
+            var attributes = File.Exists(attributesFile) ? File.ReadAllText(attributesFile) : "";
+            if (attributes.IndexOf(VaultSetup.PreviewAttributesRule, StringComparison.Ordinal) < 0)
+            {
+                var separator = attributes.Length == 0 || attributes.EndsWith("\n", StringComparison.Ordinal) ? "" : "\n";
+                File.WriteAllText(attributesFile, attributes + separator + "\n# 3D previews made by the SolidWorks add-in\n" + VaultSetup.PreviewAttributesRule + "\n");
+            }
+
+            await CommitAndPushAsync(new[] { VaultSetup.GuardWorkflowPath, VaultSetup.GuardScriptPath, VaultSetup.AttributesPath },
+                "Updated vault setup (vault guard, 3D preview storage)", progress, ct).ConfigureAwait(false);
+            result.Succeeded.Add(VaultSetup.GuardWorkflowPath);
+            result.Notes.Add("The vault guard is installed. From now on GitHub checks every push and undoes ones that break the vault rules " +
+                             "(you'll see runs under the repo's Actions tab).");
             return result;
         }
         finally

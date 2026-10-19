@@ -89,7 +89,13 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Break Lock" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding RequestCheckInCommand}"
+                <Button Command="{Binding UpdateVaultSetupCommand}" Visibility="{Binding HasSetupProblems, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Admin: install or repair the vault guard on GitHub and the vault's storage rules.">
+                    <StackPanel MinWidth="90">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE83D;" Foreground="#B45309" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Update Vault Setup" />
+                    </StackPanel>
+                </Button>                <Button Command="{Binding RequestCheckInCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: have the person who has this file checked out check in their last saved version automatically.">
                     <StackPanel MinWidth="80">
