@@ -103,6 +103,8 @@ public sealed class VaultFile
     public FrozenEntry? Freeze { get; set; }
     /// <summary>Display name of the admin who froze it.</summary>
     public string? FrozenBy { get; set; }
+    /// <summary>Latest released revision letter (given when frozen), kept after unfreezing. Null if never released.</summary>
+    public string? Revision { get; set; }
     /// <summary>Frozen, but the admin's lock is gone (e.g. broken), so the freeze isn't enforced. Freeze it again.</summary>
     public bool FreezeLockMissing { get; set; }
 

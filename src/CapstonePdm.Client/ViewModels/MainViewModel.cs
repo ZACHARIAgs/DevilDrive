@@ -134,6 +134,7 @@ public sealed class MainViewModel : ViewModelBase
         var f = row.File;
         var facts = new List<PropertyRow>();
         if (f.Version > 0) facts.Add(new PropertyRow("Version", f.Version.ToString()));
+        if (f.Revision != null) facts.Add(new PropertyRow("Revision", f.State == FileState.Frozen ? $"{f.Revision} (released)" : $"{f.Revision} (last released; changed since)"));
         if (f.LatestVersion != null)
         {
             facts.Add(new PropertyRow("Last check-in", $"{f.LatestVersion.Date.LocalDateTime:MMM d, yyyy h:mm tt} by {f.LatestVersion.Author}"));
@@ -459,7 +460,14 @@ public sealed class MainViewModel : ViewModelBase
             allowKeepCheckedOut: false, prompt: "Reason (required): why are these frozen?");
         if (request == null) return Task.CompletedTask;
         return RunAsync("Freezing…", async (vault, progress) =>
-            Report(await vault.FreezeAsync(targets, request.Comment, progress), "Froze"));
+        {
+            var result = await vault.FreezeAsync(targets, request.Comment, progress);
+            if (result.Succeeded.Any(p => p.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase)))
+            {
+                result.Notes.Add("Tip: freeze drawings from the SolidWorks pane instead, and a PDF of each revision is saved and frozen too.");
+            }
+            return Report(result, "Froze");
+        });
     }
 
     private Task RequestCheckInAsync()

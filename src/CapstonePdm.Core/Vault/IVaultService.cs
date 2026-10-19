@@ -34,7 +34,10 @@ public interface IVaultService
     Task<OperationResult> BreakLockAsync(string path, CancellationToken ct = default);
 
     /// <summary>Admin: freeze files (e.g. released for production) so nobody can change them.</summary>
-    Task<OperationResult> FreezeAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default);
+    Task<OperationResult> FreezeAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, string>? revisions = null);
+
+    /// <summary>Revision letters these files would get if frozen now.</summary>
+    Task<IReadOnlyDictionary<string, string>> GetNextRevisionsAsync(IEnumerable<string> paths, CancellationToken ct = default);
 
     /// <summary>Admin: make frozen files editable again.</summary>
     Task<OperationResult> UnfreezeAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);

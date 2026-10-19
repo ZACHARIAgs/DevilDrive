@@ -205,6 +205,7 @@
                     <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="130" />
                     <DataGridTextColumn Header="Since" Binding="{Binding CheckedOutSince, StringFormat='{}{0:ddd MMM d, h:mm tt}'}" Width="130" />
                     <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="60" />
+                    <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="45" />
                     <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="*" MinWidth="180" />
                     <DataGridTextColumn Header="Checked In By" Binding="{Binding LastCheckedInBy}" Width="120" />
                     <DataGridTextColumn Header="Checked In" Binding="{Binding LastCheckIn, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="115" />

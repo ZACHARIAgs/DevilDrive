@@ -147,6 +147,22 @@ public class GitParsersTests
     }
 }
 
+public class RevisionTests
+{
+    [Theory]
+    [InlineData(null, "A")]
+    [InlineData("", "A")]
+    [InlineData("A", "B")]
+    [InlineData("H", "J")]   // I is skipped
+    [InlineData("N", "P")]   // O is skipped
+    [InlineData("P", "R")]   // Q is skipped
+    [InlineData("Y", "AA")]
+    [InlineData("AY", "BA")]
+    [InlineData("b", "C")]
+    public void Next_FollowsDrawingLetterRules(string? current, string expected) =>
+        Assert.Equal(expected, Revisions.Next(current));
+}
+
 public class DiscordMessageTests
 {
     [Fact]

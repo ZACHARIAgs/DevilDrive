@@ -14,6 +14,33 @@ public sealed class FrozenEntry
     public string By { get; set; } = "";
     public DateTimeOffset At { get; set; }
     public string Reason { get; set; } = "";
+    /// <summary>Revision letter given at this freeze (release), e.g. "B".</summary>
+    public string Revision { get; set; } = "";
+}
+
+public static class Revisions
+{
+    // Letters drawing standards avoid because they're easily misread (I, O, Q, S, X, Z).
+    private const string Letters = "ABCDEFGHJKLMNPRTUVWY";
+
+    /// <summary>"" or null gives "A"; "A" gives "B"; "Y" gives "AA".</summary>
+    public static string Next(string? current)
+    {
+        if (string.IsNullOrWhiteSpace(current)) return "A";
+        var digits = current!.Trim().ToUpperInvariant().Select(c => Letters.IndexOf(c)).ToList();
+        if (digits.Any(d => d < 0)) return "A";
+
+        for (var i = digits.Count - 1; i >= 0; i--)
+        {
+            if (digits[i] < Letters.Length - 1)
+            {
+                digits[i]++;
+                return new string(digits.Select(d => Letters[d]).ToArray());
+            }
+            digits[i] = 0;
+        }
+        return "A" + new string(digits.Select(d => Letters[d]).ToArray());
+    }
 }
 
 /// <summary>
@@ -29,6 +56,12 @@ internal sealed class FrozenList
 
     public List<FrozenEntry> Files { get; set; } = new List<FrozenEntry>();
 
+    /// <summary>Last released revision of every file ever frozen (kept after unfreezing, so the next freeze continues the sequence).</summary>
+    public Dictionary<string, string> Revisions { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public string? RevisionOf(string relativePath) =>
+        Revisions.TryGetValue(relativePath.Replace('\\', '/'), out var revision) ? revision : null;
+
     public FrozenEntry? Find(string relativePath) =>
         Files.FirstOrDefault(f => string.Equals(f.Path.Replace('\\', '/'), relativePath.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase));
 
@@ -39,6 +72,7 @@ internal sealed class FrozenList
         {
             var list = JsonSerializer.Deserialize<FrozenList>(json!, Json.Options) ?? new FrozenList();
             list.Files ??= new List<FrozenEntry>();
+            list.Revisions = new Dictionary<string, string>(list.Revisions ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
             return list;
         }
         catch (JsonException)

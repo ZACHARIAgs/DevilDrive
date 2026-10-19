@@ -32,6 +32,7 @@ public sealed class FileRowViewModel : ViewModelBase
     public int Version => File.Version;
     public string VersionText => File.Version > 0 ? File.Version.ToString() : "—";
     public string LastComment => File.LatestVersion?.CommentFirstLine ?? "";
+    public string RevisionText => File.Revision ?? "";
     public string PartNumber => File.Index?.GetProperty(IndexEntry.PartNumberNames) ?? "";
     public string Description => File.Index?.GetProperty(IndexEntry.DescriptionNames) ?? "";
     public string Material => File.Index?.GetProperty(IndexEntry.MaterialNames) ?? "";
@@ -51,7 +52,7 @@ public sealed class FileRowViewModel : ViewModelBase
                 FileState.ModifiedWithoutCheckOut => "Edited WITHOUT check-out!",
                 FileState.NotInVault => "New, not in vault yet",
                 FileState.MissingLocally => "Deleted on this PC",
-                FileState.Frozen => $"Frozen by {File.FrozenBy}: {File.Freeze?.Reason}" + (File.FreezeLockMissing ? " (lock missing, freeze again!)" : ""),
+                FileState.Frozen => (File.Revision != null ? $"Frozen (Rev {File.Revision}) by " : "Frozen by ") + $"{File.FrozenBy}: {File.Freeze?.Reason}" + (File.FreezeLockMissing ? " (lock missing, freeze again!)" : ""),
                 _ => File.State.ToString(),
             };
             if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";

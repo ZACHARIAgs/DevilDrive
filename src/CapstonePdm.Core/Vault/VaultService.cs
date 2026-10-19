@@ -250,6 +250,7 @@ public sealed class VaultService : IVaultService
                 LatestVersion = version,
                 Freeze = freeze,
                 FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
+                Revision = frozen.RevisionOf(path),
                 FreezeLockMissing = freeze != null && _locksKnown && fileLock == null,
                 CheckInRequest = request,
                 CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
@@ -849,7 +850,7 @@ public sealed class VaultService : IVaultService
     /// keeps each file's lock, which is what stops check-outs and pushes; .pdm/frozen.json records
     /// who froze it, when and why, so everyone's vault view shows it.
     /// </summary>
-    public async Task<OperationResult> FreezeAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<OperationResult> FreezeAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, string>? revisions = null)
     {
         RequireAdmin("freeze files");
         if (string.IsNullOrWhiteSpace(reason)) throw new PdmException("Enter a reason, for example \"Released for production, rev A\".");
@@ -907,15 +908,24 @@ public sealed class VaultService : IVaultService
             if (toFreeze.Count == 0) return result;
 
             var by = GitHubLogin ?? UserName;
+            var given = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var rel in toFreeze)
             {
-                frozen.Files.Add(new FrozenEntry { Path = rel, By = by, At = DateTimeOffset.Now, Reason = reason });
+                // Each freeze is a release: the next revision letter, unless one is given (e.g. a drawing's PDF matches the drawing).
+                var revision = revisions != null && revisions.TryGetValue(rel, out var forced) && forced.Length > 0
+                    ? forced
+                    : Revisions.Next(frozen.RevisionOf(rel));
+                given[rel] = revision;
+                frozen.Revisions[rel] = revision;
+                frozen.Files.Add(new FrozenEntry { Path = rel, By = by, At = DateTimeOffset.Now, Reason = reason, Revision = revision });
                 FileUtil.SetReadOnly(ToFullPath(rel), true);
             }
-            await SaveFrozenListAsync(frozen, $"Froze {PathList.Format(toFreeze)}: {reason}", progress, ct).ConfigureAwait(false);
+            var summary = string.Join(", ", toFreeze.Select(r => $"{PathList.Name(r)} Rev {given[r]}"));
+            await SaveFrozenListAsync(frozen, $"Froze {summary}: {reason}", progress, ct).ConfigureAwait(false);
             result.Succeeded.AddRange(toFreeze);
+            result.Notes.Add($"Released as: {summary}.");
 
-            await NotifyAsync(new VaultEvent(VaultEventKind.Frozen, UserDisplayName, toFreeze) { Comment = reason }, result).ConfigureAwait(false);
+            await NotifyAsync(new VaultEvent(VaultEventKind.Frozen, UserDisplayName, toFreeze) { Comment = reason, Revisions = given }, result).ConfigureAwait(false);
             return result;
         }
         finally
@@ -973,6 +983,23 @@ public sealed class VaultService : IVaultService
 
             await NotifyAsync(new VaultEvent(VaultEventKind.Unfrozen, UserDisplayName, unfrozen), result).ConfigureAwait(false);
             return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The revision letters these files would get if frozen now (e.g. to name a drawing's PDF before freezing).</summary>
+    public async Task<IReadOnlyDictionary<string, string>> GetNextRevisionsAsync(IEnumerable<string> paths, CancellationToken ct = default)
+    {
+        var relatives = Normalize(paths);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await FetchAsync(ct).ConfigureAwait(false);
+            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+            return relatives.ToDictionary(r => r, r => Revisions.Next(frozen.RevisionOf(r)), StringComparer.OrdinalIgnoreCase);
         }
         finally
         {

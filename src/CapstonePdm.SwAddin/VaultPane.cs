@@ -317,7 +317,7 @@ internal sealed class VaultPane : UserControl
             FileState.ModifiedWithoutCheckOut => ("Edited without check-out", OrangeBadge),
             FileState.Modified => ("Edited, not checked in", OrangeBadge),
             FileState.NotInVault => ("New, not in vault yet", PurpleBadge),
-            FileState.Frozen => ("Frozen", SlateBadge),
+            FileState.Frozen => (file.Revision != null ? $"Frozen \u2022 Rev {file.Revision}" : "Frozen", SlateBadge),
             _ => (file.State.ToString(), GrayBadge),
         };
 
@@ -328,6 +328,7 @@ internal sealed class VaultPane : UserControl
             lines.Add($"Version {file.Version}  \u2022  {file.LatestVersion.Author}, {file.LatestVersion.Date.LocalDateTime:MMM d}");
             if (file.LatestVersion.CommentFirstLine.Length > 0) lines.Add($"\u201C{file.LatestVersion.CommentFirstLine}\u201D");
         }
+        if (file.Revision != null && file.State != FileState.Frozen) lines.Add($"Last released as Rev {file.Revision} (changes since then aren't released).");
         if (file.State == FileState.Available && !file.IsOutdated) lines.Add("Check out to edit.");
         if (file.State == FileState.ModifiedWithoutCheckOut) lines.Add("Check it out to keep your edits, or Undo to discard them.");
         if (file.IsOutdated) lines.Add("Click Get Latest to update it.");
@@ -649,7 +650,41 @@ internal sealed class VaultPane : UserControl
 
         await RunAsync("Freezing…", async progress =>
         {
-            var result = await _vault.FreezeAsync(targets, reason, progress);
+            // Releasing a drawing also saves "<name> Rev X.pdf" next to it, checked in and frozen with the same revision.
+            var drawings = targets.Where(p => Path.GetExtension(p).Equals(".slddrw", StringComparison.OrdinalIgnoreCase)).ToList();
+            var revisions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var pdfs = new List<string>();
+            var pdfProblems = new List<string>();
+            if (drawings.Count > 0)
+            {
+                var next = await _vault.GetNextRevisionsAsync(drawings);
+                foreach (var drawing in drawings)
+                {
+                    var revision = next[_vault.ToRelativePath(drawing)];
+                    var pdf = Path.Combine(Path.GetDirectoryName(drawing)!, $"{Path.GetFileNameWithoutExtension(drawing)} Rev {revision}.pdf");
+                    progress.Report($"Saving {Path.GetFileName(pdf)}…");
+                    try
+                    {
+                        _sw.ExportPdf(drawing, pdf);
+                        revisions[drawing] = revision;
+                        revisions[pdf] = revision;
+                        pdfs.Add(pdf);
+                    }
+                    catch (PdmException ex)
+                    {
+                        pdfProblems.Add(ex.Message);
+                    }
+                }
+                if (pdfs.Count > 0)
+                {
+                    progress.Report("Checking in the PDFs…");
+                    await _vault.CheckInAsync(pdfs, $"Drawing PDF for release: {reason}", progress: progress);
+                }
+            }
+
+            var result = await _vault.FreezeAsync(targets.Concat(pdfs).ToList(), reason, progress,
+                revisions: revisions.ToDictionary(p => _vault.ToRelativePath(p.Key), p => p.Value, StringComparer.OrdinalIgnoreCase));
+            result.Warnings.AddRange(pdfProblems.Select(p => p + " The drawing was still frozen, without a PDF."));
             _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
             return Report(result, "Froze");
         });

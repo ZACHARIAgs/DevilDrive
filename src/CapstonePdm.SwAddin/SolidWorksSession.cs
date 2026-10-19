@@ -212,6 +212,46 @@ internal sealed class SolidWorksSession
         }
     }
 
+    /// <summary>Saves every sheet of a drawing as a PDF (opening the drawing invisibly if needed).</summary>
+    public void ExportPdf(string drawingPath, string pdfPath)
+    {
+        var doc = FindOpen(drawingPath);
+        var openedHere = false;
+        if (doc == null)
+        {
+            _sw.DocumentVisible(false, (int)swDocumentTypes_e.swDocDRAWING);
+            try
+            {
+                int openErrors = 0, openWarnings = 0;
+                doc = _sw.OpenDoc6(drawingPath, (int)swDocumentTypes_e.swDocDRAWING,
+                    (int)(swOpenDocOptions_e.swOpenDocOptions_Silent | swOpenDocOptions_e.swOpenDocOptions_ReadOnly), "", ref openErrors, ref openWarnings);
+                openedHere = doc != null;
+            }
+            finally
+            {
+                _sw.DocumentVisible(true, (int)swDocumentTypes_e.swDocDRAWING);
+            }
+            if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(drawingPath)} to make its PDF.");
+        }
+
+        try
+        {
+            var exportData = _sw.GetExportFileData((int)swExportDataFileType_e.swExportPdfData) as IExportPdfData;
+            exportData?.SetSheets((int)swExportDataSheetsToExport_e.swExportData_ExportAllSheets, null);
+            int errors = 0, warnings = 0;
+            var saved = doc.Extension.SaveAs(pdfPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                (int)swSaveAsOptions_e.swSaveAsOptions_Silent, exportData, ref errors, ref warnings);
+            if (!saved || !File.Exists(pdfPath))
+            {
+                throw new PdmException($"SolidWorks couldn't save a PDF of {Path.GetFileName(drawingPath)} (error {errors}).");
+            }
+        }
+        finally
+        {
+            if (openedHere) _sw.CloseDoc(drawingPath);
+        }
+    }
+
     /// <summary>Builds the vault index entry for a file: saved-in version, direct references, properties.</summary>
     public IndexEntry BuildIndexEntry(string fullPath, string vaultRoot, Dictionary<string, string>? properties)
     {

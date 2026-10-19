@@ -37,6 +37,8 @@ public sealed class VaultEvent
     public string? Comment { get; set; }
     public string? PreviousOwner { get; set; }
     public IReadOnlyDictionary<string, int>? Versions { get; set; }
+    /// <summary>Revision letters given at a freeze.</summary>
+    public IReadOnlyDictionary<string, string>? Revisions { get; set; }
     public bool KeptCheckedOut { get; set; }
 }
 
@@ -85,7 +87,7 @@ public sealed class DiscordWebhookNotifier : INotifier
     internal static string BuildMessage(VaultEvent e)
     {
         var user = Escape(e.User);
-        var files = FormatFiles(e.Files, e.Versions);
+        var files = FormatFiles(e.Files, e.Versions, e.Revisions);
         string message;
         switch (e.Kind)
         {
@@ -129,12 +131,13 @@ public sealed class DiscordWebhookNotifier : INotifier
         return message.Length <= DiscordLimit ? message : message.Substring(0, DiscordLimit - 1) + "…";
     }
 
-    private static string FormatFiles(IReadOnlyList<string> files, IReadOnlyDictionary<string, int>? versions)
+    private static string FormatFiles(IReadOnlyList<string> files, IReadOnlyDictionary<string, int>? versions, IReadOnlyDictionary<string, string>? revisions = null)
     {
         var shown = files.Take(MaxFilesListed).Select(f =>
         {
             var text = "`" + f.Replace("`", "'") + "`";
             if (versions != null && versions.TryGetValue(f, out var v) && v > 0) text += $" (v{v})";
+            if (revisions != null && revisions.TryGetValue(f, out var rev) && rev.Length > 0) text += $" Rev {rev}";
             return text;
         });
         var result = string.Join(", ", shown);
