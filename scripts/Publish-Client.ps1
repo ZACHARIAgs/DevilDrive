@@ -1,7 +1,9 @@
 <#
 .SYNOPSIS
     Builds CapstonePDM.exe (self-contained, so teammates don't need .NET installed) and packs
-    dist\CapstonePDM-Setup.zip with Setup.cmd, the setup script and the exe.
+    dist\CapstonePDM-Setup.zip with Setup.cmd, the setup script and the exe. Also writes the files
+    a GitHub release needs for automatic updates: dist\CapstonePDM.exe,
+    dist\CapstonePDM-SolidWorksAddin.zip and dist\SHA256SUMS (see Release-Client.ps1).
 
 .DESCRIPTION
     Share the zip on GitHub Releases or Discord. Teammates unzip it and double-click Setup.cmd.
@@ -37,6 +39,16 @@ if (Test-Path 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SolidWorks.Interop.sl
     Copy-Item (Join-Path $dist 'publish-addin\*.dll') $addinStage
     Copy-Item (Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1') $stage
     Copy-Item (Join-Path $PSScriptRoot 'Install SolidWorks Add-in.cmd') $stage
+
+    # Add-in on its own, for automatic updates.
+    $addinZipStage = Join-Path $dist 'CapstonePDM-SolidWorksAddin'
+    if (Test-Path $addinZipStage) { Remove-Item -Recurse -Force $addinZipStage }
+    New-Item -ItemType Directory -Force (Join-Path $addinZipStage 'SolidWorksAddin') | Out-Null
+    Copy-Item (Join-Path $dist 'publish-addin\*.dll') (Join-Path $addinZipStage 'SolidWorksAddin')
+    Copy-Item (Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1') $addinZipStage
+    $addinZip = Join-Path $dist 'CapstonePDM-SolidWorksAddin.zip'
+    if (Test-Path $addinZip) { Remove-Item -Force $addinZip }
+    Compress-Archive -Path (Join-Path $addinZipStage '*') -DestinationPath $addinZip
 }
 else {
     Write-Warning 'SolidWorks is not installed on this PC, so the add-in was left out of the zip.'
@@ -46,4 +58,13 @@ $zip = Join-Path $dist 'CapstonePDM-Setup.zip'
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 
+Copy-Item (Join-Path $dist 'publish\CapstonePDM.exe') $dist -Force
+
+# Checksums for the release: the app only installs an update whose SHA-256 matches.
+$released = @('CapstonePDM.exe', 'CapstonePDM-Setup.zip', 'CapstonePDM-SolidWorksAddin.zip') |
+    Where-Object { Test-Path (Join-Path $dist $_) }
+$sums = foreach ($name in $released) { '{0}  {1}' -f (Get-FileHash (Join-Path $dist $name) -Algorithm SHA256).Hash.ToLowerInvariant(), $name }
+[IO.File]::WriteAllText((Join-Path $dist 'SHA256SUMS'), (($sums -join "`n") + "`n"))
+
 Write-Host "Created $zip" -ForegroundColor Green
+$sums | ForEach-Object { Write-Host "  $_" }

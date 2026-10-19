@@ -38,6 +38,8 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
         UpdateExplorerMenu(UserSettings.Load());
+        AppUpdater.CleanUpAfterUpdate();
+        await AppUpdater.CheckAsync(window);
     }
 
     /// <summary>Keeps the right-click menu pointing at this copy and the current vault folder (or removes it).</summary>

@@ -233,3 +233,27 @@ public class BomTests
         Assert.Equal("2,plate,'=HYPERLINK(1),,1,B,Default,plate.SLDPRT", rows[2]);
     }
 }
+
+public class UpdaterTests
+{
+    [Theory]
+    [InlineData("v0.2.0", "0.2.0.0")]
+    [InlineData("0.2", "0.2.0.0")]
+    [InlineData("1.4.2+abc123", "1.4.2.0")]
+    [InlineData("v1.0.0-beta", "1.0.0.0")]
+    public void ParseVersion_HandlesTagsAndBuildSuffixes(string text, string expected) =>
+        Assert.Equal(System.Version.Parse(expected), CapstonePdm.Core.Updates.Updater.ParseVersion(text));
+
+    [Fact]
+    public void ParseVersion_RejectsNonVersions() => Assert.Null(CapstonePdm.Core.Updates.Updater.ParseVersion("latest"));
+
+    [Fact]
+    public void ParseChecksums_ReadsSha256sumFormat()
+    {
+        var hash = new string('a', 64);
+        var sums = CapstonePdm.Core.Updates.Updater.ParseChecksums($"{hash}  CapstonePDM.exe\r\n{new string('b', 64)} *Setup.zip\njunk line\n");
+        Assert.Equal(hash, sums["capstonepdm.exe"]);
+        Assert.Equal(new string('b', 64), sums["Setup.zip"]);
+        Assert.Equal(2, sums.Count);
+    }
+}

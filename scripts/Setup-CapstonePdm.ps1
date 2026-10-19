@@ -156,6 +156,8 @@ New-Item -ItemType Directory -Force $settingsDir | Out-Null
 @{ vaultPath = $VaultPath } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $settingsDir 'settings.json')
 
 if (Test-Path $ExePath) {
+    # Compare with SHA256SUMS on the release page to be sure this is the real file.
+    Write-Ok ('CapstonePDM.exe SHA-256: ' + (Get-FileHash $ExePath -Algorithm SHA256).Hash.ToLowerInvariant())
     $shell = New-Object -ComObject WScript.Shell
     foreach ($folder in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
         $shortcut = $shell.CreateShortcut((Join-Path $folder 'Capstone PDM.lnk'))
