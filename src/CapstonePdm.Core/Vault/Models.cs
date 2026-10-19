@@ -117,6 +117,9 @@ public sealed class VaultFile
     public IndexEntry? Index { get; set; }
     /// <summary>Files that reference this one (from the index): the assemblies and drawings that would be affected by changing it.</summary>
     public IReadOnlyList<string> UsedIn { get; set; } = Array.Empty<string>();
+
+    /// <summary>Only a small placeholder is on this PC (its folder isn't in "only download my folders"). Download it before opening.</summary>
+    public bool NotDownloaded { get; set; }
 }
 
 public sealed class VaultSnapshot
@@ -146,6 +149,12 @@ public sealed class VaultSnapshot
 
     /// <summary>For admins: vault guard missing or changed, storage rules missing. Fixed by Update Vault Setup.</summary>
     public IReadOnlyList<string> SetupProblems { get; set; } = Array.Empty<string>();
+
+    /// <summary>For admins: how much of the free storage the vault uses (measured at most every 30 minutes).</summary>
+    public StorageUsage? Storage { get; set; }
+
+    /// <summary>Folders this PC downloads; null means everything.</summary>
+    public IReadOnlyList<string>? DownloadFolders { get; set; }
 }
 
 public sealed class FileFailure

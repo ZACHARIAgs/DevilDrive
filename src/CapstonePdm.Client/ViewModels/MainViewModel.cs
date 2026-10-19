@@ -61,6 +61,7 @@ public sealed class MainViewModel : ViewModelBase
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
         Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
+        DownloadCommand = new RelayCommand(async () => await DownloadAsync(), () => CanEdit && _selected.Any(r => r.File.NotDownloaded));
         UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
     }
 
@@ -84,6 +85,9 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ReturnToLatestCommand { get; }
     public ICommand UpdateVaultSetupCommand { get; }
     public ICommand Open3DCommand { get; }
+    public ICommand DownloadCommand { get; }
+
+    private VaultSnapshot? _snapshot;
 
     private bool _hasSetupProblems;
 
@@ -170,6 +174,22 @@ public sealed class MainViewModel : ViewModelBase
             details.Loading3D = false;
         }
     }
+
+    private Task DownloadAsync()
+    {
+        var targets = _selected.Where(r => r.File.NotDownloaded).Select(r => r.Path).ToList();
+        return RunAsync("Downloading…", async (vault, progress) =>
+        {
+            await vault.DownloadAsync(targets, progress);
+            return $"Downloaded {PathList.Format(targets)}.";
+        });
+    }
+
+    /// <summary>Top-level vault folders, for choosing which to download.</summary>
+    private List<string> VaultFolders() =>
+        Files.Select(r => r.Path).Where(p => p.Contains('/')).Select(p => p.Substring(0, p.IndexOf('/')))
+            .Where(f => !f.StartsWith(".", StringComparison.Ordinal)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
 
     private void Open3D()
     {
@@ -449,6 +469,14 @@ public sealed class MainViewModel : ViewModelBase
             lines.Add("Admin: " + string.Join(" ", snapshot.SetupProblems) + " Click Update Vault Setup to fix it.");
             if (brush != ErrorBrush) brush = WarningBrush;
         }
+        _snapshot = snapshot;
+        if (snapshot.Storage != null && snapshot.Storage.OverWarning)
+        {
+            var s = snapshot.Storage;
+            lines.Add($"Admin: the vault uses {s.UsedGB:0.0} GB of the free {s.LimitGB:0.#} GB of storage ({s.UsedPercent:0}%), counting every version ever checked in. " +
+                      "Download use is on GitHub under Settings, Billing. The README lists ways to save space.");
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
         if (snapshot.PendingCheckIns > 0)
         {
             lines.Add($"You have {snapshot.PendingCheckIns} check-in(s) saved on this PC that haven't reached the vault. Select the files and click Check In to send them.");
@@ -467,7 +495,10 @@ public sealed class MainViewModel : ViewModelBase
         SetBanner(string.Join("\n", lines), brush);
 
         var mine = snapshot.Files.Count(f => f.State == FileState.CheckedOutByMe);
-        InfoText = $"{_vault!.UserDisplayName}{(IsAdmin ? " (admin)" : "")}  •  {mine} checked out to you  •  {snapshot.Files.Count} files  •  refreshed {snapshot.RetrievedAt:h:mm tt}";
+        var storage = snapshot.Storage != null ? $"  •  storage {StorageUsage.FormatBytes(snapshot.Storage.AllVersionsBytes)} of {snapshot.Storage.LimitGB:0.#} GB" : "";
+        var notDownloaded = snapshot.Files.Count(f => f.NotDownloaded);
+        var partial = snapshot.DownloadFolders != null ? $"  •  {notDownloaded} not downloaded" : "";
+        InfoText = $"{_vault!.UserDisplayName}{(IsAdmin ? " (admin)" : "")}  •  {mine} checked out to you  •  {snapshot.Files.Count} files{partial}{storage}  •  refreshed {snapshot.RetrievedAt:h:mm tt}";
         OnPropertyChanged(nameof(IsAdmin));
         OnPropertyChanged(nameof(WindowTitle));
     }
@@ -490,6 +521,7 @@ public sealed class MainViewModel : ViewModelBase
             3 => f.State is FileState.ModifiedWithoutCheckOut or FileState.NotInVault or FileState.Modified or FileState.MissingLocally || f.IsOutdated,
             4 => f.IsOutdated,
             5 => f.State == FileState.Frozen,
+            6 => f.NotDownloaded,
             _ => true,
         };
     }
@@ -572,16 +604,19 @@ public sealed class MainViewModel : ViewModelBase
             Report(await vault.CheckOutAsync(targets, progress), "Checked out"));
     }
 
-    private Task CheckInAsync()
+    private async Task CheckInAsync()
     {
         var targets = CheckInTargets().Select(r => r.Path).ToList();
+        if (_vault == null || IsBusy) return;
+        var exportWarning = await _vault.GetExportWarningAsync(targets);
+        if (exportWarning != null && !_dialogs.Confirm("Check in exports?", exportWarning)) return;
         var team = _vault?.Config.SolidWorksVersion;
         var footnote = team != null
             ? $"Close the files in SolidWorks first. Only check in files saved in SolidWorks {team}: newer versions can't be opened by the team."
             : null;
         var request = _dialogs.AskCheckIn("Check In", "Check In", targets, "", allowKeepCheckedOut: true, footnote: footnote);
-        if (request == null) return Task.CompletedTask;
-        return RunAsync("Checking in…", async (vault, progress) =>
+        if (request == null) return;
+        await RunAsync("Checking in…", async (vault, progress) =>
             Report(await vault.CheckInAsync(targets, request.Comment, request.KeepCheckedOut, progress), "Checked in"));
     }
 
@@ -650,7 +685,8 @@ public sealed class MainViewModel : ViewModelBase
         var signedInAs = _vault == null ? "No vault open"
             : _vault.GitHubLogin == null ? "Not verified yet (are you online and signed in to GitHub?)"
             : $"{_vault.GitHubLogin}{(_vault.IsAdmin ? " (vault admin)" : "")}, verified with GitHub";
-        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu);
+        var currentFolders = _snapshot?.DownloadFolders;
+        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu, VaultFolders(), currentFolders);
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
@@ -659,8 +695,22 @@ public sealed class MainViewModel : ViewModelBase
         settings.Save();
         App.UpdateExplorerMenu(settings);
 
-        if (pathChanged || _vault == null) await OpenVaultAsync(request.VaultPath);
+        if (pathChanged || _vault == null)
+        {
+            await OpenVaultAsync(request.VaultPath);
+        }
+        else if (!SameFolders(currentFolders, request.DownloadFolders))
+        {
+            await RunAsync("Updating download folders…", async (vault, progress) =>
+            {
+                await vault.SetDownloadFoldersAsync(request.DownloadFolders, progress);
+                return request.DownloadFolders == null ? "Downloading everything." : $"Downloading only: {string.Join(", ", request.DownloadFolders)}.";
+            });
+        }
     }
+
+    private static bool SameFolders(IReadOnlyList<string>? a, IReadOnlyList<string>? b) =>
+        a == null || b == null ? a == b : a.OrderBy(x => x).SequenceEqual(b.OrderBy(x => x), StringComparer.OrdinalIgnoreCase);
 
     public Task<IReadOnlyList<Milestone>> LoadMilestonesAsync() =>
         _vault?.GetMilestonesAsync() ?? Task.FromResult<IReadOnlyList<Milestone>>(Array.Empty<Milestone>());

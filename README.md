@@ -39,9 +39,18 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 * **Milestones…** lets you view the whole vault as it was at a milestone (e.g. "Design Review 1"). The vault folder switches to those versions, read-only, so assemblies open with the matching parts. Click **Return to Latest** when you're done.
 * **History** shows every version of a file. **Restore This Version** checks the file out, puts the old version back and checks it in as a new version. Nothing is lost, and the newer versions stay in the history.
 
+### Saving the vault's storage
+
+The vault lives on GitHub's free plan: **10 GB of storage** (every version of every file ever checked in counts) and **10 GB of downloads a month**, shared by the whole team. Two features help:
+
+* **Export warning:** checking in a new or changed STEP, PDF, DXF (or similar) asks first, because exports can be made again from the model and each check-in keeps a full copy. Check them in when you actually send them out, like a DXF for cutting. Admins can turn it off with `"warnOnExports": false` in `pdm.json`.
+* **Only download my folders:** in **Settings → What to download**, pick the folders you work on. Get Latest then only downloads files in those folders. Everything else shows as **not downloaded**: you can still see its 3D preview, and you can right-click it and choose **Download** to get it. In SolidWorks, if an assembly uses parts you haven't downloaded, the pane offers **Download missing parts**. Check Out always downloads the real file first.
+
+Other ways to save space: turn off *Save tessellation data* (Tools → Options → Performance), delete unused configurations and embedded images, and check in at the end of a work session rather than after every tweak.
+
 ### From File Explorer
 
-Right-click a file inside the vault and choose **Capstone PDM** (on Windows 11, click **Show more options** first). From there you can **Check Out**, **Check In…**, **Undo Check Out**, or **Show in Capstone PDM**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
+Right-click a file inside the vault and choose **Capstone PDM** (on Windows 11, click **Show more options** first). From there you can **Check Out**, **Check In…**, **Undo Check Out**, **Download**, or **Show in Capstone PDM**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
 
 ### Inside SolidWorks (add-in)
 
@@ -201,6 +210,10 @@ The tool isn't tied to the capstone. For a new team:
 4. Click **Update Vault Setup** once in the app to turn on the vault guard.
 
 If you're in both teams, keep both vaults on your PC and switch with **Settings → Vault folder**. The SolidWorks add-in and the File Explorer menu follow the switch. Each vault has its own admins, frozen files, milestones and Discord channel.
+
+### Storage meter
+
+Admins see the vault's storage in the status bar ("storage 1.2 GB of 10 GB"), counting every stored version. A banner warns at 70% of the limit. Change the limit and warning point with `storageLimitGB` and `storageWarningPercent` in `pdm.json`. Monthly downloads can't be measured from your PC; check them on GitHub under **Settings → Billing and licensing**.
 
 ### GitHub LFS storage
 

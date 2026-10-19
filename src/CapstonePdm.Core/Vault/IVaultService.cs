@@ -71,6 +71,20 @@ public interface IVaultService
     /// <summary>Admin: install or repair the GitHub vault guard and storage rules.</summary>
     Task<OperationResult> UpdateVaultSetupAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
+    /// <summary>Git LFS storage used by every stored version (what counts against GitHub's free storage).</summary>
+    Task<StorageUsage> GetStorageUsageAsync(CancellationToken ct = default);
+
+    /// <summary>Message asking to confirm checking in new/changed export files (STEP, PDF, DXF...), or null.</summary>
+    Task<string?> GetExportWarningAsync(IEnumerable<string> paths, CancellationToken ct = default);
+
+    /// <summary>Folders this PC downloads (null = everything).</summary>
+    Task<IReadOnlyList<string>?> GetDownloadFoldersAsync(CancellationToken ct = default);
+
+    Task SetDownloadFoldersAsync(IReadOnlyList<string>? folders, IProgress<string>? progress = null, CancellationToken ct = default);
+
+    /// <summary>Downloads specific files even if their folder isn't chosen.</summary>
+    Task DownloadAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
+
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);
 }

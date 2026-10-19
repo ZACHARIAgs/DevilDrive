@@ -19,6 +19,15 @@
 
         <CheckBox x:Name="ExplorerMenuBox" Margin="0,16,0,0" Content="Show Capstone PDM in File Explorer's right-click menu (Windows 11: under &quot;Show more options&quot;)" />
 
+        <TextBlock FontWeight="SemiBold" Text="What to download" Margin="0,16,0,0" />
+        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,6"
+                   Text="Downloading only the folders you work on saves the team's monthly download allowance. Files in other folders show as &quot;not downloaded&quot; (their 3D previews still work); right-click one and choose Download to get it. Assemblies that use parts you haven't downloaded show those parts as missing until you download them." />
+        <RadioButton x:Name="DownloadAllRadio" GroupName="Download" Content="Everything" />
+        <RadioButton x:Name="DownloadSomeRadio" GroupName="Download" Content="Only these folders:" Margin="0,4,0,0" />
+        <ListBox x:Name="FolderList" MaxHeight="150" Margin="22,4,0,0"
+                 IsEnabled="{Binding IsChecked, ElementName=DownloadSomeRadio}" />
+        <TextBlock x:Name="NoFoldersText" Foreground="#9CA3AF" Margin="22,4,0,0" Visibility="Collapsed"
+                   Text="The vault has no folders yet. Organize files into folders to use this." />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Style="{StaticResource DialogButton}" Content="Save" IsDefault="True" Click="OnSave" />
             <Button Style="{StaticResource DialogButton}" Content="Cancel" IsCancel="True" />

@@ -375,6 +375,56 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task StorageMeter_CountsEveryStoredVersion()
+    {
+        // Two versions of a Git LFS file, committed locally (no push needed to measure).
+        File.AppendAllText(Path.Combine(_alice, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n");
+        File.WriteAllBytes(Path.Combine(_alice, "part.bin"), new byte[3000]);
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "v1");
+        File.WriteAllBytes(Path.Combine(_alice, "part.bin"), new byte[5000]);
+        Git(_alice, "commit", "-am", "v2");
+
+        var alice = await Open(_alice);
+        var usage = await alice.GetStorageUsageAsync();
+
+        Assert.Equal(2, usage.VersionCount);
+        Assert.Equal(8000, usage.AllVersionsBytes);
+        Assert.Equal(5000, usage.LatestBytes);
+        Assert.Equal(10, usage.LimitGB);
+    }
+
+    [Fact]
+    public async Task ExportWarning_OnlyForNewOrChangedExports_AndCanBeTurnedOff()
+    {
+        Write(_bob, "plate.dxf", "outline");
+        var bob = await Open(_bob);
+
+        var warning = await bob.GetExportWarningAsync(new[] { "plate.dxf", "notes.txt" });
+        Assert.NotNull(warning);
+        Assert.Contains("plate.dxf", warning);
+        Assert.Null(await bob.GetExportWarningAsync(new[] { "notes.txt" }));
+
+        Write(_bob, "pdm.json", "{ \"warnOnExports\": false }");
+        var quiet = await Open(_bob);
+        Assert.Null(await quiet.GetExportWarningAsync(new[] { "plate.dxf" }));
+    }
+
+    [Fact]
+    public async Task DownloadFolders_AreSaved_AndCanBeReset()
+    {
+        var bob = await Open(_bob);
+        Assert.Null(await bob.GetDownloadFoldersAsync());
+
+        await bob.SetDownloadFoldersAsync(new[] { "Chassis", "Drivetrain\\" });
+        Assert.Equal(new[] { "Chassis", "Drivetrain" }, await bob.GetDownloadFoldersAsync());
+        Assert.Equal(new[] { "Chassis", "Drivetrain" }, (await bob.GetSnapshotAsync(contactVault: false)).DownloadFolders);
+
+        await bob.SetDownloadFoldersAsync(null);
+        Assert.Null(await bob.GetDownloadFoldersAsync());
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);

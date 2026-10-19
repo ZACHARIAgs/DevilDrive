@@ -57,11 +57,12 @@ public sealed class FileRowViewModel : ViewModelBase
             };
             if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
             if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
+            if (File.NotDownloaded) text += " (not downloaded: right-click, Download)";
             return text;
         }
     }
 
-    public Brush StateBrush => File.State switch
+    public Brush StateBrush => File.NotDownloaded ? Gray : File.State switch
     {
         FileState.Available => File.IsOutdated ? Gray : Green,
         FileState.CheckedOutByMe => Blue,

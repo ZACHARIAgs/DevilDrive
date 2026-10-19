@@ -144,6 +144,7 @@
                 <ComboBoxItem Content="Needs attention" />
                 <ComboBoxItem Content="Newer version in vault" />
                 <ComboBoxItem Content="Frozen" />
+                <ComboBoxItem Content="Not downloaded" />
             </ComboBox>
             <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" />
         </DockPanel>
@@ -182,7 +183,8 @@
                         <MenuItem Header="Check In&#x2026;" Command="{Binding CheckInCommand}" />
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
                         <Separator />
-                        <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" />
+                        <MenuItem Header="Download" Command="{Binding DownloadCommand}" />
+                    <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" />
                         <MenuItem Header="Open" Command="{Binding OpenCommand}" />
                         <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" />
                         <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />

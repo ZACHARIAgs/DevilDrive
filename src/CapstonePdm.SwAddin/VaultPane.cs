@@ -46,6 +46,8 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _unfreeze;
     private readonly ModernButton _requestCheckIn;
     private readonly ModernButton _rename;
+    private readonly ModernButton _downloadRefs;
+    private List<string> _missingRefs = new List<string>();
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
@@ -98,6 +100,7 @@ internal sealed class VaultPane : UserControl
         _unfreeze = new ModernButton("Unfreeze (admin)", "");
         _requestCheckIn = new ModernButton("Request Check-In (admin)", "");
         _rename = new ModernButton("Rename / Move", "");
+        _downloadRefs = new ModernButton("Download missing parts", "\uE896");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
@@ -107,7 +110,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _checkIn, _checkOut, _undo, _rename, _requestCheckIn, _freeze, _unfreeze,
+            _downloadRefs, _checkIn, _checkOut, _undo, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp, _rebuildIndex,
             _status,
@@ -122,6 +125,7 @@ internal sealed class VaultPane : UserControl
         _unfreeze.Click += async (_, _) => await UnfreezeAsync();
         _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
         _rename.Click += async (_, _) => await RenameAsync();
+        _downloadRefs.Click += async (_, _) => await DownloadMissingPartsAsync();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
@@ -193,6 +197,9 @@ internal sealed class VaultPane : UserControl
             if (contactVault) _lastVaultContact = DateTime.Now;
             _filesByFullPath = _snapshot.Files.ToDictionary(f => _vault.ToFullPath(f.RelativePath), f => f, StringComparer.OrdinalIgnoreCase);
             if (_snapshot.CheckInRequestsForMe > 0) await CarryOutCheckInRequestsAsync();
+            _missingRefs = _snapshot.DownloadFolders != null && _currentPath != null && SolidWorksSession.HasReferences(_currentPath)
+                ? _sw.GetReferences(_currentPath).Where(IsInVault).Where(r => FileAt(r)?.NotDownloaded == true).ToList()
+                : new List<string>();
             WarnIfCheckedOutByOther();
         }
         catch (PdmException ex)
@@ -302,6 +309,8 @@ internal sealed class VaultPane : UserControl
         _freeze.Visible = isAdmin && file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
         _unfreeze.Visible = isAdmin && state == FileState.Frozen;
         _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
+        _downloadRefs.Visible = _missingRefs.Count > 0;
+        _downloadRefs.Enabled = ready && _snapshot?.ViewingMilestone == null;
         _rename.Visible = file != null && file.ExistsLocally && IsSolidWorksFile(file.RelativePath) && !file.HasLocalChanges &&
                           state is FileState.Available or FileState.CheckedOutByMe;
         _checkIn.Primary = canCheckIn;
@@ -568,6 +577,13 @@ internal sealed class VaultPane : UserControl
                     "Capstone PDM — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+        }
+
+        var exportWarning = await _vault.GetExportWarningAsync(targets);
+        if (exportWarning != null &&
+            MessageBox.Show(_sw.MainWindow, exportWarning, "Capstone PDM \u2014 Check in exports?", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
         }
 
         await RunAsync("Checking in…", async progress =>
@@ -925,6 +941,27 @@ internal sealed class VaultPane : UserControl
             {
                 _sw.Reopen(reopen);
             }
+        });
+    }
+
+    /// <summary>
+    /// With "only download my folders", an assembly can use parts that are only placeholders here. Download
+    /// them, then reopen the assembly so SolidWorks loads them.
+    /// </summary>
+    private async Task DownloadMissingPartsAsync()
+    {
+        var top = _currentPath;
+        var missing = _missingRefs.ToList();
+        if (top == null || _vault == null || missing.Count == 0) return;
+
+        await RunAsync($"Downloading {missing.Count} part(s)\u2026", async progress =>
+        {
+            await _vault.DownloadAsync(missing, progress);
+            var closed = _sw.CloseIfSaved(new[] { top });
+            _sw.Reopen(closed);
+            return closed.Paths.Count > 0
+                ? $"Downloaded {PathList.Format(missing)} and reopened {Path.GetFileName(top)}."
+                : $"Downloaded {PathList.Format(missing)}. Save and reopen {Path.GetFileName(top)} to load them.";
         });
     }
 

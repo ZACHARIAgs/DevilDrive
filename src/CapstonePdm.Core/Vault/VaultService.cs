@@ -200,7 +200,20 @@ public sealed class VaultService : IVaultService
         }
         snapshot.LocksUnknown = !_locksKnown;
         snapshot.ViewingMilestone = await GetViewingMilestoneAsync(ct).ConfigureAwait(false);
-        if (IsAdmin) snapshot.SetupProblems = await GetSetupProblemsAsync(ct).ConfigureAwait(false);
+        if (IsAdmin)
+        {
+            snapshot.SetupProblems = await GetSetupProblemsAsync(ct).ConfigureAwait(false);
+            snapshot.Storage = _storage != null && DateTimeOffset.Now - _storage.MeasuredAt < StorageRecheck
+                ? _storage
+                : await MeasureStorageAsync(ct).ConfigureAwait(false);
+        }
+        snapshot.DownloadFolders = ParseDownloadFolders(await GetConfigValueAsync("lfs.fetchinclude", ct).ConfigureAwait(false));
+        var placeholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (snapshot.DownloadFolders != null)
+        {
+            var lfs = await RunAsync(new[] { "lfs", "ls-files", "--json" }, ct).ConfigureAwait(false);
+            placeholders.UnionWith(LfsFile.Parse(lfs.StdOut).Where(f => !f.CheckedOut).Select(f => f.Name));
+        }
 
         var tracked = GitParsers.SplitZ((await RunCheckedAsync("list the vault files", new[] { "ls-files", "-z" }, ct).ConfigureAwait(false)).StdOut);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
@@ -271,6 +284,7 @@ public sealed class VaultService : IVaultService
                 CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
                 Index = index.TryGetValue(path, out var indexEntry) ? indexEntry : null,
                 UsedIn = usedIn.TryGetValue(path, out var parents) ? parents : (IReadOnlyList<string>)Array.Empty<string>(),
+                NotDownloaded = placeholders.Contains(path),
             });
         }
 
@@ -408,6 +422,13 @@ public sealed class VaultService : IVaultService
             targets.Remove(rel);
         }
         if (targets.Count == 0) return result;
+
+        // With "only download my folders", a file may be just a placeholder: get the real file before anyone edits it.
+        if (await GetConfigValueAsync("lfs.fetchinclude", ct).ConfigureAwait(false) != null)
+        {
+            progress?.Report("Downloading\u2026");
+            await DownloadCoreAsync(targets, ct).ConfigureAwait(false);
+        }
 
         // 2. Lock.
         progress?.Report("Checking out…");
@@ -1365,6 +1386,157 @@ public sealed class VaultService : IVaultService
         {
             _gate.Release();
         }
+    }
+
+    // ---------------------------------------------------------------- Storage meter
+
+    private static readonly TimeSpan StorageRecheck = TimeSpan.FromMinutes(30);
+    private StorageUsage? _storage;
+
+    /// <summary>
+    /// Measures Git LFS storage: every distinct version of every CAD file in the vault's history,
+    /// which is what GitHub counts against the free storage (it never deletes old versions).
+    /// </summary>
+    public async Task<StorageUsage> GetStorageUsageAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await MeasureStorageAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<StorageUsage> MeasureStorageAsync(CancellationToken ct)
+    {
+        // --all walks every commit; the upstream ref makes sure versions this PC hasn't merged yet count too.
+        var all = await RunAsync(new[] { "lfs", "ls-files", "--all", "--json" }, ct, TransferTimeout).ConfigureAwait(false);
+        var latest = await RunAsync(new[] { "lfs", "ls-files", "--json" }, ct).ConfigureAwait(false);
+        var versions = LfsFile.Parse(all.StdOut).GroupBy(f => f.Oid).Select(g => g.First()).ToList();
+        var current = LfsFile.Parse(latest.StdOut);
+        _storage = new StorageUsage
+        {
+            AllVersionsBytes = versions.Sum(f => f.Size),
+            VersionCount = versions.Count,
+            LatestBytes = current.Sum(f => f.Size),
+            FileCount = current.Count,
+            LimitGB = Config.StorageLimitGB,
+            WarningPercent = Config.StorageWarningPercent,
+            MeasuredAt = DateTimeOffset.Now,
+        };
+        return _storage;
+    }
+
+    // ---------------------------------------------------------------- Export warning
+
+    /// <summary>
+    /// If any of these files is a new or changed export (STEP, PDF, DXF, ...), returns a message asking
+    /// whether to check it in anyway; null when there's nothing to warn about (or pdm.json turns it off).
+    /// </summary>
+    public async Task<string?> GetExportWarningAsync(IEnumerable<string> paths, CancellationToken ct = default)
+    {
+        if (!Config.WarnOnExports) return null;
+        var relatives = paths.Select(ToRelativePath).Where(ExportFiles.IsExport).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (relatives.Count == 0) return null;
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            var exports = relatives.Where(r => changes.TryGetValue(r, out var c) && !c.IsDeleted).ToList();
+            if (exports.Count == 0) return null;
+
+            long SizeOf(string rel)
+            {
+                var info = new FileInfo(ToFullPath(rel));
+                return info.Exists ? info.Length : 0;
+            }
+            var list = string.Join("\n", exports.Select(r => $"• {r} ({StorageUsage.FormatBytes(SizeOf(r))})"));
+            return $"{(exports.Count == 1 ? "This file looks" : "These files look")} like an export (STEP, PDF, DXF, ...):\n{list}\n\n" +
+                   "Exports can be made again from the model whenever they're needed, and every check-in keeps a full copy forever " +
+                   $"in the vault's free {Config.StorageLimitGB:0.#} GB.\n\n" +
+                   "Check in anyway? (Do check in files you actually send out, like a DXF for cutting or a PDF for a review.)";
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // ---------------------------------------------------------------- Only download my folders
+
+    /// <summary>
+    /// Folders this PC downloads CAD files for (Git LFS lfs.fetchinclude); null means everything.
+    /// Files elsewhere stay as small placeholders until downloaded, which saves the team's monthly
+    /// download allowance. 3D previews (.pdm) are always downloaded.
+    /// </summary>
+    public async Task<IReadOnlyList<string>?> GetDownloadFoldersAsync(CancellationToken ct = default)
+    {
+        var value = await GetConfigValueAsync("lfs.fetchinclude", ct).ConfigureAwait(false);
+        return ParseDownloadFolders(value);
+    }
+
+    /// <summary>Sets the folders to download (null or empty = everything) and downloads what's newly included.</summary>
+    public async Task SetDownloadFoldersAsync(IReadOnlyList<string>? folders, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var cleaned = folders?.Select(f => f.Replace('\\', '/').Trim('/')).Where(f => f.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (cleaned == null || cleaned.Count == 0)
+            {
+                await RunAsync(new[] { "config", "--local", "--unset", "lfs.fetchinclude" }, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // Files in the vault root and the .pdm folder (3D previews, index) always come down.
+                var patterns = cleaned.Select(f => f + "/**").Concat(new[] { "/*.*", ".pdm/**" });
+                await RunCheckedAsync("save the download folders", new[] { "config", "--local", "lfs.fetchinclude", string.Join(",", patterns) }, ct).ConfigureAwait(false);
+            }
+
+            progress?.Report("Downloading files in the chosen folders…");
+            await RunCheckedAsync("download files", new[] { "lfs", "pull" }, ct, TransferTimeout).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Downloads specific files (or everything under specific folders) even if their folder isn't chosen.</summary>
+    public async Task DownloadAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var relatives = Normalize(paths);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            progress?.Report($"Downloading {PathList.Format(relatives)}…");
+            await DownloadCoreAsync(relatives, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task DownloadCoreAsync(IReadOnlyCollection<string> relatives, CancellationToken ct)
+    {
+        if (relatives.Count == 0) return;
+        // --include on the command line overrides lfs.fetchinclude; an empty --exclude clears any exclude rule.
+        await RunCheckedAsync("download files", new[] { "lfs", "pull", "--include", string.Join(",", relatives), "--exclude", "" }, ct, TransferTimeout).ConfigureAwait(false);
+    }
+
+    private static IReadOnlyList<string>? ParseDownloadFolders(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return value!.Split(',')
+            .Select(p => p.Trim())
+            .Where(p => p.EndsWith("/**", StringComparison.Ordinal) && !p.StartsWith(".pdm", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Substring(0, p.Length - 3))
+            .ToList();
     }
 
     // ---------------------------------------------------------------- Milestones

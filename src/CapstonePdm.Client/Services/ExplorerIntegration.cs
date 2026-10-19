@@ -19,6 +19,8 @@ internal static class ExplorerIntegration
         var vault = vaultPath.TrimEnd('\\');
         var icon = $"\"{exePath}\",0";
 
+        Unregister();
+
         using (var menu = Registry.CurrentUser.CreateSubKey(FileMenuKey))
         {
             menu.SetValue("MUIVerb", "Capstone PDM");
@@ -29,7 +31,8 @@ internal static class ExplorerIntegration
         AddCommand(FileMenuKey, "1checkout", "Check Out", exePath, "checkout", "\"%1\"");
         AddCommand(FileMenuKey, "2checkin", "Check In…", exePath, "checkin", "\"%1\"");
         AddCommand(FileMenuKey, "3undo", "Undo Check Out", exePath, "undo", "\"%1\"");
-        AddCommand(FileMenuKey, "4show", "Show in Capstone PDM", exePath, "show", "\"%1\"");
+        AddCommand(FileMenuKey, "4download", "Download", exePath, "download", "\"%1\"");
+        AddCommand(FileMenuKey, "5show", "Show in Capstone PDM", exePath, "show", "\"%1\"");
 
         using (var menu = Registry.CurrentUser.CreateSubKey(FolderMenuKey))
         {

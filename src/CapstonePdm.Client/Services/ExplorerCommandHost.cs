@@ -101,6 +101,12 @@ internal static class ExplorerCommandHost
 
                 case "checkin":
                     note.Hide();
+                    var exportWarning = await vault.GetExportWarningAsync(paths);
+                    if (exportWarning != null &&
+                        MessageBox.Show(exportWarning, "Capstone PDM \u2014 Check in exports?", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+                    {
+                        return;
+                    }
                     var team = vault.Config.SolidWorksVersion;
                     var dialog = new CheckInWindow("Check In", "Check In", paths.Select(vault.ToRelativePath).ToList(), "", allowKeepCheckedOut: true,
                         footnote: team != null ? $"Close the files in SolidWorks first. Only check in files saved in SolidWorks {team}." : null);
@@ -116,6 +122,13 @@ internal static class ExplorerCommandHost
                     if (answer != MessageBoxResult.OK) return;
                     note.Say($"Undoing check-out of {names}…");
                     await FinishAsync(note, await vault.UndoCheckOutAsync(paths, new Progress<string>(s => note.Say(s))), "Undid check-out of");
+                    break;
+
+                case "download":
+                    note.Say($"Downloading {names}\u2026");
+                    await vault.DownloadAsync(paths, new Progress<string>(s => note.Say(s)));
+                    note.Say($"Downloaded {names}.", TimeSpan.FromSeconds(4));
+                    await WaitForCloseAsync(note);
                     break;
 
                 case "getlatest":
