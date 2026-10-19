@@ -27,6 +27,21 @@ Copy-Item (Join-Path $dist 'publish\CapstonePDM.exe') $stage
 Copy-Item (Join-Path $PSScriptRoot 'Setup.cmd') $stage
 Copy-Item (Join-Path $PSScriptRoot 'Setup-CapstonePdm.ps1') $stage
 
+# SolidWorks add-in (needs SolidWorks installed on this PC to build).
+$addinProject = Join-Path $root 'src\CapstonePdm.SwAddin\CapstonePdm.SwAddin.csproj'
+if (Test-Path 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SolidWorks.Interop.sldworks.dll') {
+    & dotnet build $addinProject -c $Configuration -o (Join-Path $dist 'publish-addin')
+    if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed.' }
+    $addinStage = Join-Path $stage 'SolidWorksAddin'
+    New-Item -ItemType Directory -Force $addinStage | Out-Null
+    Copy-Item (Join-Path $dist 'publish-addin\*.dll') $addinStage
+    Copy-Item (Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1') $stage
+    Copy-Item (Join-Path $PSScriptRoot 'Install SolidWorks Add-in.cmd') $stage
+}
+else {
+    Write-Warning 'SolidWorks is not installed on this PC, so the add-in was left out of the zip.'
+}
+
 $zip = Join-Path $dist 'CapstonePDM-Setup.zip'
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip

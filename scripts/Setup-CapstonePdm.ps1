@@ -166,6 +166,20 @@ if (Test-Path $ExePath) {
     Write-Ok 'Shortcuts added to the Desktop and Start menu.'
 }
 
+# 6. SolidWorks add-in (optional) ----------------------------------------------
+$addinInstaller = Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1'
+if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidWorksAddin'))) {
+    Write-Step 'SolidWorks add-in'
+    $answer = Read-Default 'Install the Capstone PDM add-in for SolidWorks? (needs admin permission) [Y/n]' 'Y'
+    if ($answer -match '^[Yy]') {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $addinInstaller
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'The add-in was not installed. Run "Install SolidWorks Add-in.cmd" later to try again.' }
+    }
+    else {
+        Write-Warn 'Skipped. Run "Install SolidWorks Add-in.cmd" any time to add it.'
+    }
+}
+
 Write-Host ''
 Write-Host 'All done! Open "Capstone PDM" from your Desktop.' -ForegroundColor Green
 Write-Host "Always open SolidWorks files from $VaultPath, and check out before editing."
