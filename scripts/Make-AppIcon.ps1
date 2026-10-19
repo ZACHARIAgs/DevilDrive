@@ -35,17 +35,39 @@ function Get-PngBytes([System.Drawing.Bitmap]$bitmap) {
     return , $stream.ToArray()
 }
 
+function Get-DibBytes([System.Drawing.Bitmap]$bitmap) {
+    # Icon-style DIB: BITMAPINFOHEADER (height doubled), bottom-up BGRA pixels, then a 1-bit AND mask.
+    $w = $bitmap.Width; $h = $bitmap.Height
+    $maskStride = [int]([Math]::Ceiling($w / 32.0) * 4)
+    $stream = New-Object System.IO.MemoryStream
+    $writer = New-Object System.IO.BinaryWriter($stream)
+    $writer.Write([UInt32]40); $writer.Write([Int32]$w); $writer.Write([Int32]($h * 2))
+    $writer.Write([UInt16]1); $writer.Write([UInt16]32); $writer.Write([UInt32]0)
+    $writer.Write([UInt32]($w * $h * 4 + $maskStride * $h))
+    $writer.Write([Int32]0); $writer.Write([Int32]0); $writer.Write([UInt32]0); $writer.Write([UInt32]0)
+    for ($y = $h - 1; $y -ge 0; $y--) {
+        for ($x = 0; $x -lt $w; $x++) {
+            $c = $bitmap.GetPixel($x, $y)
+            $writer.Write([Byte]$c.B); $writer.Write([Byte]$c.G); $writer.Write([Byte]$c.R); $writer.Write([Byte]$c.A)
+        }
+    }
+    $writer.Write((New-Object Byte[] ($maskStride * $h)))  # alpha channel does the masking
+    $writer.Flush()
+    return , $stream.ToArray()
+}
+
 $image = [System.Drawing.Image]::FromFile((Resolve-Path $Source).Path)
 try {
     $master = Resize-Image $image 512
     $master.Save((Join-Path $assets 'vault.png'), [System.Drawing.Imaging.ImageFormat]::Png)
     $master.Dispose()
 
-    # .ico with PNG-compressed entries (supported by Windows Vista and later).
-    $sizes = 16, 20, 24, 32, 40, 48, 64, 128, 256
+    # Classic 32-bit bitmaps below 256 px and PNG at 256 px. Some parts of Windows (e.g. the
+    # large preview in Start search) show a generic icon when smaller entries are PNG.
+    $sizes = 16, 20, 24, 32, 40, 48, 64, 96, 128, 256
     $images = foreach ($size in $sizes) {
         $bitmap = Resize-Image $image $size
-        , (Get-PngBytes $bitmap)
+        if ($size -ge 256) { , (Get-PngBytes $bitmap) } else { , (Get-DibBytes $bitmap) }
         $bitmap.Dispose()
     }
 

@@ -159,6 +159,7 @@ if (Test-Path $ExePath) {
     foreach ($folder in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
         $shortcut = $shell.CreateShortcut((Join-Path $folder 'Capstone PDM.lnk'))
         $shortcut.TargetPath = $ExePath
+        $shortcut.IconLocation = "$ExePath,0"
         $shortcut.WorkingDirectory = $VaultPath
         $shortcut.Description = 'Check files in and out of the Capstone vault'
         $shortcut.Save()

@@ -42,6 +42,13 @@ internal static class PaneIcon
         return path;
     }
 
+    /// <summary>The safe, scaled for the pane header.</summary>
+    public static Bitmap LoadLogo(int size)
+    {
+        using var master = LoadMaster();
+        return Resize(master, size, size, Color.Transparent);
+    }
+
     private static Image LoadMaster()
     {
         using var stream = typeof(PaneIcon).Assembly.GetManifestResourceStream("CapstonePdm.SwAddin.vault.png")!;

@@ -19,31 +19,32 @@ namespace CapstonePdm.SwAddin;
 /// </summary>
 internal sealed class VaultPane : UserControl
 {
-    private static readonly Color Green = Color.FromArgb(0x2E, 0x7D, 0x32);
-    private static readonly Color Blue = Color.FromArgb(0x15, 0x65, 0xC0);
-    private static readonly Color Red = Color.FromArgb(0xC6, 0x28, 0x28);
-    private static readonly Color Orange = Color.FromArgb(0xEF, 0x6C, 0x00);
-    private static readonly Color Purple = Color.FromArgb(0x6A, 0x1B, 0x9A);
-    private static readonly Color Gray = Color.FromArgb(0x75, 0x75, 0x75);
     private static readonly TimeSpan VaultContactInterval = TimeSpan.FromSeconds(60);
+
+    // Badge colors (background, text) per file state.
+    private static readonly (Color Back, Color Fore) GreenBadge = (Color.FromArgb(0xE6, 0xF4, 0xEA), Color.FromArgb(0x1B, 0x7F, 0x3B));
+    private static readonly (Color Back, Color Fore) BlueBadge = (Color.FromArgb(0xE0, 0xEB, 0xFF), Color.FromArgb(0x1D, 0x4E, 0xD8));
+    private static readonly (Color Back, Color Fore) RedBadge = (Color.FromArgb(0xFD, 0xE8, 0xE8), Color.FromArgb(0xB9, 0x1C, 0x1C));
+    private static readonly (Color Back, Color Fore) OrangeBadge = (Color.FromArgb(0xFF, 0xF1, 0xE0), Color.FromArgb(0xB4, 0x53, 0x09));
+    private static readonly (Color Back, Color Fore) PurpleBadge = (Color.FromArgb(0xF1, 0xE8, 0xFD), Color.FromArgb(0x6D, 0x28, 0xD9));
+    private static readonly (Color Back, Color Fore) GrayBadge = (Color.FromArgb(0xEE, 0xF0, 0xF3), Color.FromArgb(0x4B, 0x55, 0x63));
 
     private readonly SolidWorksSession _sw;
     private readonly Timer _timer = new Timer { Interval = 1000 };
     private readonly HashSet<string> _warned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _checkedOnline = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-    private readonly FlowLayoutPanel _layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(8) };
-    private readonly Label _banner = new Label { AutoSize = true, Padding = new Padding(6), Visible = false };
-    private readonly Label _fileName = new Label { AutoSize = true };
-    private readonly Label _state = new Label { AutoSize = true };
-    private readonly Label _details = new Label { AutoSize = true, ForeColor = Color.FromArgb(0x44, 0x44, 0x44) };
-    private readonly Button _checkOut = NewButton("Check Out");
-    private readonly Button _checkIn = NewButton("Check In…");
-    private readonly Button _undo = NewButton("Undo Check Out");
-    private readonly Button _getLatest = NewButton("Get Latest");
-    private readonly Button _refresh = NewButton("Refresh");
-    private readonly Button _openApp = NewButton("Open Capstone PDM");
-    private readonly Label _status = new Label { AutoSize = true, ForeColor = Gray, Margin = new Padding(3, 10, 3, 3) };
+    private readonly FlowLayoutPanel _layout;
+    private readonly PaneHeader _header;
+    private readonly NoticeBox _banner;
+    private readonly FileCard _card;
+    private readonly ModernButton _checkOut;
+    private readonly ModernButton _checkIn;
+    private readonly ModernButton _undo;
+    private readonly ModernButton _getLatest;
+    private readonly ModernButton _refresh;
+    private readonly ModernButton _openApp;
+    private readonly CaptionLabel _status;
 
     private VaultService? _vault;
     private string? _vaultProblem;
@@ -56,18 +57,39 @@ internal sealed class VaultPane : UserControl
     public VaultPane(SolidWorksSession sw)
     {
         _sw = sw;
-        Font = SystemFonts.MessageBoxFont;
-        BackColor = SystemColors.Window;
+        // Sizes are in pixels scaled by hand (WinForms auto-scaling misbehaves inside SolidWorks).
+        AutoScaleMode = AutoScaleMode.None;
+        using (var g = CreateGraphics()) Theme.Init(g.DpiX);
+        BackColor = Theme.Background;
+        Font = Theme.Body;
 
-        var title = new Label { Text = "Capstone PDM", AutoSize = true, Font = new Font(Font.FontFamily, 12f, FontStyle.Bold), Margin = new Padding(3, 0, 3, 8) };
-        _fileName.Font = new Font(Font, FontStyle.Bold);
-        _state.Font = new Font(Font.FontFamily, 10f, FontStyle.Bold);
-        _details.Margin = new Padding(3, 3, 3, 10);
+        _layout = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(Theme.Px(14), Theme.Px(12), Theme.Px(14), Theme.Px(12)),
+            BackColor = Theme.Background,
+        };
+        _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Capstone PDM");
+        _banner = new NoticeBox();
+        _card = new FileCard();
+        _checkOut = new ModernButton("Check Out", "");
+        _checkIn = new ModernButton("Check In", "");
+        _undo = new ModernButton("Undo Check Out", "");
+        _getLatest = new ModernButton("Get Latest", "");
+        _refresh = new ModernButton("Refresh", "");
+        _openApp = new ModernButton("Open Capstone PDM", "");
+        _status = new CaptionLabel();
 
         _layout.Controls.AddRange(new Control[]
         {
-            title, _banner, _fileName, _state, _details,
-            _checkOut, _checkIn, _undo, Spacer(), _getLatest, _refresh, _openApp, _status,
+            _header, _banner, _card,
+            _checkIn, _checkOut, _undo,
+            new Divider(),
+            _getLatest, _refresh, _openApp,
+            _status,
         });
         Controls.Add(_layout);
         Resize += (_, _) => FitWidths();
@@ -191,137 +213,123 @@ internal sealed class VaultPane : UserControl
 
     private void UpdateView()
     {
-        SuspendLayout();
+        _layout.SuspendLayout();
         UpdateBanner();
+        _header.Subtitle = _vault == null ? "Vault not connected" : $"{_vault.Config.VaultName}  \u2022  {_vault.UserDisplayName}";
 
         var file = CurrentFile;
-        _fileName.Text = _currentPath != null ? Path.GetFileName(_currentPath) : _sw.ActiveDocument != null ? "Unsaved document" : "No document open";
-        _details.Text = "";
+        var name = _currentPath != null ? Path.GetFileName(_currentPath) : _sw.ActiveDocument != null ? "Unsaved document" : "No document open";
 
         if (_vault == null)
         {
-            SetState("Vault not available", Gray);
+            _card.Show(name, "Vault not available", GrayBadge.Back, GrayBadge.Fore, "Click Refresh to try again.");
         }
         else if (_currentPath == null)
         {
-            SetState(_sw.ActiveDocument != null ? "Save it inside the vault to add it" : "Open a file from the vault", Gray);
-            if (_sw.ActiveDocument != null) _details.Text = $"Vault folder: {_vault.VaultRoot}";
+            _card.Show(name, _sw.ActiveDocument != null ? "Not saved yet" : "Nothing to show", GrayBadge.Back, GrayBadge.Fore,
+                _sw.ActiveDocument != null ? $"Save it inside {_vault.VaultRoot} to add it to the vault." : "Open a file from the vault to see its status.");
         }
         else if (!IsInVault(_currentPath))
         {
-            SetState("Not in the vault", Orange);
-            _details.Text = $"Only files inside {_vault.VaultRoot} are managed. Use Save As to put a copy in the vault.";
+            _card.Show(name, "Not in the vault", OrangeBadge.Back, OrangeBadge.Fore,
+                $"Only files inside {_vault.VaultRoot} are managed. Use Save As to put a copy in the vault.");
         }
         else if (file == null)
         {
-            SetState(_snapshot == null ? "Checking…" : "Not tracked by the vault", Gray);
+            _card.Show(name, _snapshot == null ? "Checking\u2026" : "Not tracked", GrayBadge.Back, GrayBadge.Fore, "");
         }
         else
         {
             ShowFile(file);
         }
 
+        // Show only the actions that make sense for this file; the main one is highlighted.
         var state = file?.State;
         var ready = _vault != null && !_busy;
-        _checkOut.Enabled = ready && file != null && file.IsLockable && state is FileState.Available or FileState.ModifiedWithoutCheckOut;
-        _checkIn.Enabled = ready && state is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
-        _undo.Enabled = ready && state is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified;
+        var canCheckIn = state is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
+        var canCheckOut = file != null && file.IsLockable && state is FileState.Available or FileState.ModifiedWithoutCheckOut;
+        var canUndo = state is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified;
+
+        _checkIn.Visible = canCheckIn;
+        _checkOut.Visible = canCheckOut;
+        _undo.Visible = canUndo;
+        _checkIn.Primary = canCheckIn;
+        _checkOut.Primary = canCheckOut && !canCheckIn;
+        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = ready;
         _getLatest.Enabled = ready;
+        _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
 
         FitWidths();
-        ResumeLayout();
+        _layout.ResumeLayout();
     }
 
     private void ShowFile(VaultFile file)
     {
-        switch (file.State)
+        (string Text, (Color Back, Color Fore) Colors) badge = file.State switch
         {
-            case FileState.Available:
-                SetState(file.IsOutdated ? "Available, newer version in vault" : "Available", file.IsOutdated ? Gray : Green);
-                break;
-            case FileState.CheckedOutByMe:
-                SetState("Checked out to you", Blue);
-                break;
-            case FileState.CheckedOutByOther:
-                SetState("Checked out by " + file.CheckedOutBy, Red);
-                break;
-            case FileState.ModifiedWithoutCheckOut:
-                SetState("Edited WITHOUT check-out!", Orange);
-                break;
-            case FileState.Modified:
-                SetState("Edited (check in to save)", Orange);
-                break;
-            case FileState.NotInVault:
-                SetState("New, not in vault yet", Purple);
-                break;
-            default:
-                SetState(file.State.ToString(), Gray);
-                break;
-        }
+            FileState.Available when file.IsOutdated => ("Newer version in vault", GrayBadge),
+            FileState.Available => ("Available", GreenBadge),
+            FileState.CheckedOutByMe => ("Checked out to you", BlueBadge),
+            FileState.CheckedOutByOther => ("Checked out by " + file.CheckedOutBy, RedBadge),
+            FileState.ModifiedWithoutCheckOut => ("Edited without check-out", OrangeBadge),
+            FileState.Modified => ("Edited, not checked in", OrangeBadge),
+            FileState.NotInVault => ("New, not in vault yet", PurpleBadge),
+            _ => (file.State.ToString(), GrayBadge),
+        };
 
         var lines = new List<string>();
         if (file.Lock?.LockedAt != null) lines.Add($"Checked out {file.Lock.LockedAt.Value.LocalDateTime:ddd MMM d, h:mm tt}");
         if (file.LatestVersion != null)
         {
-            lines.Add($"Version {file.Version}, checked in by {file.LatestVersion.Author} on {file.LatestVersion.Date.LocalDateTime:MMM d}");
-            if (file.LatestVersion.CommentFirstLine.Length > 0) lines.Add($"“{file.LatestVersion.CommentFirstLine}”");
+            lines.Add($"Version {file.Version}  \u2022  {file.LatestVersion.Author}, {file.LatestVersion.Date.LocalDateTime:MMM d}");
+            if (file.LatestVersion.CommentFirstLine.Length > 0) lines.Add($"\u201C{file.LatestVersion.CommentFirstLine}\u201D");
         }
         if (file.State == FileState.Available && !file.IsOutdated) lines.Add("Check out to edit.");
+        if (file.State == FileState.ModifiedWithoutCheckOut) lines.Add("Check it out to keep your edits, or Undo to discard them.");
         if (file.IsOutdated) lines.Add("Click Get Latest to update it.");
-        _details.Text = string.Join("\n", lines);
+
+        _card.Show(file.Name, badge.Text, badge.Colors.Back, badge.Colors.Fore, string.Join("\n", lines));
     }
 
     private void UpdateBanner()
     {
         var lines = new List<string>();
-        var color = Color.FromArgb(0xE3, 0xF2, 0xFD);
+        var kind = NoticeKind.Info;
         if (_vaultProblem != null)
         {
             lines.Add(_vaultProblem);
-            color = Color.FromArgb(0xFF, 0xEB, 0xEE);
+            kind = NoticeKind.Error;
         }
         else if (_snapshot != null)
         {
             if (_snapshot.IsOffline)
             {
                 lines.Add("Offline: showing the last known status.");
-                color = Color.FromArgb(0xFF, 0xF3, 0xE0);
+                kind = NoticeKind.Warning;
             }
             if (_snapshot.PendingCheckIns > 0)
             {
                 lines.Add($"{_snapshot.PendingCheckIns} check-in(s) haven't reached the vault yet. Check In again to send them.");
-                color = Color.FromArgb(0xFF, 0xF3, 0xE0);
+                kind = NoticeKind.Warning;
             }
             if (_snapshot.UpdatesAvailable > 0) lines.Add($"The vault has {_snapshot.UpdatesAvailable} new check-in(s). Click Get Latest.");
         }
-        _banner.Text = string.Join("\n", lines);
-        _banner.BackColor = color;
-        _banner.Visible = lines.Count > 0;
-    }
-
-    private void SetState(string text, Color color)
-    {
-        _state.Text = text;
-        _state.ForeColor = color;
+        _banner.Show(string.Join("\n", lines), kind);
     }
 
     private void SetStatus(string text) => _status.Text = text;
 
     private void FitWidths()
     {
-        var width = Math.Max(120, _layout.ClientSize.Width - _layout.Padding.Horizontal - 8);
+        var scrollbar = _layout.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+        var width = Math.Max(Theme.Px(140), _layout.ClientSize.Width - _layout.Padding.Horizontal - scrollbar);
         foreach (Control c in _layout.Controls)
         {
-            if (c is Button || c.Tag as string == "spacer") c.Width = width;
-            else if (c is Label label) label.MaximumSize = new Size(width, 0);
+            if (c is IFitWidth fit) fit.FitTo(width);
+            else c.Width = width;
         }
     }
-
-    private static Button NewButton(string text) =>
-        new Button { Text = text, Height = 30, Margin = new Padding(3, 2, 3, 2), FlatStyle = FlatStyle.System };
-
-    private static Control Spacer() => new Panel { Height = 8, Tag = "spacer" };
 
     // ------------------------------------------------------------ commands
 
