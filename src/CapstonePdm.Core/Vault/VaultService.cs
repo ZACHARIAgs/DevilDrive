@@ -1228,15 +1228,27 @@ public sealed class VaultService : IVaultService
         if (previews == null) return result;
         foreach (var rel in previews.Select(ToRelativePath).Where(VaultPaths.IsPreview).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (File.Exists(ToFullPath(rel)))
+            // Windows ignores case but Git doesn't (SolidWorks saves "x.STL" when asked for "x.stl"): use the name as it is on disk.
+            var onDisk = FindWithActualCase(ToFullPath(rel));
+            if (onDisk != null)
             {
-                result.Add(rel);
+                result.Add(ToRelativePath(onDisk));
                 continue;
             }
             var tracked = await RunAsync(new[] { "ls-files", "--", rel }, ct).ConfigureAwait(false);
             if (tracked.Success && tracked.StdOut.Trim().Length > 0) result.Add(rel);
         }
         return result;
+    }
+
+    /// <summary>The file's full path with the letter case it really has on disk, or null if it doesn't exist.</summary>
+    private static string? FindWithActualCase(string fullPath)
+    {
+        var folder = Path.GetDirectoryName(fullPath);
+        if (folder == null || !Directory.Exists(folder)) return null;
+        var name = Path.GetFileName(fullPath);
+        var match = Directory.EnumerateFiles(folder).FirstOrDefault(f => string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase));
+        return match == null ? null : Path.Combine(folder, Path.GetFileName(match));
     }
 
     /// <summary>Team settings and admin-managed lists: only admins may check these in.</summary>

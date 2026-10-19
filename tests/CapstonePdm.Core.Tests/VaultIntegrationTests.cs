@@ -358,6 +358,23 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckIn_IncludesPreview_EvenWhenSolidWorksChangedItsLetterCase()
+    {
+        // SolidWorks saves "x.STL" when asked for "x.stl"; Windows doesn't mind but Git does.
+        Write(_bob, "notes.txt", "bob's notes");
+        Directory.CreateDirectory(Path.Combine(_bob, ".pdm", "preview"));
+        File.WriteAllText(Path.Combine(_bob, ".pdm", "preview", "notes.txt.STL"), "solid preview");
+
+        var bob = await Open(_bob);
+        await bob.CheckInAsync(new[] { "notes.txt" }, "notes with a 3D preview", previews: new[] { VaultPaths.PreviewFor("notes.txt") });
+
+        var alice = await Open(_alice);
+        await alice.GetLatestAsync();
+        Assert.True(File.Exists(Path.Combine(_alice, ".pdm", "preview", "notes.txt.STL")));
+        Assert.Equal("bob's notes", Read(_alice, "notes.txt"));
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);

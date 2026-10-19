@@ -252,7 +252,9 @@ internal sealed class SolidWorksSession
             int errors = 0, warnings = 0;
             var saved = doc.Extension.SaveAs(stlPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
                 (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, ref errors, ref warnings);
-            return saved && File.Exists(stlPath);
+            if (!saved || !File.Exists(stlPath)) return false;
+            FixNameCase(stlPath);
+            return true;
         }
         catch (Exception ex)
         {
@@ -264,6 +266,22 @@ internal sealed class SolidWorksSession
             foreach (var (toggle, value) in savedToggles) _sw.SetUserPreferenceToggle((int)toggle, value);
             _sw.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, savedQuality);
         }
+    }
+
+    /// <summary>
+    /// SolidWorks saves "x.STL" even when asked for "x.stl". Windows doesn't care but Git does, so
+    /// rename the file to exactly the expected name.
+    /// </summary>
+    private static void FixNameCase(string expectedPath)
+    {
+        var folder = Path.GetDirectoryName(expectedPath)!;
+        var expectedName = Path.GetFileName(expectedPath);
+        var actual = Directory.EnumerateFiles(folder).Select(Path.GetFileName)
+            .FirstOrDefault(n => string.Equals(n, expectedName, StringComparison.OrdinalIgnoreCase));
+        if (actual == null || string.Equals(actual, expectedName, StringComparison.Ordinal)) return;
+        var temporary = expectedPath + ".renaming";
+        File.Move(Path.Combine(folder, actual), temporary);
+        File.Move(temporary, expectedPath);
     }
 
     /// <summary>
