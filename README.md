@@ -34,6 +34,9 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\CapstonePDM\Backups`.
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
+* **Details panel** (right side of the app): a preview of the selected file, its properties (part number, description, material, ...), what it **contains**, and **where it's used**. Check where-used before changing a part, so you know which assemblies it affects.
+* **Search** finds files by name, part number, description or any other SolidWorks property.
+* **Milestones…** lets you view the whole vault as it was at a milestone (e.g. "Design Review 1"). The vault folder switches to those versions, read-only, so assemblies open with the matching parts. Click **Return to Latest** when you're done.
 * **History** shows every version of a file. **Restore This Version** checks the file out, puts the old version back and checks it in as a new version. Nothing is lost, and the newer versions stay in the history.
 
 ### Inside SolidWorks (add-in)
@@ -45,6 +48,8 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
 * **Check Out**: for an assembly or drawing, you can tick the referenced parts to check out at the same time. The document becomes editable right away; there's no need to reopen it.
 * **Check In…**: saves, closes, checks in and reopens the files for you, so you don't have to close them yourself. New parts used by an assembly are pre-ticked, so teammates never get missing references.
 * **Undo Check Out**, **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
+* **Rename / Move**: the safe way to rename or move a file. It finds every assembly and drawing that uses the file, updates their references, and checks everything in together.
+* The card also shows the file's part number, which SolidWorks version saved it, and where it's used.
 * **Open Capstone PDM**: opens the full app (vault view, history, restore).
 
 When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\CapstonePDM\addin.log` to an admin.
@@ -68,7 +73,7 @@ A **read-only file means you haven't checked it out.** Don't clear the read-only
 
 1. Always work inside `C:\CapstoneVault`. Never open copies from Downloads, Discord or email.
 2. Check out before editing.
-3. **Never rename or move files in Windows Explorer.** Use Save As in SolidWorks with references updated, or ask whoever owns the assembly.
+3. **Never rename or move files in Windows Explorer.** Use **Rename / Move** in the SolidWorks pane, which updates every assembly and drawing that uses the file.
 4. Check in at least daily, with a real comment.
 5. Close the file in SolidWorks before checking in from the app. The add-in does this for you.
 6. Follow the team's file naming scheme.
@@ -134,6 +139,27 @@ Select files in the app (or open one in SolidWorks) and click **Freeze…**, the
 
 A teammate who uses raw Git commands instead of the app could get around these rules. Every version stays in the history, so anything can be restored.
 
+### SolidWorks versions (version guard)
+
+Set the team's SolidWorks version in `pdm.json`, for example `"solidWorksVersion": 2024`. Then the add-in:
+* shows which SolidWorks last saved each file,
+* **refuses to check in files saved in a newer version** than the team's,
+* turns off Check Out and Check In when someone runs a newer SolidWorks than the team's, so they can still look at files but can't save them in a format the others can't open.
+
+The desktop app reminds people at check-in, but only SolidWorks can read a file's version, so the add-in is what enforces this.
+
+### Vault index (part numbers, properties, where-used)
+
+The SolidWorks add-in records each file's custom properties, references and saved-in version whenever it's checked in from SolidWorks. Files added before the add-in, or checked in from the desktop app, aren't recorded until you click **Rebuild Index** in the SolidWorks pane, which reads every SolidWorks file in the vault (it takes a few minutes). The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
+
+### Milestones
+
+Click **Milestones…**, type a name such as "Design Review 1" and an optional description, then click **Create**. This labels the vault exactly as it is now; only admins can create milestones. Everyone can view one later. The team gets a Discord notice.
+
+### Revisions and drawing PDFs
+
+Every freeze is a release with the next revision letter: A, B, C, and so on, skipping I, O, Q, S, X and Z as drawing standards do. The letter shows in the **Rev** column and the SolidWorks pane, and the sequence continues after unfreezing and refreezing. **Freezing a drawing from the SolidWorks pane also saves `<name> Rev X.pdf`** next to it, covering all sheets, and checks in and freezes that PDF with the same revision. Freezing from the desktop app gives the revision but no PDF, because making a PDF needs SolidWorks.
+
 ### SolidWorks versions
 
 The PDM itself works with any version, and the add-in supports SolidWorks 2020 and newer. But **SolidWorks files can't be opened in an older SolidWorks than the one that last saved them.** Agree on one SolidWorks version for all vault files (the oldest one anyone uses), or a single save in a newer version locks everyone on the older one out of that file and every assembly that uses it.
@@ -196,6 +222,10 @@ This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-f
 | Undo Check Out | back up, `checkout HEAD -- file`, `lfs unlock` |
 | History / Restore | `log -- file` / `checkout <commit> -- file`, then Check In |
 | Break Lock | `lfs unlock --force --id` |
+| Version guard | add-in reads `ISldWorks.VersionHistory` (file version 17000 = 2024, 19000 = 2026) and compares with `pdm.json` `solidWorksVersion` |
+| Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in; Rebuild Index commits them all |
+| Milestones | annotated tag `milestone/<name>` on the vault's latest commit; viewing = `checkout --detach <tag>`, Return to Latest = `checkout main` + Get Latest |
+| Rename / Move | add-in: check out file + referencing files, move the file, `ReplaceReferencedDocument` on each, check in old path + new path + referencing files |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
@@ -208,4 +238,4 @@ This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-f
 * **Design:** `CapstonePdmAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `SolidWorksSession` (references, save, close/reopen so Git can replace files SolidWorks has open).
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.
 * **Log:** `%LocalAppData%\CapstonePDM\addin.log`.
-* **Not yet done (Phase 2, part 2):** rename and move through the add-in with reference updates.
+* **Rename / Move** (`VaultPane.RenameAsync`) finds referencing files by reading them with `GetDocumentDependencies2` rather than trusting the index, and rolls back if any reference update fails.
