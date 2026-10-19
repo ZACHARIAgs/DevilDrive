@@ -276,9 +276,7 @@ public sealed class VaultIntegrationTests : IDisposable
         Git(_alice, "add", "-A");
         Git(_alice, "commit", "-m", "Admins");
         Git(_alice, "push");
-        Git(_alice, "config", "pdm.githubLogin", "alice-gh");
-
-        var alice = await Open(_alice);
+        var alice = await Open(_alice, "alice-gh");
         var milestone = await alice.CreateMilestoneAsync("Design Review 1", "Before the redesign");
         Assert.Equal("milestone/design-review-1", milestone.Tag);
         AliceChecksIn("shared.txt", "v2", "after the review");
@@ -320,8 +318,35 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.Single(await alice.GetHistoryAsync("docs/notes.txt"));
     }
 
-    // ------------------------------------------------------------ helpers
+    [Fact]
+    public async Task TypingAnAdminsUsername_DoesNotGiveAdminRights()
+    {
+        Write(_alice, "pdm.json", "{ \"admins\": [ \"alice-gh\" ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Admins");
+        Git(_alice, "push");
+        Git(_bob, "config", "pdm.githubLogin", "alice-gh"); // the old, typed setting
 
+        var unverified = await Open(_bob);
+        await unverified.GetLatestAsync();
+        Assert.False(unverified.IsAdmin);
+
+        var verifiedBob = await Open(_bob, "bob-gh");
+        Assert.False(verifiedBob.IsAdmin);
+        Assert.Equal("bob-gh", verifiedBob.GitHubLogin);
+
+        var verifiedAlice = await Open(_alice, "alice-gh");
+        Assert.True(verifiedAlice.IsAdmin);
+    }
+
+    [Fact]
+    public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
+    {
+        var owner = await Open(_bob, "owner-gh", repoAdmin: true);
+        Assert.True(owner.IsAdmin);
+    }
+
+    // ------------------------------------------------------------ helpers
     /// <summary>What an admin's Freeze records in the vault (the lock part needs a real LFS server).</summary>
     private void AliceFreezes(string file, string reason)
     {
@@ -340,7 +365,9 @@ public sealed class VaultIntegrationTests : IDisposable
         Git(_alice, "push");
     }
 
-    private static Task<VaultService> Open(string path) => VaultService.OpenAsync(path, new NoNotifier());
+    /// <summary>Opens a clone as a given GitHub account (null = not verified, as when offline).</summary>
+    private static Task<VaultService> Open(string path, string? login = null, bool repoAdmin = false) =>
+        VaultService.OpenAsync(path, new NoNotifier(), identityProvider: new FakeIdentity(login == null ? null : new VaultIdentity(login, repoAdmin)));
 
     private static void Configure(string repo, string name)
     {
@@ -378,6 +405,15 @@ public sealed class VaultIntegrationTests : IDisposable
         {
             // Temp folder; leftovers are harmless.
         }
+    }
+
+    private sealed class FakeIdentity : IIdentityProvider
+    {
+        private readonly VaultIdentity? _identity;
+
+        public FakeIdentity(VaultIdentity? identity) => _identity = identity;
+
+        public Task<VaultIdentity?> GetIdentityAsync(CapstonePdm.Core.Git.IGitRunner git, string remoteUrl, CancellationToken ct) => Task.FromResult(_identity);
     }
 
     private sealed class NoNotifier : INotifier

@@ -17,6 +17,7 @@ public interface IVaultService
     string VaultRoot { get; }
     VaultConfig Config { get; }
     string UserDisplayName { get; }
+    /// <summary>GitHub account verified with GitHub (null until verified).</summary>
     string? GitHubLogin { get; }
     bool IsAdmin { get; }
 
@@ -65,7 +66,6 @@ public interface IVaultService
 
     Task<GetLatestResult> ReturnToLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
-    Task SetGitHubLoginAsync(string login, CancellationToken ct = default);
     string ToRelativePath(string path);
     string ToFullPath(string relativePath);
 }

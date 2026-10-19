@@ -49,10 +49,10 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? new CheckInRequest(dialog.Comment, dialog.KeepCheckedOut) : null;
     }
 
-    public SettingsRequest? AskSettings(string vaultPath, string? gitHubLogin)
+    public SettingsRequest? AskSettings(string vaultPath, string signedInAs)
     {
-        var dialog = new SettingsWindow(vaultPath, gitHubLogin) { Owner = this };
-        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath, dialog.GitHubLogin) : null;
+        var dialog = new SettingsWindow(vaultPath, signedInAs) { Owner = this };
+        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath) : null;
     }
 
     public void ShowHistory(string relativePath) => new HistoryWindow(_vm, this, relativePath) { Owner = this }.ShowDialog();

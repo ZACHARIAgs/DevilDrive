@@ -25,21 +25,23 @@ namespace CapstonePdm.Core.Vault;
 /// </summary>
 public sealed class VaultService : IVaultService
 {
-    private const string LoginConfigKey = "pdm.githubLogin";
     private static readonly TimeSpan NetworkTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TransferTimeout = TimeSpan.FromMinutes(60);
 
     private readonly IGitRunner _git;
     private readonly INotifier _notifier;
+    private readonly IIdentityProvider _identityProvider;
+    private VaultIdentity? _identity;
     private readonly SemaphoreSlim _gate = new SemaphoreSlim(1, 1);
     private IReadOnlyList<LockInfo> _lastLocks = Array.Empty<LockInfo>();
     private bool _locksKnown;
     private string? _configProblem;
 
-    private VaultService(string vaultRoot, IGitRunner git, INotifier? notifier)
+    private VaultService(string vaultRoot, IGitRunner git, INotifier? notifier, IIdentityProvider? identityProvider)
     {
         VaultRoot = vaultRoot;
         _git = git;
+        _identityProvider = identityProvider ?? new GitHubIdentityProvider();
         Config = new VaultConfig();
         ReloadConfig();
         _notifier = notifier ?? new DiscordWebhookNotifier(() => Config);
@@ -48,15 +50,19 @@ public sealed class VaultService : IVaultService
     public string VaultRoot { get; }
     public VaultConfig Config { get; private set; }
     public string UserName { get; private set; } = Environment.UserName;
-    public string? GitHubLogin { get; private set; }
-    public bool IsAdmin => Config.IsAdmin(GitHubLogin);
+    /// <summary>The GitHub account this PC is signed in as, verified with GitHub (null until verified, e.g. offline).</summary>
+    public string? GitHubLogin => _identity?.Login;
+
+    /// <summary>Admin if GitHub verified the account and it's listed in pdm.json, or GitHub says it's a repo admin/maintainer.</summary>
+    public bool IsAdmin => _identity != null && (_identity.IsRepoAdmin || Config.IsAdmin(_identity.Login));
 
     public string UserDisplayName =>
         GitHubLogin != null && Config.Team.TryGetValue(GitHubLogin, out var name) && !string.IsNullOrWhiteSpace(name) ? name : UserName;
 
     private string Upstream => Config.Remote + "/" + Config.Branch;
 
-    public static async Task<VaultService> OpenAsync(string vaultRoot, INotifier? notifier = null, IGitRunner? git = null, CancellationToken ct = default)
+    public static async Task<VaultService> OpenAsync(string vaultRoot, INotifier? notifier = null, IGitRunner? git = null,
+        IIdentityProvider? identityProvider = null, CancellationToken ct = default)
     {
         var root = Path.GetFullPath(vaultRoot).TrimEnd('\\', '/');
         var dotGit = Path.Combine(root, ".git");
@@ -68,7 +74,7 @@ public sealed class VaultService : IVaultService
             git = new GitRunner(root, exe);
         }
 
-        var service = new VaultService(root, git, notifier);
+        var service = new VaultService(root, git, notifier, identityProvider);
         await service.LoadIdentityAsync(ct).ConfigureAwait(false);
         return service;
     }
@@ -113,15 +119,22 @@ public sealed class VaultService : IVaultService
     {
         var name = await GetConfigValueAsync("user.name", ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(name)) UserName = name!;
-        GitHubLogin = await GetConfigValueAsync(LoginConfigKey, ct).ConfigureAwait(false);
+        await VerifyIdentityAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task SetGitHubLoginAsync(string login, CancellationToken ct = default)
+    /// <summary>Asks GitHub which account this PC is signed in as. Retried on each vault contact until it works.</summary>
+    private async Task VerifyIdentityAsync(CancellationToken ct)
     {
-        login = login.Trim();
-        if (login.Length == 0) return;
-        await RunCheckedAsync("save your GitHub username", new[] { "config", "--local", LoginConfigKey, login }, ct).ConfigureAwait(false);
-        GitHubLogin = login;
+        if (_identity != null) return;
+        try
+        {
+            var remote = await GetConfigValueAsync($"remote.{Config.Remote}.url", ct).ConfigureAwait(false);
+            if (remote != null) _identity = await _identityProvider.GetIdentityAsync(_git, remote, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException))
+        {
+            _identity = null;
+        }
     }
 
     private async Task<string?> GetConfigValueAsync(string key, CancellationToken ct)
@@ -176,6 +189,7 @@ public sealed class VaultService : IVaultService
             try
             {
                 await FetchAsync(ct).ConfigureAwait(false);
+                await VerifyIdentityAsync(ct).ConfigureAwait(false);
                 await GetLocksAsync(ct).ConfigureAwait(false);
             }
             catch (PdmException ex)
@@ -813,7 +827,7 @@ public sealed class VaultService : IVaultService
         if (!IsAdmin)
         {
             throw new PdmException("Only vault admins can break a check-out. Admins are listed in pdm.json; your GitHub username is " +
-                                   (GitHubLogin ?? "not set (see Settings)") + ".");
+                                   (GitHubLogin ?? "not verified yet (are you online and signed in to GitHub?)") + ".");
         }
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -1399,7 +1413,7 @@ public sealed class VaultService : IVaultService
     {
         if (IsAdmin) return;
         throw new PdmException($"Only vault admins can {what}. Admins are listed in pdm.json; your GitHub username is " +
-                               (GitHubLogin ?? "not set (see Settings)") + ".");
+                               (GitHubLogin ?? "not verified yet (are you online and signed in to GitHub?)") + ".");
     }
 
     // ---------------------------------------------------------------- Git helpers
@@ -1490,13 +1504,6 @@ public sealed class VaultService : IVaultService
             locks = GitParsers.ParseLocks(plain.StdOut, GitHubLogin);
         }
 
-        // Learn the GitHub username from our own locks if Setup didn't record it.
-        var mine = locks.FirstOrDefault(l => l.IsMine && l.Owner.Length > 0);
-        if (mine != null && !string.Equals(mine.Owner, GitHubLogin, StringComparison.OrdinalIgnoreCase))
-        {
-            GitHubLogin = mine.Owner;
-            await RunAsync(new[] { "config", "--local", LoginConfigKey, mine.Owner }, ct).ConfigureAwait(false);
-        }
 
         _lastLocks = locks;
         _locksKnown = true;

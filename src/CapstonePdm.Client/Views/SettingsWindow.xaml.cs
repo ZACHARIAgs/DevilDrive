@@ -6,15 +6,14 @@ namespace CapstonePdm.Client.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(string vaultPath, string? gitHubLogin)
+    public SettingsWindow(string vaultPath, string signedInAs)
     {
         InitializeComponent();
         VaultPathBox.Text = vaultPath;
-        LoginBox.Text = gitHubLogin ?? "";
+        SignedInText.Text = signedInAs;
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();
-    public string GitHubLogin => LoginBox.Text.Trim();
 
     private void OnBrowse(object sender, RoutedEventArgs e)
     {

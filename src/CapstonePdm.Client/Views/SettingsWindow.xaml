@@ -12,10 +12,10 @@
             <TextBox x:Name="VaultPathBox" Height="24" VerticalContentAlignment="Center" />
         </DockPanel>
 
-        <TextBlock FontWeight="SemiBold" Text="Your GitHub username" Margin="0,14,0,0" />
+        <TextBlock FontWeight="SemiBold" Text="Signed in to GitHub as" Margin="0,14,0,0" />
         <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
-                   Text="Used to show your name and to check whether you're a vault admin. It's filled in automatically after your first check-out." />
-        <TextBox x:Name="LoginBox" Height="24" VerticalContentAlignment="Center" />
+                   Text="Checked with GitHub using your saved sign-in, so it can't be changed here. Admin rights come from this account." />
+        <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Style="{StaticResource DialogButton}" Content="Save" IsDefault="True" Click="OnSave" />

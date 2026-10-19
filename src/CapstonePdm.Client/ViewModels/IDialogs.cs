@@ -17,14 +17,12 @@ public sealed class CheckInRequest
 
 public sealed class SettingsRequest
 {
-    public SettingsRequest(string vaultPath, string gitHubLogin)
+    public SettingsRequest(string vaultPath)
     {
         VaultPath = vaultPath;
-        GitHubLogin = gitHubLogin;
     }
 
     public string VaultPath { get; }
-    public string GitHubLogin { get; }
 }
 
 /// <summary>Everything the view model needs from windows, so it stays testable and UI-free.</summary>
@@ -34,7 +32,7 @@ public interface IDialogs
     void ShowMessage(string title, string message, bool isWarning);
     bool Confirm(string title, string message);
     CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null);
-    SettingsRequest? AskSettings(string vaultPath, string? gitHubLogin);
+    SettingsRequest? AskSettings(string vaultPath, string signedInAs);
     void ShowHistory(string relativePath);
     void ShowMilestones();
 }

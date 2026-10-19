@@ -585,7 +585,10 @@ public sealed class MainViewModel : ViewModelBase
     private async Task OpenSettingsAsync()
     {
         var settings = UserSettings.Load();
-        var request = _dialogs.AskSettings(settings.VaultPath, _vault?.GitHubLogin);
+        var signedInAs = _vault == null ? "No vault open"
+            : _vault.GitHubLogin == null ? "Not verified yet (are you online and signed in to GitHub?)"
+            : $"{_vault.GitHubLogin}{(_vault.IsAdmin ? " (vault admin)" : "")}, verified with GitHub";
+        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs);
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
@@ -593,18 +596,6 @@ public sealed class MainViewModel : ViewModelBase
         settings.Save();
 
         if (pathChanged || _vault == null) await OpenVaultAsync(request.VaultPath);
-        if (_vault != null && request.GitHubLogin.Length > 0 && request.GitHubLogin != _vault.GitHubLogin)
-        {
-            try
-            {
-                await _vault.SetGitHubLoginAsync(request.GitHubLogin);
-            }
-            catch (PdmException ex)
-            {
-                _dialogs.ShowError(ex);
-            }
-            await RefreshAsync(quiet: false);
-        }
     }
 
     public Task<IReadOnlyList<Milestone>> LoadMilestonesAsync() =>
