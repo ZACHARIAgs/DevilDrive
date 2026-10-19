@@ -18,6 +18,8 @@ public enum FileState
     NotInVault,
     /// <summary>In the vault but deleted from this PC.</summary>
     MissingLocally,
+    /// <summary>An admin froze it (e.g. released for production). Nobody can check it out until an admin unfreezes it.</summary>
+    Frozen,
 }
 
 public sealed class LockInfo
@@ -96,6 +98,13 @@ public sealed class VaultFile
     public bool ExistsLocally { get; set; }
     public FileVersion? LatestVersion { get; set; }
     public int Version => LatestVersion?.Version ?? 0;
+
+    /// <summary>Set when an admin froze the file.</summary>
+    public FrozenEntry? Freeze { get; set; }
+    /// <summary>Display name of the admin who froze it.</summary>
+    public string? FrozenBy { get; set; }
+    /// <summary>Frozen, but the admin's lock is gone (e.g. broken), so the freeze isn't enforced. Freeze it again.</summary>
+    public bool FreezeLockMissing { get; set; }
 }
 
 public sealed class VaultSnapshot

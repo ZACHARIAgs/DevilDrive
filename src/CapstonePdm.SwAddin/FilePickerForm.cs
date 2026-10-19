@@ -35,8 +35,10 @@ internal sealed class FilePickerForm : Form
     private readonly TableLayoutPanel _layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1 };
     private readonly bool _askComment;
 
-    public FilePickerForm(string title, string intro, IReadOnlyList<PickItem> items, string okText, bool askComment, bool askKeep, string? note = null)
+    public FilePickerForm(string title, string intro, IReadOnlyList<PickItem> items, string okText, bool askComment, bool askKeep, string? note = null,
+        string commentLabel = "Comment (required): what changed and why", string defaultComment = "")
     {
+        _comment.Text = defaultComment;
         _askComment = askComment;
         Text = title;
         Font = SystemFonts.MessageBoxFont;
@@ -80,7 +82,7 @@ internal sealed class FilePickerForm : Form
 
         if (askComment)
         {
-            layout.Controls.Add(new Label { Text = "Comment (required): what changed and why", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
+            layout.Controls.Add(new Label { Text = commentLabel, AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
             layout.Controls.Add(_comment);
             _comment.TextChanged += (_, _) => UpdateOk();
         }

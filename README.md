@@ -38,7 +38,7 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 
 ### Inside SolidWorks (add-in)
 
-Setup offers to install the **Capstone PDM add-in** (SolidWorks 2024 or newer; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
+Setup offers to install the **Capstone PDM add-in** (SolidWorks 2020 or newer, tested on 2024 and 2026; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
 
 In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the state of the document you're looking at, plus buttons:
 
@@ -59,6 +59,7 @@ When you open a file someone else has checked out, a warning tells you who has i
 | 🟠 | Edited WITHOUT check-out! | You changed a file you hadn't checked out. Check it out now (your edits are kept), or Undo Check Out. |
 | 🟠 | Edited (check in to save) | A non-CAD file (e.g. a spreadsheet) with changes. Just check it in. |
 | 🟣 | New, not in vault yet | Only on your PC. Check it in to add it. |
+| ⚫ | Frozen by *name* | An admin froze it (e.g. released for production). Nobody can check it out or change it. Ask an admin if it needs to change. |
 | ⚪ | …newer version in vault | Click Get Latest. |
 
 A **read-only file means you haven't checked it out.** Don't clear the read-only flag by hand.
@@ -111,6 +112,22 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 Select the file, then click **Break Lock**. The button only appears for users listed in `admins`. The team is told in Discord. The person who had it loses their check-out. Any changes they hadn't checked in stay on their PC only, and they'll see a conflict or "edited without check-out" state.
 
 GitHub decides whether a forced unlock is allowed. If it's refused, your GitHub role on the repo may need to be raised (Maintain or Admin).
+
+### Freezing files (released for production)
+
+Select files in the app (or open one in SolidWorks) and click **Freeze…**, then give a reason such as "Released for production, rev A". Only admins listed in `pdm.json` see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
+
+* A frozen file shows **Frozen by *name*** with the reason, for everyone, in the app and in SolidWorks. Opening one in SolidWorks shows a warning.
+* **Nobody can check it out**, admins included. Admins click **Unfreeze** first if it really has to change, which also tells the team in Discord.
+* How it's enforced: the freezing admin keeps the file's lock, so the app and GitHub's lock check refuse changes from anyone else. The list of frozen files (who, when, why) is stored in the vault as `.pdm/frozen.json`; don't edit it by hand.
+* Files with changes, or checked out by someone else, can't be frozen until they're checked in.
+* Non-admins also can't check in `pdm.json`, so nobody can make themselves admin through the app.
+
+A teammate who uses raw Git commands instead of the app could get around these rules. Every version stays in the history, so anything can be restored.
+
+### SolidWorks versions
+
+The PDM itself works with any version, and the add-in supports SolidWorks 2020 and newer. But **SolidWorks files can't be opened in an older SolidWorks than the one that last saved them.** Agree on one SolidWorks version for all vault files (the oldest one anyone uses), or a single save in a newer version locks everyone on the older one out of that file and every assembly that uses it.
 
 ### What's tracked
 
@@ -170,12 +187,13 @@ This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-f
 | Undo Check Out | back up, `checkout HEAD -- file`, `lfs unlock` |
 | History / Restore | `log -- file` / `checkout <commit> -- file`, then Check In |
 | Break Lock | `lfs unlock --force --id` |
+| Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
 
 ### SolidWorks add-in
 
 * **Building** needs SolidWorks installed (it references the interop DLLs in `C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS`; override with `/p:SolidWorksDir=...`). Without SolidWorks, build the other projects individually.
-* **Version support:** built against the SolidWorks **2024** interop files with *Embed Interop Types* on, and it uses only API calls that exist in 2024, so one build loads in 2024 and newer. Don't add newer API calls without a version check (`ISldWorks.RevisionNumber()`).
+* **Version support:** built against the SolidWorks **2024** interop files with *Embed Interop Types* on. It only uses API calls that already existed in SolidWorks 2017 (the multi-size task pane icon, with a fallback for older versions), so one build supports **2020 and newer**. It has been tested on 2024 and 2026. Don't add newer API calls without a version check (`ISldWorks.RevisionNumber()`; 2020 is 28, 2024 is 32, 2026 is 34).
 * **Install for development:** close SolidWorks, build, then run `scripts\Install-SolidWorksAddin.ps1`. It copies the Release (or Debug) build to `C:\ProgramData\CapstonePDM\SolidWorksAddin` and registers it with RegAsm (admin prompt). Run with `-Uninstall` to remove it. Re-run after every rebuild.
 * **Design:** `CapstonePdmAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `SolidWorksSession` (references, save, close/reopen so Git can replace files SolidWorks has open).
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.

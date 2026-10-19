@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs (or removes) the Capstone PDM add-in for SolidWorks 2024 and newer.
+    Installs (or removes) the Capstone PDM add-in for SolidWorks 2020 and newer.
 
 .DESCRIPTION
     Copies the add-in to C:\ProgramData\CapstonePDM\SolidWorksAddin and registers it with

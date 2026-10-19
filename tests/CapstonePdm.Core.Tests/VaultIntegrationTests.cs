@@ -36,6 +36,7 @@ public sealed class VaultIntegrationTests : IDisposable
         Write(_alice, "shared.txt", "v1");
         Write(_alice, "mine.txt", "v1");
         Write(_alice, "notes.txt", "v1");
+        Write(_alice, "frame.sldprt", "v1");
         Git(_alice, "add", "-A");
         Git(_alice, "commit", "-m", "first version");
         Git(_alice, "push", "-u", "origin", "main");
@@ -148,7 +149,68 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.Contains(result.Notes, n => n.Contains("backed up"));
     }
 
+    [Fact]
+    public async Task FrozenFile_ShowsAsFrozen_WithWhoAndWhy()
+    {
+        AliceFreezes("frame.sldprt", "Released for production, rev A");
+
+        var bob = await Open(_bob);
+        var file = await bob.GetFileAsync("frame.sldprt", contactVault: true);
+
+        Assert.Equal(FileState.Frozen, file!.State);
+        Assert.Equal("alice-gh", file.FrozenBy);
+        Assert.Equal("Released for production, rev A", file.Freeze!.Reason);
+    }
+
+    [Fact]
+    public async Task FrozenFile_CannotBeCheckedOut()
+    {
+        AliceFreezes("frame.sldprt", "Released");
+
+        var bob = await Open(_bob);
+        var result = await bob.CheckOutAsync(new[] { "frame.sldprt" });
+
+        Assert.Empty(result.Succeeded);
+        Assert.IsType<FrozenFileException>(result.Failures.Single().Error);
+    }
+
+    [Fact]
+    public async Task FrozenFile_CannotBeCheckedIn_EvenIfEditedAnyway()
+    {
+        AliceFreezes("frame.sldprt", "Released");
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        File.SetAttributes(Path.Combine(_bob, "frame.sldprt"), FileAttributes.Normal);
+        Write(_bob, "frame.sldprt", "sneaky edit");
+
+        await Assert.ThrowsAsync<FrozenFileException>(() => bob.CheckInAsync(new[] { "frame.sldprt" }, "changed it anyway"));
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotChangeTeamSettings_OrFreeze()
+    {
+        Write(_bob, "pdm.json", "{ \"admins\": [ \"bob\" ] }");
+        var bob = await Open(_bob);
+
+        var settings = await Assert.ThrowsAsync<PdmException>(() => bob.CheckInAsync(new[] { "pdm.json" }, "make me admin"));
+        Assert.Contains("Only vault admins", settings.Message);
+
+        var freeze = await Assert.ThrowsAsync<PdmException>(() => bob.FreezeAsync(new[] { "frame.sldprt" }, "nope"));
+        Assert.Contains("Only vault admins", freeze.Message);
+    }
+
     // ------------------------------------------------------------ helpers
+
+    /// <summary>What an admin's Freeze records in the vault (the lock part needs a real LFS server).</summary>
+    private void AliceFreezes(string file, string reason)
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm"));
+        Write(_alice, ".pdm/frozen.json",
+            "{ \"files\": [ { \"path\": \"" + file + "\", \"by\": \"alice-gh\", \"at\": \"2026-10-19T10:00:00+00:00\", \"reason\": \"" + reason + "\" } ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Froze " + file);
+        Git(_alice, "push");
+    }
 
     private void AliceChecksIn(string file, string content, string comment)
     {

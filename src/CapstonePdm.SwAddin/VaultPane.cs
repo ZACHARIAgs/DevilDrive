@@ -28,6 +28,7 @@ internal sealed class VaultPane : UserControl
     private static readonly (Color Back, Color Fore) OrangeBadge = (Color.FromArgb(0xFF, 0xF1, 0xE0), Color.FromArgb(0xB4, 0x53, 0x09));
     private static readonly (Color Back, Color Fore) PurpleBadge = (Color.FromArgb(0xF1, 0xE8, 0xFD), Color.FromArgb(0x6D, 0x28, 0xD9));
     private static readonly (Color Back, Color Fore) GrayBadge = (Color.FromArgb(0xEE, 0xF0, 0xF3), Color.FromArgb(0x4B, 0x55, 0x63));
+    private static readonly (Color Back, Color Fore) SlateBadge = (Color.FromArgb(0xE2, 0xE8, 0xF0), Color.FromArgb(0x33, 0x41, 0x55));
 
     private readonly SolidWorksSession _sw;
     private readonly Timer _timer = new Timer { Interval = 1000 };
@@ -41,6 +42,8 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _checkOut;
     private readonly ModernButton _checkIn;
     private readonly ModernButton _undo;
+    private readonly ModernButton _freeze;
+    private readonly ModernButton _unfreeze;
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
@@ -78,6 +81,8 @@ internal sealed class VaultPane : UserControl
         _checkOut = new ModernButton("Check Out", "");
         _checkIn = new ModernButton("Check In", "");
         _undo = new ModernButton("Undo Check Out", "");
+        _freeze = new ModernButton("Freeze (admin)", "");
+        _unfreeze = new ModernButton("Unfreeze (admin)", "");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Capstone PDM", "");
@@ -86,7 +91,7 @@ internal sealed class VaultPane : UserControl
         _layout.Controls.AddRange(new Control[]
         {
             _header, _banner, _card,
-            _checkIn, _checkOut, _undo,
+            _checkIn, _checkOut, _undo, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _openApp,
             _status,
@@ -97,6 +102,8 @@ internal sealed class VaultPane : UserControl
         _checkOut.Click += async (_, _) => await CheckOutAsync();
         _checkIn.Click += async (_, _) => await CheckInAsync();
         _undo.Click += async (_, _) => await UndoCheckOutAsync();
+        _freeze.Click += async (_, _) => await FreezeAsync();
+        _unfreeze.Click += async (_, _) => await UnfreezeAsync();
         _getLatest.Click += async (_, _) => await GetLatestAsync();
         _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
         _openApp.Click += (_, _) => OpenDesktopApp();
@@ -193,13 +200,22 @@ internal sealed class VaultPane : UserControl
     private void WarnIfCheckedOutByOther()
     {
         var file = CurrentFile;
-        if (_currentPath == null || file?.State != FileState.CheckedOutByOther || !_warned.Add(_currentPath)) return;
+        if (_currentPath == null || file == null || file.State is not (FileState.CheckedOutByOther or FileState.Frozen) || !_warned.Add(_currentPath)) return;
 
-        var since = file.Lock?.LockedAt != null ? $" since {file.Lock.LockedAt.Value.LocalDateTime:ddd MMM d, h:mm tt}" : "";
-        MessageBox.Show(_sw.MainWindow,
-            $"{file.Name} is checked out by {file.CheckedOutBy}{since}.\n\n" +
-            "It's open read-only: you can look at it, but you can't check in changes until they check it in.",
-            "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        string message;
+        if (file.State == FileState.Frozen)
+        {
+            var reason = string.IsNullOrWhiteSpace(file.Freeze?.Reason) ? "" : $": “{file.Freeze!.Reason}”";
+            message = $"{file.Name} is frozen by {file.FrozenBy}{reason}.\n\n" +
+                      "It's open read-only and can't be changed. Ask an admin if it needs to change.";
+        }
+        else
+        {
+            var since = file.Lock?.LockedAt != null ? $" since {file.Lock.LockedAt.Value.LocalDateTime:ddd MMM d, h:mm tt}" : "";
+            message = $"{file.Name} is checked out by {file.CheckedOutBy}{since}.\n\n" +
+                      "It's open read-only: you can look at it, but you can't check in changes until they check it in.";
+        }
+        MessageBox.Show(_sw.MainWindow, message, "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     // ------------------------------------------------------------ view
@@ -253,9 +269,12 @@ internal sealed class VaultPane : UserControl
         _checkIn.Visible = canCheckIn;
         _checkOut.Visible = canCheckOut;
         _undo.Visible = canUndo;
+        var isAdmin = _vault?.IsAdmin == true;
+        _freeze.Visible = isAdmin && file != null && file.IsLockable && !file.HasLocalChanges && state is FileState.Available or FileState.CheckedOutByMe;
+        _unfreeze.Visible = isAdmin && state == FileState.Frozen;
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
-        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = ready;
+        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = _freeze.Enabled = _unfreeze.Enabled = ready;
         _getLatest.Enabled = ready;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
@@ -275,6 +294,7 @@ internal sealed class VaultPane : UserControl
             FileState.ModifiedWithoutCheckOut => ("Edited without check-out", OrangeBadge),
             FileState.Modified => ("Edited, not checked in", OrangeBadge),
             FileState.NotInVault => ("New, not in vault yet", PurpleBadge),
+            FileState.Frozen => ("Frozen", SlateBadge),
             _ => (file.State.ToString(), GrayBadge),
         };
 
@@ -288,6 +308,14 @@ internal sealed class VaultPane : UserControl
         if (file.State == FileState.Available && !file.IsOutdated) lines.Add("Check out to edit.");
         if (file.State == FileState.ModifiedWithoutCheckOut) lines.Add("Check it out to keep your edits, or Undo to discard them.");
         if (file.IsOutdated) lines.Add("Click Get Latest to update it.");
+        if (file.State == FileState.Frozen && file.Freeze != null)
+        {
+            lines.Clear();
+            lines.Add($"Frozen by {file.FrozenBy} on {file.Freeze.At.LocalDateTime:MMM d, yyyy}");
+            if (file.Freeze.Reason.Length > 0) lines.Add($"“{file.Freeze.Reason}”");
+            lines.Add(_vault?.IsAdmin == true ? "Unfreeze it if it really needs to change." : "It can't be changed. Ask an admin if it needs to.");
+            if (file.FreezeLockMissing) lines.Add("Warning: the freeze lock is missing. An admin should freeze it again.");
+        }
 
         _card.Show(file.Name, badge.Text, badge.Colors.Back, badge.Colors.Fore, string.Join("\n", lines));
     }
@@ -471,6 +499,56 @@ internal sealed class VaultPane : UserControl
                 _sw.Reopen(closed);
             }
         });
+    }
+
+    private async Task FreezeAsync()
+    {
+        var top = _currentPath;
+        if (top == null || _vault == null) return;
+
+        // Releasing an assembly usually means its parts too: offer them, unticked.
+        var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
+        foreach (var path in _sw.GetReferences(top).Where(IsInVault).OrderBy(Path.GetFileName))
+        {
+            var file = FileAt(path);
+            if (file == null || !file.IsLockable) continue;
+            var canFreeze = !file.HasLocalChanges && file.State is FileState.Available or FileState.CheckedOutByMe;
+            var label = Path.GetFileName(path) + (file.State switch
+            {
+                FileState.Frozen => "  (already frozen)",
+                FileState.CheckedOutByOther => $"  (checked out by {file.CheckedOutBy})",
+                _ when file.HasLocalChanges => "  (has changes, check in first)",
+                _ => "",
+            });
+            items.Add(new PickItem(path, label, false, !canFreeze));
+        }
+
+        using var picker = new FilePickerForm("Freeze (admin)",
+            "Frozen files can't be checked out or changed by anyone until an admin unfreezes them.", items, "Freeze",
+            askComment: true, askKeep: false, commentLabel: "Reason (required): why is it frozen?", defaultComment: "Released for production");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var targets = picker.SelectedPaths;
+        var reason = picker.Comment;
+
+        await RunAsync("Freezing…", async progress =>
+        {
+            var result = await _vault.FreezeAsync(targets, reason, progress);
+            _sw.MakeReadOnly(result.Succeeded.Select(_vault.ToFullPath));
+            return Report(result, "Froze");
+        });
+    }
+
+    private async Task UnfreezeAsync()
+    {
+        var top = _currentPath;
+        if (top == null || _vault == null) return;
+
+        var answer = MessageBox.Show(_sw.MainWindow,
+            $"Unfreeze {Path.GetFileName(top)}?\n\nAnyone will be able to check it out and change it again. The team will be told in Discord.",
+            "Unfreeze (admin)", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.OK) return;
+
+        await RunAsync("Unfreezing…", async progress => Report(await _vault.UnfreezeAsync(new[] { top }, progress), "Unfroze"));
     }
 
     private async Task GetLatestAsync()

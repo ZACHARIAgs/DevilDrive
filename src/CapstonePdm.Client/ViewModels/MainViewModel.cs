@@ -50,7 +50,9 @@ public sealed class MainViewModel : ViewModelBase
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanRun && UndoTargets().Count > 0);
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
-        BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanRun && IsAdmin && SingleSelected?.File.Lock != null);
+        BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanRun && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
+        FreezeCommand = new RelayCommand(async () => await FreezeAsync(), () => CanRun && IsAdmin && FreezeTargets().Count > 0);
+        UnfreezeCommand = new RelayCommand(async () => await UnfreezeAsync(), () => CanRun && IsAdmin && UnfreezeTargets().Count > 0);
         OpenCommand = new RelayCommand(OpenSelected, () => SingleSelected?.File.ExistsLocally == true);
         ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
@@ -66,6 +68,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand HistoryCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand BreakLockCommand { get; }
+    public ICommand FreezeCommand { get; }
+    public ICommand UnfreezeCommand { get; }
     public ICommand OpenCommand { get; }
     public ICommand ShowInExplorerCommand { get; }
     public ICommand SettingsCommand { get; }
@@ -276,6 +280,7 @@ public sealed class MainViewModel : ViewModelBase
             2 => f.State == FileState.CheckedOutByOther,
             3 => f.State is FileState.ModifiedWithoutCheckOut or FileState.NotInVault or FileState.Modified or FileState.MissingLocally || f.IsOutdated,
             4 => f.IsOutdated,
+            5 => f.State == FileState.Frozen,
             _ => true,
         };
     }
@@ -289,8 +294,37 @@ public sealed class MainViewModel : ViewModelBase
     private List<FileRowViewModel> CheckInTargets()
     {
         static bool CanCheckIn(FileState s) => s is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified or FileState.MissingLocally;
+        // With nothing selected, leave out team settings for non-admins: they couldn't check them in anyway.
+        bool Offered(FileRowViewModel r) => _selected.Count > 0 || IsAdmin || !string.Equals(r.Path, "pdm.json", StringComparison.OrdinalIgnoreCase);
         var source = _selected.Count > 0 ? _selected : Files;
-        return source.Where(r => CanCheckIn(r.File.State) || (_selected.Count > 0 && r.File.State == FileState.ModifiedWithoutCheckOut)).ToList();
+        return source.Where(r => (CanCheckIn(r.File.State) || (_selected.Count > 0 && r.File.State == FileState.ModifiedWithoutCheckOut)) && Offered(r)).ToList();
+    }
+
+    private List<FileRowViewModel> FreezeTargets() =>
+        _selected.Where(r => r.File.IsLockable && !r.File.HasLocalChanges && r.File.State is FileState.Available or FileState.CheckedOutByMe).ToList();
+
+    private List<FileRowViewModel> UnfreezeTargets() =>
+        _selected.Where(r => r.File.State == FileState.Frozen).ToList();
+
+    private Task FreezeAsync()
+    {
+        var targets = FreezeTargets().Select(r => r.Path).ToList();
+        var request = _dialogs.AskCheckIn("Freeze (admin)", "Freeze", targets, "Released for production",
+            allowKeepCheckedOut: false, prompt: "Reason (required): why are these frozen?");
+        if (request == null) return Task.CompletedTask;
+        return RunAsync("Freezing…", async (vault, progress) =>
+            Report(await vault.FreezeAsync(targets, request.Comment, progress), "Froze"));
+    }
+
+    private Task UnfreezeAsync()
+    {
+        var targets = UnfreezeTargets().Select(r => r.Path).ToList();
+        if (!_dialogs.Confirm("Unfreeze (admin)", $"Unfreeze {PathList.Format(targets)}?\n\nAnyone will be able to check them out and change them again. The team will be told in Discord."))
+        {
+            return Task.CompletedTask;
+        }
+        return RunAsync("Unfreezing…", async (vault, progress) =>
+            Report(await vault.UnfreezeAsync(targets, progress), "Unfroze"));
     }
 
     private List<FileRowViewModel> UndoTargets() =>

@@ -64,6 +64,23 @@ public sealed class LockHeldException : PdmException
     }
 }
 
+public sealed class FrozenFileException : PdmException
+{
+    public FrozenFileException(string path, string frozenBy, DateTimeOffset frozenAt, string reason, bool userIsAdmin)
+        : base($"{PathList.Name(path)} is frozen by {frozenBy} (since {frozenAt.LocalDateTime:MMM d, yyyy})" +
+               (string.IsNullOrWhiteSpace(reason) ? "." : $": “{reason}”.") +
+               (userIsAdmin
+                   ? " Frozen files can't be changed. If it really needs to change, Unfreeze it first."
+                   : " Frozen files can't be changed. Ask an admin if it needs to change."))
+    {
+        Path = path;
+    }
+
+    public string Path { get; }
+
+    public override string Title => "File is frozen";
+}
+
 public enum PushRejectReason
 {
     OutOfDate,

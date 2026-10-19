@@ -4,8 +4,8 @@
     SolidWorks add-in. SolidWorks loads add-ins in-process on .NET Framework, hence net48.
 
     Built against the SolidWorks 2024 interop files. Interop types are embedded (no dependency
-    on a specific SolidWorks.Interop version at runtime), and only API calls that exist in 2024
-    are used, so one build works in SolidWorks 2024 and newer.
+    on a specific SolidWorks.Interop version at runtime), and only API calls that already existed
+    in SolidWorks 2017 are used, so one build supports SolidWorks 2020 and newer.
 
     Building needs SolidWorks installed. Override the folder with /p:SolidWorksDir=... if needed.
   -->

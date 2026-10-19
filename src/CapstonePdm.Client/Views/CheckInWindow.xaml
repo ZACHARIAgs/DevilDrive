@@ -16,7 +16,7 @@
         <TextBlock x:Name="FilesHeader" FontWeight="SemiBold" Text="Files:" />
         <ListBox x:Name="FileList" Grid.Row="1" Margin="0,4,0,10" />
 
-        <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Comment (required): what changed and why" />
+        <TextBlock x:Name="PromptText" Grid.Row="2" FontWeight="SemiBold" Text="Comment (required): what changed and why" />
         <TextBox x:Name="CommentBox" Grid.Row="3" Height="90" Margin="0,4,0,8"
                  AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                  TextChanged="OnCommentChanged" />

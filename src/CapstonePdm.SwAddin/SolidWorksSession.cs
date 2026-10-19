@@ -121,6 +121,16 @@ internal sealed class SolidWorksSession
         }
     }
 
+    /// <summary>Switches open, unmodified documents to read-only (after freezing).</summary>
+    public void MakeReadOnly(IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            var doc = FindOpen(path);
+            if (doc != null && !doc.IsOpenedReadOnly() && !doc.GetSaveFlag()) doc.SetReadOnlyState(true);
+        }
+    }
+
     /// <summary>
     /// Closes every window that shows one of the targets or uses one of them, so their files are
     /// released. Returns what was closed so it can be reopened afterwards.

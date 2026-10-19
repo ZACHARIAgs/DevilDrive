@@ -69,6 +69,7 @@ public sealed class NotifySettings
     public bool CheckIn { get; set; } = true;
     public bool UndoCheckOut { get; set; } = true;
     public bool BreakLock { get; set; } = true;
+    public bool Freeze { get; set; } = true;
 
     public bool IsEnabled(VaultEventKind kind) => kind switch
     {
@@ -76,6 +77,7 @@ public sealed class NotifySettings
         VaultEventKind.CheckedIn => CheckIn,
         VaultEventKind.UndoCheckOut => UndoCheckOut,
         VaultEventKind.LockBroken => BreakLock,
+        VaultEventKind.Frozen or VaultEventKind.Unfrozen => Freeze,
         _ => true,
     };
 }

@@ -190,6 +190,7 @@ public sealed class VaultService : IVaultService
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
         var incoming = await GetIncomingChangesAsync(ct).ConfigureAwait(false);
         var latest = await GetLatestVersionsAsync(ct).ConfigureAwait(false);
+        var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var locks = _lastLocks;
 
         if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
@@ -220,6 +221,9 @@ public sealed class VaultService : IVaultService
             else if (change.IsDeleted) state = FileState.MissingLocally;
             else state = isLockable ? FileState.ModifiedWithoutCheckOut : FileState.Modified;
 
+            var freeze = frozen.Find(path);
+            if (freeze != null) state = FileState.Frozen;
+
             latest.TryGetValue(path, out var version);
             files.Add(new VaultFile
             {
@@ -232,6 +236,9 @@ public sealed class VaultService : IVaultService
                 IsOutdated = incoming.Contains(path),
                 ExistsLocally = File.Exists(ToFullPath(path)),
                 LatestVersion = version,
+                Freeze = freeze,
+                FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
+                FreezeLockMissing = freeze != null && _locksKnown && fileLock == null,
             });
         }
 
@@ -357,6 +364,17 @@ public sealed class VaultService : IVaultService
         }
         var stillOutdated = await GetIncomingChangesAsync(ct).ConfigureAwait(false);
 
+        // Frozen files can't be checked out by anyone, admins included (they unfreeze first).
+        var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+        foreach (var rel in targets.ToList())
+        {
+            var freeze = frozen.Find(rel);
+            if (freeze == null) continue;
+            result.Fail(rel, FrozenError(rel, freeze));
+            targets.Remove(rel);
+        }
+        if (targets.Count == 0) return result;
+
         // 2. Lock.
         progress?.Report("Checking out…");
         var locks = await GetLocksAsync(ct).ConfigureAwait(false);
@@ -468,6 +486,21 @@ public sealed class VaultService : IVaultService
 
         var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+
+        var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+        foreach (var rel in relatives)
+        {
+            var freeze = frozen.Find(rel);
+            if (freeze != null) throw FrozenError(rel, freeze);
+        }
+
+        // Team settings and the frozen list are admin-only, so nobody can make themselves admin or unfreeze files.
+        var adminOnly = relatives.Where(IsAdminOnlyFile).ToList();
+        if (adminOnly.Count > 0 && !IsAdmin)
+        {
+            throw new PdmException($"Only vault admins can change {PathList.Format(adminOnly)} (team settings). " +
+                                   "Undo your changes to it, or ask an admin to make the change.");
+        }
 
         // Lockable files must be checked out to you (brand-new files excepted: nobody else has them).
         IReadOnlyList<LockInfo> locks = Array.Empty<LockInfo>();
@@ -608,6 +641,7 @@ public sealed class VaultService : IVaultService
         var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
         var locks = relatives.Any(lockable.Contains) ? await GetLocksAsync(ct).ConfigureAwait(false) : Array.Empty<LockInfo>();
+        var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
 
         var inUse = relatives.Where(r => changes.ContainsKey(r) && FileUtil.IsInUse(ToFullPath(r))).ToList();
         if (inUse.Count > 0) throw new FileInUseException(inUse, "Close them in SolidWorks (without saving), then try again.");
@@ -619,6 +653,17 @@ public sealed class VaultService : IVaultService
         {
             var fileLock = FindLock(locks, rel);
             changes.TryGetValue(rel, out var change);
+
+            // A frozen file's lock IS the freeze: never release it here. Stray local edits can still be thrown away.
+            if (frozen.Find(rel) != null)
+            {
+                if (change == null)
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} is frozen, not checked out, so there's nothing to undo."));
+                    continue;
+                }
+                fileLock = null;
+            }
 
             if (fileLock != null && !fileLock.IsMine)
             {
@@ -750,6 +795,10 @@ public sealed class VaultService : IVaultService
         try
         {
             var result = new OperationResult();
+            if ((await ReadFrozenListAsync(ct).ConfigureAwait(false)).Find(rel) != null)
+            {
+                throw new PdmException($"{PathList.Name(rel)} is frozen, not checked out. Use Unfreeze to make it editable again.");
+            }
             var fileLock = FindLock(await GetLocksAsync(ct).ConfigureAwait(false), rel)
                            ?? throw new PdmException($"{PathList.Name(rel)} isn't checked out by anyone.");
 
@@ -767,6 +816,188 @@ public sealed class VaultService : IVaultService
         {
             _gate.Release();
         }
+    }
+
+    // ---------------------------------------------------------------- Freeze (admin)
+
+    /// <summary>
+    /// Freezes files so nobody can change them (e.g. released for production). The admin takes and
+    /// keeps each file's lock, which is what stops check-outs and pushes; .pdm/frozen.json records
+    /// who froze it, when and why, so everyone's vault view shows it.
+    /// </summary>
+    public async Task<OperationResult> FreezeAsync(IEnumerable<string> paths, string reason, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        RequireAdmin("freeze files");
+        if (string.IsNullOrWhiteSpace(reason)) throw new PdmException("Enter a reason, for example \"Released for production, rev A\".");
+        reason = reason.Trim();
+        var relatives = Normalize(paths);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+
+            progress?.Report("Freezing…");
+            var toFreeze = new List<string>();
+            foreach (var rel in relatives)
+            {
+                var name = PathList.Name(rel);
+                if (!lockable.Contains(rel))
+                {
+                    result.Fail(rel, new PdmException($"{name} isn't a lockable (CAD) file, so it can't be frozen."));
+                    continue;
+                }
+                if (frozen.Find(rel) != null)
+                {
+                    result.Fail(rel, new PdmException($"{name} is already frozen."));
+                    continue;
+                }
+                if (changes.ContainsKey(rel))
+                {
+                    result.Fail(rel, new PdmException($"{name} has changes on this PC that aren't in the vault. Check it in (or undo) before freezing it."));
+                    continue;
+                }
+
+                var fileLock = FindLock(locks, rel);
+                if (fileLock != null && !fileLock.IsMine)
+                {
+                    result.Fail(rel, new PdmException($"{name} is checked out by {Config.DisplayNameFor(fileLock.Owner)}. Ask them to check it in before freezing it."));
+                    continue;
+                }
+                if (fileLock == null)
+                {
+                    var lockResult = await RunAsync(new[] { "lfs", "lock", "--json", rel }, ct, NetworkTimeout).ConfigureAwait(false);
+                    if (!lockResult.Success)
+                    {
+                        result.Fail(rel, GitErrorClassifier.Classify(lockResult, "freeze " + name));
+                        continue;
+                    }
+                }
+                toFreeze.Add(rel);
+            }
+            if (toFreeze.Count == 0) return result;
+
+            var by = GitHubLogin ?? UserName;
+            foreach (var rel in toFreeze)
+            {
+                frozen.Files.Add(new FrozenEntry { Path = rel, By = by, At = DateTimeOffset.Now, Reason = reason });
+                FileUtil.SetReadOnly(ToFullPath(rel), true);
+            }
+            await SaveFrozenListAsync(frozen, $"Froze {PathList.Format(toFreeze)}: {reason}", progress, ct).ConfigureAwait(false);
+            result.Succeeded.AddRange(toFreeze);
+
+            await NotifyAsync(new VaultEvent(VaultEventKind.Frozen, UserDisplayName, toFreeze) { Comment = reason }, result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Removes files from the frozen list and releases the freeze lock (forcing it if another admin froze it).</summary>
+    public async Task<OperationResult> UnfreezeAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        RequireAdmin("unfreeze files");
+        var relatives = Normalize(paths);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            await SyncCoreAsync(progress, ct).ConfigureAwait(false);
+            var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
+            var locks = await GetLocksAsync(ct).ConfigureAwait(false);
+
+            progress?.Report("Unfreezing…");
+            var unfrozen = new List<string>();
+            foreach (var rel in relatives)
+            {
+                var entry = frozen.Find(rel);
+                if (entry == null)
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} isn't frozen."));
+                    continue;
+                }
+                frozen.Files.Remove(entry);
+                unfrozen.Add(rel);
+            }
+            if (unfrozen.Count == 0) return result;
+
+            await SaveFrozenListAsync(frozen, $"Unfroze {PathList.Format(unfrozen)}", progress, ct).ConfigureAwait(false);
+
+            foreach (var rel in unfrozen)
+            {
+                var fileLock = FindLock(locks, rel);
+                if (fileLock == null) continue;
+                var args = fileLock.IsMine
+                    ? new[] { "lfs", "unlock", rel }
+                    : new[] { "lfs", "unlock", "--force", "--id", fileLock.Id };
+                var unlock = await RunAsync(args, ct, NetworkTimeout).ConfigureAwait(false);
+                if (!unlock.Success)
+                {
+                    result.Warnings.Add($"{PathList.Name(rel)} was unfrozen, but its lock couldn't be released ({GitErrorClassifier.Classify(unlock, "release the lock").Message}). Use Break Lock.");
+                }
+                FileUtil.SetReadOnly(ToFullPath(rel), true);
+            }
+            result.Succeeded.AddRange(unfrozen);
+
+            await NotifyAsync(new VaultEvent(VaultEventKind.Unfrozen, UserDisplayName, unfrozen), result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Reads the frozen list as the vault has it (falls back to this PC's copy).</summary>
+    private async Task<FrozenList> ReadFrozenListAsync(CancellationToken ct)
+    {
+        if (await UpstreamExistsAsync(ct).ConfigureAwait(false))
+        {
+            var show = await RunAsync(new[] { "show", Upstream + ":" + FrozenList.RelativePath }, ct).ConfigureAwait(false);
+            return show.Success ? FrozenList.Parse(show.StdOut) : new FrozenList();
+        }
+        var local = ToFullPath(FrozenList.RelativePath);
+        return File.Exists(local) ? FrozenList.Parse(File.ReadAllText(local)) : new FrozenList();
+    }
+
+    private async Task SaveFrozenListAsync(FrozenList frozen, string message, IProgress<string>? progress, CancellationToken ct)
+    {
+        var full = ToFullPath(FrozenList.RelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, frozen.Serialize());
+
+        await RunCheckedAsync("save the frozen list", new[] { "add", "--", FrozenList.RelativePath }, ct).ConfigureAwait(false);
+        await RunCheckedAsync("save the frozen list", new[] { "commit", "--quiet", "-m", message, "--", FrozenList.RelativePath }, ct).ConfigureAwait(false);
+        try
+        {
+            progress?.Report("Sending to the vault…");
+            await PushWithRetryAsync(progress, ct).ConfigureAwait(false);
+        }
+        catch (PdmException ex)
+        {
+            throw PushRejectedException.NotSent(ex);
+        }
+    }
+
+    private PdmException FrozenError(string rel, FrozenEntry freeze) =>
+        new FrozenFileException(rel, Config.DisplayNameFor(freeze.By), freeze.At, freeze.Reason, IsAdmin);
+
+    private static bool IsAdminOnlyFile(string rel) =>
+        SamePath(rel, VaultConfig.FileName) || rel.Replace('\\', '/').StartsWith(".pdm/", StringComparison.OrdinalIgnoreCase);
+
+    private void RequireAdmin(string what)
+    {
+        if (IsAdmin) return;
+        throw new PdmException($"Only vault admins can {what}. Admins are listed in pdm.json; your GitHub username is " +
+                               (GitHubLogin ?? "not set (see Settings)") + ".");
     }
 
     // ---------------------------------------------------------------- Git helpers

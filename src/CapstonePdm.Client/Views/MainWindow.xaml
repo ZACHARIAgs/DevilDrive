@@ -73,8 +73,24 @@
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: release someone else's stale check-out.">
                     <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE785;" Foreground="#C62828" />
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE711;" Foreground="#C62828" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Break Lock" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding FreezeCommand}"
+                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Admin: freeze the selected files (e.g. released for production) so nobody can change them.">
+                    <StackPanel MinWidth="60">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xEA18;" Foreground="#334155" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Freeze&#x2026;" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding UnfreezeCommand}"
+                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Admin: make the selected frozen files editable again.">
+                    <StackPanel MinWidth="60">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE785;" Foreground="#334155" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Unfreeze" />
                     </StackPanel>
                 </Button>
                 <Separator />
@@ -100,6 +116,7 @@
                 <ComboBoxItem Content="Checked out by others" />
                 <ComboBoxItem Content="Needs attention" />
                 <ComboBoxItem Content="Newer version in vault" />
+                <ComboBoxItem Content="Frozen" />
             </ComboBox>
             <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" />
         </DockPanel>
@@ -136,6 +153,10 @@
                     <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" />
                     <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                     <MenuItem Header="Break Lock (admin)" Command="{Binding BreakLockCommand}"
+                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                    <MenuItem Header="Freeze&#x2026; (admin)" Command="{Binding FreezeCommand}"
+                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                    <MenuItem Header="Unfreeze (admin)" Command="{Binding UnfreezeCommand}"
                               Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
