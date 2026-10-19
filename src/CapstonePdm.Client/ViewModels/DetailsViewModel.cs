@@ -46,6 +46,41 @@ public sealed class DetailsViewModel : ViewModelBase
         set => Set(ref _loadingThumbnail, value);
     }
 
+    private System.Windows.Media.Media3D.Model3D? _model;
+    private bool _show3D;
+    private bool _loading3D;
+
+    /// <summary>Full path of the 3D preview (STL) saved by the add-in, if there is one on this PC.</summary>
+    public string? PreviewPath { get; set; }
+    public System.DateTime PreviewWritten { get; set; }
+    public bool HasPreviewFile => PreviewPath != null;
+
+    public System.Windows.Media.Media3D.Model3D? Model
+    {
+        get => _model;
+        set => Set(ref _model, value);
+    }
+
+    /// <summary>Show the rotatable 3D preview instead of the picture.</summary>
+    public bool Show3D
+    {
+        get => _show3D;
+        set
+        {
+            if (Set(ref _show3D, value)) OnPropertyChanged(nameof(ShowPicture));
+        }
+    }
+
+    public bool ShowPicture => !Show3D;
+
+    public bool Loading3D
+    {
+        get => _loading3D;
+        set => Set(ref _loading3D, value);
+    }
+
+    public string PreviewNote { get; set; } = "";
+
     public string Name => Row.Name;
     public string Folder => Row.Folder;
     public string StateText => Row.StateText;

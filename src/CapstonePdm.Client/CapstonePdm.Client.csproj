@@ -17,4 +17,9 @@
     <ProjectReference Include="..\CapstonePdm.Core\CapstonePdm.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 3D viewer for the STL previews the SolidWorks add-in saves (MIT licensed). -->
+    <PackageReference Include="HelixToolkit.Core.Wpf" Version="2.25.0" />
+  </ItemGroup>
+
 </Project>

@@ -495,13 +495,14 @@ public sealed class VaultService : IVaultService
 
     // ---------------------------------------------------------------- Check In
 
-    public async Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null)
+    public async Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null, IReadOnlyList<string>? previews = null)
     {
         var relatives = Normalize(paths);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await CheckInCoreAsync(relatives, comment, keepCheckedOut, progress, ct, indexUpdates).ConfigureAwait(false);
+            return await CheckInCoreAsync(relatives, comment, keepCheckedOut, progress, ct, indexUpdates, previews).ConfigureAwait(false);
         }
         finally
         {
@@ -509,7 +510,8 @@ public sealed class VaultService : IVaultService
         }
     }
 
-    private async Task<OperationResult> CheckInCoreAsync(IReadOnlyList<string> relatives, string comment, bool keepCheckedOut, IProgress<string>? progress, CancellationToken ct, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null)
+    private async Task<OperationResult> CheckInCoreAsync(IReadOnlyList<string> relatives, string comment, bool keepCheckedOut, IProgress<string>? progress, CancellationToken ct,
+        IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null, IReadOnlyList<string>? previews = null)
     {
         if (string.IsNullOrWhiteSpace(comment))
         {
@@ -566,7 +568,8 @@ public sealed class VaultService : IVaultService
         {
             progress?.Report("Saving the new version…");
             // Index entries (from the SolidWorks add-in) for the files being checked in go in the same commit.
-            var commitPaths = changed.Concat(WriteIndexEntries(indexUpdates, changed)).ToList();
+            var commitPaths = changed.Concat(WriteIndexEntries(indexUpdates, changed))
+                .Concat(await CommittablePreviewsAsync(previews, ct).ConfigureAwait(false)).ToList();
             var pathspec = string.Join("\0", commitPaths) + "\0";
             await RunCheckedAsync("check in", new[] { "add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, TransferTimeout, pathspec).ConfigureAwait(false);
             await RunCheckedAsync("check in", new[] { "commit", "--quiet", "-m", comment, "--pathspec-from-file=-", "--pathspec-file-nul" }, ct, null, pathspec).ConfigureAwait(false);
@@ -1215,6 +1218,27 @@ public sealed class VaultService : IVaultService
     private PdmException FrozenError(string rel, FrozenEntry freeze) =>
         new FrozenFileException(rel, Config.DisplayNameFor(freeze.By), freeze.At, freeze.Reason, IsAdmin);
 
+    /// <summary>
+    /// 3D preview files to include in a commit: ones that exist (new or updated) and ones that were
+    /// tracked but are now gone (renamed/deleted). Anything outside .pdm/preview/ is ignored.
+    /// </summary>
+    private async Task<List<string>> CommittablePreviewsAsync(IReadOnlyList<string>? previews, CancellationToken ct)
+    {
+        var result = new List<string>();
+        if (previews == null) return result;
+        foreach (var rel in previews.Select(ToRelativePath).Where(VaultPaths.IsPreview).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (File.Exists(ToFullPath(rel)))
+            {
+                result.Add(rel);
+                continue;
+            }
+            var tracked = await RunAsync(new[] { "ls-files", "--", rel }, ct).ConfigureAwait(false);
+            if (tracked.Success && tracked.StdOut.Trim().Length > 0) result.Add(rel);
+        }
+        return result;
+    }
+
     /// <summary>Team settings and admin-managed lists: only admins may check these in.</summary>
     private static bool IsAdminOnlyFile(string rel) =>
         SamePath(rel, VaultConfig.FileName) || SamePath(rel, FrozenList.RelativePath) || SamePath(rel, CheckInRequestList.RelativePath) ||
@@ -1251,14 +1275,15 @@ public sealed class VaultService : IVaultService
     /// Saves index entries (references, properties, saved-in version) without checking in any CAD
     /// file. Used by the SolidWorks add-in's Rebuild Index. Null entries remove a file's entry.
     /// </summary>
-    public async Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyList<string>? previews = null)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var result = new OperationResult();
             await SyncCoreAsync(progress, ct).ConfigureAwait(false);
-            var paths = WriteIndexEntries(entries);
+            var paths = WriteIndexEntries(entries).Concat(await CommittablePreviewsAsync(previews, ct).ConfigureAwait(false)).ToList();
             if (paths.Count == 0) return result;
             await CommitAndPushAsync(paths, $"Updated the vault index ({entries.Count} file(s))", progress, ct).ConfigureAwait(false);
             result.Succeeded.AddRange(entries.Keys.Select(ToRelativePath));

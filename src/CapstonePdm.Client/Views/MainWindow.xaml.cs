@@ -58,4 +58,6 @@ public partial class MainWindow : Window, IDialogs
     public void ShowHistory(string relativePath) => new HistoryWindow(_vm, this, relativePath) { Owner = this }.ShowDialog();
 
     public void ShowMilestones() => new MilestonesWindow(_vm, this) { Owner = this }.ShowDialog();
+
+    public void Show3D(string title, System.Windows.Media.Media3D.Model3D model) => new Viewer3DWindow(title, model) { Owner = this }.Show();
 }

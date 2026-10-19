@@ -569,11 +569,20 @@ internal sealed class VaultPane : UserControl
                 p => p,
                 p => { var doc = _sw.FindOpen(p); return doc != null ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties; },
                 StringComparer.OrdinalIgnoreCase);
+            // 3D previews for the app's viewer, from the open models (unopened ones get theirs from Rebuild Index).
+            progress.Report("Saving 3D previews…");
+            var previews = new List<string>();
+            foreach (var path in targets.Where(SolidWorksSession.CanHavePreview))
+            {
+                var doc = _sw.FindOpen(path);
+                var preview = VaultPaths.PreviewFor(_vault.ToRelativePath(path));
+                if (doc != null && _sw.ExportPreview(doc, _vault.ToFullPath(preview))) previews.Add(preview);
+            }
             var closed = _sw.CloseDocumentsUsing(targets, CloseMode.Save);
             try
             {
                 var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
-                return Report(await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index), "Checked in");
+                return Report(await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews), "Checked in");
             }
             finally
             {
@@ -878,12 +887,24 @@ internal sealed class VaultPane : UserControl
             };
             foreach (var parent in parents) index[parent] = _sw.BuildIndexEntry(parent, _vault.VaultRoot, FileAt(parent)?.Index?.Properties);
 
+            // The 3D preview moves with the file.
+            var oldPreview = VaultPaths.PreviewFor(oldRel);
+            var newPreview = VaultPaths.PreviewFor(newRel);
+            var previews = new List<string>();
+            if (File.Exists(_vault.ToFullPath(oldPreview)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_vault.ToFullPath(newPreview))!);
+                File.Move(_vault.ToFullPath(oldPreview), _vault.ToFullPath(newPreview));
+                previews.Add(oldPreview);
+                previews.Add(newPreview);
+            }
+
             var reopen = new ClosedDocuments(string.Equals(closed.ActivePath, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : closed.ActivePath);
             reopen.Paths.AddRange(closed.Paths.Select(p => string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : p));
             try
             {
                 var result = await _vault.CheckInAsync(new[] { oldPath, newPath }.Concat(parents).ToList(),
-                    $"Renamed {oldRel} to {newRel}", progress: progress, indexUpdates: index);
+                    $"Renamed {oldRel} to {newRel}", progress: progress, indexUpdates: index, previews: previews);
                 return Report(result, "Renamed");
             }
             catch (PdmException ex)
@@ -919,15 +940,18 @@ internal sealed class VaultPane : UserControl
         await RunAsync("Indexing\u2026", async progress =>
         {
             var entries = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
+            var previews = new List<string>();
             for (var i = 0; i < files.Count; i++)
             {
                 progress.Report($"Indexing {i + 1} of {files.Count}: {files[i].Name}");
                 await Task.Delay(1); // let the pane repaint between files
                 var full = _vault.ToFullPath(files[i].RelativePath);
-                entries[files[i].RelativePath] = _sw.BuildIndexEntry(full, _vault.VaultRoot, _sw.ReadPropertiesFromFile(full));
+                var preview = SolidWorksSession.CanHavePreview(full) ? VaultPaths.PreviewFor(files[i].RelativePath) : null;
+                entries[files[i].RelativePath] = _sw.IndexFile(full, _vault.VaultRoot, preview == null ? null : _vault.ToFullPath(preview), out var previewSaved);
+                if (previewSaved) previews.Add(preview!);
             }
-            await _vault.UpdateIndexAsync(entries, progress);
-            return $"Indexed {entries.Count} file(s).";
+            await _vault.UpdateIndexAsync(entries, progress, previews: previews);
+            return $"Indexed {entries.Count} file(s) and saved {previews.Count} 3D preview(s).";
         });
     }
 

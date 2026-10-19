@@ -219,6 +219,91 @@ internal sealed class SolidWorksSession
     public bool ReplaceReference(string referencingFile, string oldReference, string newReference) =>
         _sw.ReplaceReferencedDocument(referencingFile, oldReference, newReference);
 
+    public static bool CanHavePreview(string path)
+    {
+        var type = DocumentType(path);
+        return type == swDocumentTypes_e.swDocPART || type == swDocumentTypes_e.swDocASSEMBLY;
+    }
+
+    /// <summary>
+    /// Saves an open part/assembly as a small binary STL mesh for the app's 3D viewer. Uses coarse
+    /// quality and one file for assemblies, then puts the user's own STL export settings back.
+    /// </summary>
+    public bool ExportPreview(IModelDoc2 doc, string stlPath)
+    {
+        if (!CanHavePreview(doc.GetPathName())) return false;
+        var toggles = new[]
+        {
+            (swUserPreferenceToggle_e.swSTLBinaryFormat, true),
+            (swUserPreferenceToggle_e.swSTLComponentsIntoOneFile, true),
+            (swUserPreferenceToggle_e.swSTLDontTranslateToPositive, true),
+            (swUserPreferenceToggle_e.swSTLShowInfoOnSave, false),
+            (swUserPreferenceToggle_e.swSTLPreview, false),
+            (swUserPreferenceToggle_e.swSTLCheckForInterference, false),
+        };
+        var savedToggles = toggles.Select(t => (t.Item1, _sw.GetUserPreferenceToggle((int)t.Item1))).ToList();
+        var savedQuality = _sw.GetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality);
+        try
+        {
+            foreach (var (toggle, value) in toggles) _sw.SetUserPreferenceToggle((int)toggle, value);
+            _sw.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, (int)swSTLQuality_e.swSTLQuality_Coarse);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(stlPath)!);
+            int errors = 0, warnings = 0;
+            var saved = doc.Extension.SaveAs(stlPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, ref errors, ref warnings);
+            return saved && File.Exists(stlPath);
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write($"3D preview export failed for {doc.GetPathName()}: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            foreach (var (toggle, value) in savedToggles) _sw.SetUserPreferenceToggle((int)toggle, value);
+            _sw.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, savedQuality);
+        }
+    }
+
+    /// <summary>
+    /// Reads everything the vault index needs from one file, opening it invisibly once if it isn't
+    /// open: properties, references, saved-in version, and (for parts/assemblies) the 3D preview.
+    /// </summary>
+    public IndexEntry IndexFile(string path, string vaultRoot, string? previewPath, out bool previewSaved)
+    {
+        previewSaved = false;
+        var doc = FindOpen(path);
+        var openedHere = false;
+        var type = DocumentType(path);
+        if (doc == null && type != swDocumentTypes_e.swDocNONE && File.Exists(path))
+        {
+            _sw.DocumentVisible(false, (int)type);
+            try
+            {
+                int errors = 0, warnings = 0;
+                // Fully resolved (not lightweight) so assemblies have geometry for the 3D preview.
+                doc = _sw.OpenDoc6(path, (int)type, (int)(swOpenDocOptions_e.swOpenDocOptions_Silent | swOpenDocOptions_e.swOpenDocOptions_ReadOnly), "", ref errors, ref warnings);
+                openedHere = doc != null;
+            }
+            finally
+            {
+                _sw.DocumentVisible(true, (int)type);
+            }
+        }
+
+        try
+        {
+            var properties = doc != null ? ReadProperties(doc) : null;
+            if (doc != null && previewPath != null) previewSaved = ExportPreview(doc, previewPath);
+            return BuildIndexEntry(path, vaultRoot, properties);
+        }
+        finally
+        {
+            if (openedHere) _sw.CloseDoc(path);
+        }
+    }
+
     /// <summary>Saves every sheet of a drawing as a PDF (opening the drawing invisibly if needed).</summary>
     public void ExportPdf(string drawingPath, string pdfPath)
     {

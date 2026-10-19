@@ -26,7 +26,8 @@ public interface IVaultService
 
     Task<GetLatestResult> GetLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default);
     Task<OperationResult> CheckOutAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
-    Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default, IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null);
+    Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null, IReadOnlyList<string>? previews = null);
     Task<OperationResult> UndoCheckOutAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
     Task<IReadOnlyList<FileVersion>> GetHistoryAsync(string path, CancellationToken ct = default);
@@ -53,7 +54,8 @@ public interface IVaultService
     Task<OperationResult> ProcessCheckInRequestsAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
     /// <summary>Saves index entries (references, properties, saved-in version) recorded by the SolidWorks add-in.</summary>
-    Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default);
+    Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyList<string>? previews = null);
 
     /// <summary>Milestones (labeled snapshots of the whole vault), newest first.</summary>
     Task<IReadOnlyList<Milestone>> GetMilestonesAsync(CancellationToken ct = default);

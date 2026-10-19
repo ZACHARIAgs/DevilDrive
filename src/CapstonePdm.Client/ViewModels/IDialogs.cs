@@ -35,4 +35,5 @@ public interface IDialogs
     SettingsRequest? AskSettings(string vaultPath, string signedInAs);
     void ShowHistory(string relativePath);
     void ShowMilestones();
+    void Show3D(string title, System.Windows.Media.Media3D.Model3D model);
 }

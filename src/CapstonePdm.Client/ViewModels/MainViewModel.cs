@@ -60,6 +60,7 @@ public sealed class MainViewModel : ViewModelBase
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
+        Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
         UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
     }
 
@@ -82,6 +83,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand MilestonesCommand { get; }
     public ICommand ReturnToLatestCommand { get; }
     public ICommand UpdateVaultSetupCommand { get; }
+    public ICommand Open3DCommand { get; }
 
     private bool _hasSetupProblems;
 
@@ -127,8 +129,51 @@ public sealed class MainViewModel : ViewModelBase
         var details = BuildDetails(row);
         var sameFile = previous != null && string.Equals(previous.Row.Path, row.Path, StringComparison.OrdinalIgnoreCase);
         if (sameFile && !reloadThumbnail) details.Thumbnail = previous!.Thumbnail;
+
+        // 3D preview saved by the SolidWorks add-in (.pdm/preview/<path>.stl); shown by default when there is one.
+        if (_vault != null)
+        {
+            var preview = _vault.ToFullPath(VaultPaths.PreviewFor(row.Path));
+            if (System.IO.File.Exists(preview))
+            {
+                details.PreviewPath = preview;
+                details.PreviewWritten = System.IO.File.GetLastWriteTime(preview);
+                details.Show3D = !sameFile || previous!.Show3D;
+                details.PreviewNote = $"Drag to rotate, right-drag to pan, scroll to zoom. Simplified 3D preview from {details.PreviewWritten:MMM d, h:mm tt}.";
+                if (sameFile && previous!.Model != null && previous.PreviewWritten == details.PreviewWritten) details.Model = previous.Model;
+            }
+            else if (IsCadFile(row.Path) && !row.Path.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase))
+            {
+                details.PreviewNote = "No 3D preview yet. It's made when the file is checked in from SolidWorks, or with Rebuild Index in the SolidWorks pane.";
+            }
+        }
+
         Details = details;
         if (!sameFile || reloadThumbnail) _ = LoadThumbnailAsync(details);
+        if (details.HasPreviewFile && details.Model == null) _ = Load3DAsync(details);
+    }
+
+    private async Task Load3DAsync(DetailsViewModel details)
+    {
+        details.Loading3D = true;
+        try
+        {
+            var model = await StlLoader.LoadAsync(details.PreviewPath!);
+            if (ReferenceEquals(Details, details)) details.Model = model;
+        }
+        catch (Exception)
+        {
+            details.Show3D = false;
+        }
+        finally
+        {
+            details.Loading3D = false;
+        }
+    }
+
+    private void Open3D()
+    {
+        if (Details?.Model != null) _dialogs.Show3D(Details.Name, Details.Model);
     }
 
     private async Task LoadThumbnailAsync(DetailsViewModel details)

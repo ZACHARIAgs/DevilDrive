@@ -40,6 +40,16 @@ public sealed class IndexEntry
     public static readonly string[] RevisionNames = { "Revision", "Rev" };
 }
 
+/// <summary>Where Capstone PDM keeps per-file extras in the vault.</summary>
+public static class VaultPaths
+{
+    /// <summary>3D preview mesh (STL) the add-in saves for a part or assembly, e.g. .pdm/preview/Parts/bracket.SLDPRT.stl.</summary>
+    public static string PreviewFor(string relativePath) => ".pdm/preview/" + relativePath.Replace('\\', '/') + ".stl";
+
+    public static bool IsPreview(string relativePath) =>
+        relativePath.Replace('\\', '/').StartsWith(".pdm/preview/", StringComparison.OrdinalIgnoreCase);
+}
+
 /// <summary>
 /// The index lives in the vault as one small file per CAD file (.pdm/index/&lt;path&gt;.json), so two
 /// people checking in different files never conflict.
