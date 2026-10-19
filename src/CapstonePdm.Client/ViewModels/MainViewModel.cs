@@ -10,6 +10,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using CapstonePdm.Client.Services;
 using CapstonePdm.Core.Config;
 using CapstonePdm.Core.Errors;
 using CapstonePdm.Core.Vault;
@@ -85,7 +86,71 @@ public sealed class MainViewModel : ViewModelBase
         {
             _selected = value;
             CommandManager.InvalidateRequerySuggested();
+            UpdateDetails(reloadThumbnail: true);
         }
+    }
+
+    private DetailsViewModel? _details;
+
+    /// <summary>The details panel's content; null when zero or several files are selected.</summary>
+    public DetailsViewModel? Details
+    {
+        get => _details;
+        private set => Set(ref _details, value);
+    }
+
+    private void UpdateDetails(bool reloadThumbnail)
+    {
+        var row = SingleSelected;
+        if (row == null)
+        {
+            Details = null;
+            return;
+        }
+
+        var previous = Details;
+        var details = BuildDetails(row);
+        var sameFile = previous != null && string.Equals(previous.Row.Path, row.Path, StringComparison.OrdinalIgnoreCase);
+        if (sameFile && !reloadThumbnail) details.Thumbnail = previous!.Thumbnail;
+        Details = details;
+        if (!sameFile || reloadThumbnail) _ = LoadThumbnailAsync(details);
+    }
+
+    private async Task LoadThumbnailAsync(DetailsViewModel details)
+    {
+        if (_vault == null || !details.Row.File.ExistsLocally) return;
+        details.LoadingThumbnail = true;
+        var image = await ShellThumbnail.GetAsync(_vault.ToFullPath(details.Row.Path), 256);
+        details.LoadingThumbnail = false;
+        if (ReferenceEquals(Details, details)) details.Thumbnail = image;
+    }
+
+    private DetailsViewModel BuildDetails(FileRowViewModel row)
+    {
+        var f = row.File;
+        var facts = new List<PropertyRow>();
+        if (f.Version > 0) facts.Add(new PropertyRow("Version", f.Version.ToString()));
+        if (f.LatestVersion != null)
+        {
+            facts.Add(new PropertyRow("Last check-in", $"{f.LatestVersion.Date.LocalDateTime:MMM d, yyyy h:mm tt} by {f.LatestVersion.Author}"));
+            if (f.LatestVersion.CommentFirstLine.Length > 0) facts.Add(new PropertyRow("Comment", f.LatestVersion.CommentFirstLine));
+        }
+        if (f.Lock != null && f.State != FileState.Frozen)
+        {
+            facts.Add(new PropertyRow("Checked out", $"{f.CheckedOutBy}" + (f.Lock.LockedAt != null ? $", {f.Lock.LockedAt.Value.LocalDateTime:MMM d, h:mm tt}" : "")));
+        }
+        if (f.State == FileState.Frozen && f.Freeze != null)
+        {
+            facts.Add(new PropertyRow("Frozen", $"{f.FrozenBy}, {f.Freeze.At.LocalDateTime:MMM d, yyyy}"));
+            if (f.Freeze.Reason.Length > 0) facts.Add(new PropertyRow("Reason", f.Freeze.Reason));
+        }
+        if (f.CheckInRequest != null)
+        {
+            facts.Add(new PropertyRow("Check-in requested", $"{f.CheckInRequestedBy}, {f.CheckInRequest.RequestedAt.LocalDateTime:MMM d, h:mm tt}"));
+        }
+        facts.Add(new PropertyRow("Folder", row.Folder));
+
+        return new DetailsViewModel(row) { Facts = facts };
     }
 
     private FileRowViewModel? SingleSelected => _selected.Count == 1 ? _selected[0] : null;
@@ -250,6 +315,7 @@ public sealed class MainViewModel : ViewModelBase
             _rows.Remove(gone);
         }
         FilesView.Refresh();
+        UpdateDetails(reloadThumbnail: false);
 
         // Banner: the most important things first.
         var lines = new List<string>();
