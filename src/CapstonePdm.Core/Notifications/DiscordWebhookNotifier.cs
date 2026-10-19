@@ -20,6 +20,7 @@ public enum VaultEventKind
     Unfrozen,
     CheckInRequested,
     MilestoneCreated,
+    GuardTampered,
 }
 
 public sealed class VaultEvent
@@ -123,6 +124,10 @@ public sealed class DiscordWebhookNotifier : INotifier
             case VaultEventKind.MilestoneCreated:
                 message = $"\U0001F3C1 **{user}** (admin) created the milestone **{Escape(e.Files.FirstOrDefault() ?? "")}**. Anyone can view the vault exactly as it is now.";
                 if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.GuardTampered:
+                message = $"\U0001F6A8 **Vault guard alert:** the vault guard was {e.Comment ?? "changed"} (last change by {Escape(e.PreviousOwner ?? "someone")}). " +
+                          "Pushes made with Git commands may not be checked. An admin should open Capstone PDM and click **Update Vault Setup**.";
                 break;
             default:
                 message = $"**{user}**: {files}";

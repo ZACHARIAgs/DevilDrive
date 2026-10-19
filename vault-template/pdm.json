@@ -17,8 +17,8 @@
   // Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.
   "discordWebhookUrl": "",
 
-  // GitHub usernames allowed to break other people's check-outs.
-  "admins": [ "aturne59-stack" ],
+  // Admins are whoever GitHub lists as Admin or Maintain on this repo (not set here, so nobody can
+  // make themselves admin). For several admins, keep the vault in a free GitHub organization.
 
   // GitHub username -> name shown in the vault view and in Discord.
   // Anyone not listed here is shown by their GitHub username.

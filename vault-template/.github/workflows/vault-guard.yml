@@ -6,6 +6,7 @@ name: Vault Guard
 on:
   push:
     branches: [main]
+    tags: ['milestone/**']
 
 permissions:
   contents: write
@@ -22,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # A deleted milestone tag can't be checked out, so use the main branch then.
+          ref: ${{ github.event.deleted && github.event.repository.default_branch || github.ref }}
           fetch-depth: 0
           lfs: false
 
@@ -32,9 +35,16 @@ jobs:
           ACTOR: ${{ github.actor }}
           FORCED: ${{ github.event.forced }}
           BRANCH: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+          CREATED: ${{ github.event.created }}
+          DELETED: ${{ github.event.deleted }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Use the guard as it was before this push, so a push can't change the rules it's judged by.
-          git show "$BEFORE:.github/vault-guard/guard.py" > /tmp/guard.py 2>/dev/null || cp .github/vault-guard/guard.py /tmp/guard.py
+          # Use the guard as it was before this push (for milestone tags: as it is on the main branch),
+          # so a push can't change the rules it's judged by.
+          if [ "$REF_TYPE" = "tag" ]; then SOURCE="origin/$DEFAULT_BRANCH"; else SOURCE="$BEFORE"; fi
+          git show "$SOURCE:.github/vault-guard/guard.py" > /tmp/guard.py 2>/dev/null || cp .github/vault-guard/guard.py /tmp/guard.py
           python3 /tmp/guard.py

@@ -53,8 +53,12 @@ public sealed class VaultService : IVaultService
     /// <summary>The GitHub account this PC is signed in as, verified with GitHub (null until verified, e.g. offline).</summary>
     public string? GitHubLogin => _identity?.Login;
 
-    /// <summary>Admin if GitHub verified the account and it's listed in pdm.json, or GitHub says it's a repo admin/maintainer.</summary>
-    public bool IsAdmin => _identity != null && (_identity.IsRepoAdmin || Config.IsAdmin(_identity.Login));
+    /// <summary>
+    /// Admin = GitHub says this verified account is an admin or maintainer of the vault repo. Only GitHub
+    /// roles count (not pdm.json, which anyone with write access could edit), so nobody can make
+    /// themselves admin. For several admins, keep the vault in a (free) GitHub organization.
+    /// </summary>
+    public bool IsAdmin => _identity?.IsRepoAdmin == true;
 
     public string UserDisplayName =>
         GitHubLogin != null && Config.Team.TryGetValue(GitHubLogin, out var name) && !string.IsNullOrWhiteSpace(name) ? name : UserName;
@@ -191,6 +195,7 @@ public sealed class VaultService : IVaultService
                 await FetchAsync(ct).ConfigureAwait(false);
                 await VerifyIdentityAsync(ct).ConfigureAwait(false);
                 await GetLocksAsync(ct).ConfigureAwait(false);
+                await CheckGuardIntegrityAsync(ct).ConfigureAwait(false);
             }
             catch (PdmException ex)
             {
@@ -262,7 +267,7 @@ public sealed class VaultService : IVaultService
             {
                 request = null;
             }
-            if (request != null && fileLock?.IsMine == true && freeze == null) snapshot.CheckInRequestsForMe++;
+            if (request != null && fileLock?.IsMine == true && freeze == null && IsSettled(request)) snapshot.CheckInRequestsForMe++;
 
             latest.TryGetValue(path, out var version);
             files.Add(new VaultFile
@@ -851,7 +856,7 @@ public sealed class VaultService : IVaultService
         var rel = ToRelativePath(path);
         if (!IsAdmin)
         {
-            throw new PdmException("Only vault admins can break a check-out. Admins are listed in pdm.json; your GitHub username is " +
+            throw new PdmException("Only vault admins can break a check-out. GitHub decides who's an admin (repo Admin or Maintain role); you're signed in as " +
                                    (GitHubLogin ?? "not verified yet (are you online and signed in to GitHub?)") + ".");
         }
 
@@ -1139,7 +1144,7 @@ public sealed class VaultService : IVaultService
 
             result.Succeeded.Add(rel);
             result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time Capstone PDM " +
-                             "or SolidWorks is running there (within about a minute if it's on). Unsaved changes in their SolidWorks aren't included.\n\n" +
+                             "or SolidWorks is running there (within about five minutes if it's on). Unsaved changes in their SolidWorks aren't included.\n\n" +
                              "If their PC is off and you can't wait, use Break Lock instead (their saved work then stays on their PC only).");
             await NotifyAsync(new VaultEvent(VaultEventKind.CheckInRequested, UserDisplayName, new[] { rel }) { PreviousOwner = owner, Comment = note }, result).ConfigureAwait(false);
             return result;
@@ -1169,6 +1174,7 @@ public sealed class VaultService : IVaultService
             var mine = requests.Requests
                 .Where(r => frozen.Find(r.Path) == null)
                 .Where(r => FindLock(locks, r.Path) is LockInfo l && l.IsMine && string.Equals(l.Owner, r.Owner, StringComparison.OrdinalIgnoreCase))
+                .Where(IsSettled)
                 .ToList();
             if (mine.Count == 0) return result;
 
@@ -1231,6 +1237,24 @@ public sealed class VaultService : IVaultService
         {
             _gate.Release();
         }
+    }
+
+    // A request is only acted on after this PC has seen it in the vault for a few minutes: long enough
+    // for the vault guard to undo a forged one (added by a non-admin with Git commands). Uses this PC's
+    // clock from when it first saw the request, not the date written in it, which could be faked.
+    private static readonly TimeSpan RequestSettleTime = TimeSpan.FromMinutes(3);
+    private readonly Dictionary<string, DateTimeOffset> _requestFirstSeen = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsSettled(AdminCheckInRequest request)
+    {
+        var key = $"{request.Path}|{request.Owner}|{request.RequestedBy}|{request.RequestedAt:o}";
+        var now = DateTimeOffset.Now;
+        if (!_requestFirstSeen.TryGetValue(key, out var firstSeen))
+        {
+            _requestFirstSeen[key] = now;
+            return false;
+        }
+        return now - firstSeen >= RequestSettleTime;
     }
 
     private async Task<bool> IsUncommittedAsync(string relativePath, CancellationToken ct) =>
@@ -1353,6 +1377,31 @@ public sealed class VaultService : IVaultService
             problems.Add("The vault isn't set up to store 3D previews efficiently.");
         }
         return problems;
+    }
+
+    /// <summary>
+    /// The guard's trigger file is the one thing a push can switch off. Any PC that notices it was removed
+    /// or altered (after having been installed) posts a Discord alert, once per change.
+    /// </summary>
+    private async Task CheckGuardIntegrityAsync(CancellationToken ct)
+    {
+        var everInstalled = await RunAsync(new[] { "log", "-1", "--format=%H", Upstream, "--", VaultSetup.GuardWorkflowPath }, ct).ConfigureAwait(false);
+        if (!everInstalled.Success || everInstalled.StdOut.Trim().Length == 0) return;
+
+        var workflow = await ReadVaultTextAsync(VaultSetup.GuardWorkflowPath, ct).ConfigureAwait(false);
+        if (workflow != null && VaultSetup.SameText(workflow, VaultSetup.GuardWorkflow)) return;
+
+        var last = await RunAsync(new[] { "log", "-1", "--format=%H%x1f%an", Upstream, "--", ".github" }, ct).ConfigureAwait(false);
+        var parts = last.StdOut.Trim().Split('\x1f');
+        if (parts[0].Length == 0 || parts[0] == await GetConfigValueAsync("pdm.guardAlerted", ct).ConfigureAwait(false)) return;
+
+        var e = new VaultEvent(VaultEventKind.GuardTampered, UserDisplayName, Array.Empty<string>())
+        {
+            Comment = workflow == null ? "removed" : "changed",
+            PreviousOwner = parts.Length > 1 ? parts[1] : null,
+        };
+        await NotifyAsync(e, new OperationResult()).ConfigureAwait(false);
+        await RunAsync(new[] { "config", "--local", "pdm.guardAlerted", parts[0] }, ct).ConfigureAwait(false);
     }
 
     /// <summary>Admin: installs or repairs the vault guard and storage rules, then pushes them.</summary>
@@ -1650,7 +1699,18 @@ public sealed class VaultService : IVaultService
     private async Task<List<Milestone>> ListMilestonesCoreAsync(CancellationToken ct)
     {
         var r = await RunAsync(new[] { "for-each-ref", "--sort=-creatordate", "--format=" + MilestoneTags.ListFormat, "refs/tags/" + MilestoneTags.Prefix }, ct).ConfigureAwait(false);
-        return r.Success ? MilestoneTags.Parse(r.StdOut) : new List<Milestone>();
+        var milestones = r.Success ? MilestoneTags.Parse(r.StdOut) : new List<Milestone>();
+        if (!await UpstreamExistsAsync(ct).ConfigureAwait(false)) return milestones;
+
+        // Only milestones on the vault's real history count. A tag on a side commit (made with Git
+        // commands) could carry altered files or a disabled guard, so it's ignored.
+        var genuine = new List<Milestone>();
+        foreach (var milestone in milestones)
+        {
+            var onHistory = await RunAsync(new[] { "merge-base", "--is-ancestor", milestone.Tag + "^{commit}", Upstream }, ct).ConfigureAwait(false);
+            if (onHistory.Success) genuine.Add(milestone);
+        }
+        return genuine;
     }
 
     /// <summary>The milestone this PC is showing, or null when it's on the latest files.</summary>
@@ -1683,7 +1743,7 @@ public sealed class VaultService : IVaultService
     private void RequireAdmin(string what)
     {
         if (IsAdmin) return;
-        throw new PdmException($"Only vault admins can {what}. Admins are listed in pdm.json; your GitHub username is " +
+        throw new PdmException($"Only vault admins can {what}. GitHub decides who's an admin (repo Admin or Maintain role); you're signed in as " +
                                (GitHubLogin ?? "not verified yet (are you online and signed in to GitHub?)") + ".");
     }
 

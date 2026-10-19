@@ -276,7 +276,7 @@ public sealed class VaultIntegrationTests : IDisposable
         Git(_alice, "add", "-A");
         Git(_alice, "commit", "-m", "Admins");
         Git(_alice, "push");
-        var alice = await Open(_alice, "alice-gh");
+        var alice = await Open(_alice, "alice-gh", repoAdmin: true);
         var milestone = await alice.CreateMilestoneAsync("Design Review 1", "Before the redesign");
         Assert.Equal("milestone/design-review-1", milestone.Tag);
         AliceChecksIn("shared.txt", "v2", "after the review");
@@ -335,8 +335,11 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.False(verifiedBob.IsAdmin);
         Assert.Equal("bob-gh", verifiedBob.GitHubLogin);
 
-        var verifiedAlice = await Open(_alice, "alice-gh");
-        Assert.True(verifiedAlice.IsAdmin);
+        // Being listed in pdm.json no longer counts: only GitHub roles do.
+        var listedAlice = await Open(_alice, "alice-gh");
+        Assert.False(listedAlice.IsAdmin);
+        var repoAdminAlice = await Open(_alice, "alice-gh", repoAdmin: true);
+        Assert.True(repoAdminAlice.IsAdmin);
     }
 
     [Fact]
@@ -425,6 +428,43 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ChangingTheGuardWithGit_PostsOneAlert()
+    {
+        var admin = await Open(_alice, "alice-gh", repoAdmin: true);
+        await admin.UpdateVaultSetupAsync();
+
+        // A teammate switches the guard off with Git commands.
+        Git(_bob, "pull", "-q");
+        File.WriteAllText(Path.Combine(_bob, ".github", "workflows", "vault-guard.yml"), "name: nothing to see\non: workflow_dispatch\n");
+        Git(_bob, "commit", "-qam", "harmless tweak");
+        Git(_bob, "push", "-q");
+
+        var notifier = new RecordingNotifier();
+        var anyone = await Open(_alice, notifier: notifier);
+        await anyone.GetSnapshotAsync(contactVault: true);
+        await anyone.GetSnapshotAsync(contactVault: true);
+
+        var alert = Assert.Single(notifier.Events, e => e.Kind == VaultEventKind.GuardTampered);
+        Assert.Equal("changed", alert.Comment);
+        Assert.Equal("Bob", alert.PreviousOwner);
+    }
+
+    [Fact]
+    public async Task MilestoneOnASideCommit_IsIgnored()
+    {
+        Git(_bob, "checkout", "-q", "--orphan", "side");
+        Write(_bob, "fake.txt", "not the real vault");
+        Git(_bob, "add", "-A");
+        Git(_bob, "commit", "-qm", "side commit");
+        Git(_bob, "tag", "-a", "milestone/fake", "-m", "Fake Release");
+        Git(_bob, "push", "-q", "origin", "milestone/fake");
+        Git(_bob, "checkout", "-q", "-f", "main");
+
+        var alice = await Open(_alice);
+        Assert.Empty(await alice.GetMilestonesAsync());
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);
@@ -451,8 +491,8 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     /// <summary>Opens a clone as a given GitHub account (null = not verified, as when offline).</summary>
-    private static Task<VaultService> Open(string path, string? login = null, bool repoAdmin = false) =>
-        VaultService.OpenAsync(path, new NoNotifier(), identityProvider: new FakeIdentity(login == null ? null : new VaultIdentity(login, repoAdmin)));
+    private static Task<VaultService> Open(string path, string? login = null, bool repoAdmin = false, INotifier? notifier = null) =>
+        VaultService.OpenAsync(path, notifier ?? new NoNotifier(), identityProvider: new FakeIdentity(login == null ? null : new VaultIdentity(login, repoAdmin)));
 
     private static void Configure(string repo, string name)
     {
@@ -499,6 +539,17 @@ public sealed class VaultIntegrationTests : IDisposable
         public FakeIdentity(VaultIdentity? identity) => _identity = identity;
 
         public Task<VaultIdentity?> GetIdentityAsync(CapstonePdm.Core.Git.IGitRunner git, string remoteUrl, CancellationToken ct) => Task.FromResult(_identity);
+    }
+
+    private sealed class RecordingNotifier : INotifier
+    {
+        public List<VaultEvent> Events { get; } = new List<VaultEvent>();
+
+        public Task NotifyAsync(VaultEvent e, CancellationToken ct = default)
+        {
+            Events.Add(e);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class NoNotifier : INotifier

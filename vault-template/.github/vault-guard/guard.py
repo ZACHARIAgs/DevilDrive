@@ -5,10 +5,11 @@ Runs on GitHub after every push to the vault branch, so it sees who really pushe
 (GitHub's record, not the name typed into a commit) and can't be skipped by using Git
 commands instead of the app. It checks the push against the vault rules:
 
-  * only admins change pdm.json, .pdm/frozen.json or .github/ (judged by the admin list
-    as it was BEFORE the push, so nobody can make themselves admin in the same push);
+  * only admins change pdm.json, .pdm/frozen.json or .github/ (admin = GitHub says the pusher
+    is an admin or maintainer of the repo, so nobody can make themselves admin);
   * nobody adds admin check-in requests, or removes requests made of someone else;
-  * non-admins don't change frozen files;
+  * non-admins don't change frozen files, or files someone else has checked out;
+  * only admins create, move or delete milestones (milestone/* tags);
   * (warning only) files saved in a newer SolidWorks than the team's version, force pushes.
 
 A push that breaks a rule is undone straight away with a new commit that puts every file it
@@ -115,6 +116,36 @@ def is_repo_admin(actor):
         return False
 
 
+def current_locks():
+    """Who has what checked out right now (Git LFS locks), as {path_lower: owner}. None if unreadable."""
+    result = git("lfs", "locks", "--json", check=False)
+    if result.returncode != 0:
+        return None
+    try:
+        locks = json.loads(result.stdout or "[]")
+    except ValueError:
+        return None
+    return {str(l.get("path", "")).lower(): str((l.get("owner") or {}).get("name", "")) for l in locks if isinstance(l, dict)}
+
+
+def handle_milestone(ref, before, created, deleted, actor):
+    """Only admins may create, move or delete milestones; anything else is put back."""
+    tag = ref[len("refs/tags/milestone/"):]
+    if is_repo_admin(actor):
+        print(f"Milestone {tag} changed by admin {actor}.")
+        return 0
+    if created:
+        undone = git("push", "origin", f":{ref}", check=False).returncode == 0
+        what = f"created the milestone {tag}"
+    else:
+        undone = git("push", "-f", "origin", f"{before}:{ref}", check=False).returncode == 0
+        what = f"{'deleted' if deleted else 'moved'} the milestone {tag}"
+    config = load_json(show(f"origin/{os.environ.get('DEFAULT_BRANCH', 'main')}", "pdm.json"))
+    notify(config, actor, [f"{what} (only admins may)"], [], undone)
+    print(f"VIOLATION: {what}. {'Undone.' if undone else 'Not undone.'}")
+    return 1
+
+
 def changed_paths(before, after):
     output = git("diff", "--name-only", "--no-renames", "-z", before, after).stdout
     return [p for p in output.split("\0") if p]
@@ -161,6 +192,11 @@ def main():
     before, after, actor = os.environ["BEFORE"], os.environ["AFTER"], os.environ["ACTOR"]
     forced = os.environ.get("FORCED", "false") == "true"
     branch = os.environ.get("BRANCH", "main")
+    ref = os.environ.get("REF", "")
+    if os.environ.get("REF_TYPE") == "tag":
+        if not ref.startswith("refs/tags/milestone/"):
+            return 0
+        return handle_milestone(ref, before, os.environ.get("CREATED") == "true", os.environ.get("DELETED") == "true", actor)
     if before == ZERO:
         print("New branch: nothing to compare against.")
         return 0
@@ -168,7 +204,7 @@ def main():
         git("fetch", "-q", "origin", before, check=False)
 
     config = load_json(show(before, "pdm.json"))
-    admin = actor.lower() in lower_set(config.get("admins", [])) or is_repo_admin(actor)
+    admin = is_repo_admin(actor)
     changed = changed_paths(before, after)
     violations, warnings = [], []
 
@@ -187,6 +223,17 @@ def main():
     for path in changed:
         if path.lower() in frozen_before and path.lower() in frozen_after:
             (warnings if admin else violations).append(f"changed the frozen file {path}")
+
+    # Pushing over someone else's check-out. Our own check-in releases its lock right after pushing, so
+    # only locks held by OTHER people matter here.
+    locks = current_locks()
+    if locks is None:
+        warnings.append("couldn't read who has files checked out, so check-outs weren't verified for this push")
+    else:
+        for path in changed:
+            owner = locks.get(path.lower())
+            if owner and owner.lower() != actor.lower() and path.lower() not in frozen_after:
+                (warnings if admin else violations).append(f"changed {path}, which is checked out by {owner}")
 
     team = config.get("solidWorksVersion")
     if isinstance(team, int):
