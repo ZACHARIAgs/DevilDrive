@@ -7,11 +7,12 @@ namespace CapstonePdm.Client.Views;
 /// <summary>Collects the required check-in comment. Also used by History for restores.</summary>
 public partial class CheckInWindow : Window
 {
-    public CheckInWindow(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null)
+    public CheckInWindow(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null)
     {
         InitializeComponent();
         Title = title;
         if (prompt != null) PromptText.Text = prompt;
+        if (footnote != null) FooterText.Text = footnote;
         OkButton.Content = okText;
         FilesHeader.Text = files.Count == 1 ? "File:" : $"Files ({files.Count}):";
         FileList.ItemsSource = files;

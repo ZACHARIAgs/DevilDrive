@@ -57,10 +57,20 @@ internal sealed class VaultPane : UserControl
     private string? _currentPath;
     private DateTime _lastVaultContact = DateTime.MinValue;
     private bool _busy;
+    private readonly int _runningYear;
+    private readonly Dictionary<string, (DateTime Written, int? Year)> _savedInCache = new Dictionary<string, (DateTime, int?)>(StringComparer.OrdinalIgnoreCase);
 
     public VaultPane(SolidWorksSession sw)
     {
         _sw = sw;
+        try
+        {
+            _runningYear = sw.RunningYear;
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write("Couldn't read the SolidWorks version: " + ex.Message);
+        }
         // Sizes are in pixels scaled by hand (WinForms auto-scaling misbehaves inside SolidWorks).
         AutoScaleMode = AutoScaleMode.None;
         using (var g = CreateGraphics()) Theme.Init(g.DpiX);
@@ -279,7 +289,10 @@ internal sealed class VaultPane : UserControl
         _requestCheckIn.Visible = isAdmin && state == FileState.CheckedOutByOther;
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
-        _checkIn.Enabled = _checkOut.Enabled = _undo.Enabled = _freeze.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready;
+        // Editing in a newer SolidWorks than the team's would save files the others can't open.
+        var editable = ready && !NewerThanTeam;
+        _checkIn.Enabled = _checkOut.Enabled = _freeze.Enabled = editable;
+        _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready;
         _getLatest.Enabled = ready;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
@@ -328,6 +341,17 @@ internal sealed class VaultPane : UserControl
             if (file.FreezeLockMissing) lines.Add("Warning: the freeze lock is missing. An admin should freeze it again.");
         }
 
+        if (_vault != null && IsSolidWorksFile(file.RelativePath) && file.ExistsLocally)
+        {
+            var savedIn = SavedInYear(_vault.ToFullPath(file.RelativePath));
+            if (savedIn != null)
+            {
+                lines.Add(TeamYear != null && savedIn > TeamYear
+                    ? $"⚠ Saved in SolidWorks {savedIn}: newer than the team's {TeamYear}, so {TeamYear} users can't open it!"
+                    : $"Saved in SolidWorks {savedIn}");
+            }
+        }
+
         _card.Show(file.Name, badge.Text, badge.Colors.Back, badge.Colors.Fore, string.Join("\n", lines));
     }
 
@@ -354,7 +378,47 @@ internal sealed class VaultPane : UserControl
             }
             if (_snapshot.UpdatesAvailable > 0) lines.Add($"The vault has {_snapshot.UpdatesAvailable} new check-in(s). Click Get Latest.");
         }
+        if (NewerThanTeam)
+        {
+            lines.Insert(0, $"You're using SolidWorks {_runningYear}, but the team works in {TeamYear}. Files saved here can't be opened in {TeamYear}, " +
+                            $"so Check Out and Check In are turned off in this version. Open SolidWorks {TeamYear} to edit.");
+            if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
+        }
+        else if (TeamYear != null && _runningYear > 0 && _runningYear < TeamYear)
+        {
+            lines.Add($"Your SolidWorks ({_runningYear}) is older than the team's ({TeamYear}). Files saved in {TeamYear} won't open here.");
+            if (kind == NoticeKind.Info) kind = NoticeKind.Warning;
+        }
         _banner.Show(string.Join("\n", lines), kind);
+    }
+
+    private int? TeamYear => _vault?.Config.SolidWorksVersion;
+
+    private bool NewerThanTeam => TeamYear != null && _runningYear > TeamYear;
+
+    /// <summary>SolidWorks version that last saved the file, cached until the file changes.</summary>
+    private int? SavedInYear(string fullPath)
+    {
+        DateTime written;
+        try
+        {
+            written = File.GetLastWriteTimeUtc(fullPath);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+        if (_savedInCache.TryGetValue(fullPath, out var cached) && cached.Written == written) return cached.Year;
+        var year = _sw.SavedInYear(fullPath);
+        _savedInCache[fullPath] = (written, year);
+        return year;
+    }
+
+    private static bool IsSolidWorksFile(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".sldprt", StringComparison.OrdinalIgnoreCase) || ext.Equals(".sldasm", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".slddrw", StringComparison.OrdinalIgnoreCase);
     }
 
     private void SetStatus(string text) => _status.Text = text;
@@ -454,6 +518,21 @@ internal sealed class VaultPane : UserControl
         var targets = picker.SelectedPaths;
         var comment = picker.Comment;
         var keep = picker.KeepCheckedOut;
+
+        // Version guard: a file last saved in a newer SolidWorks than the team's can't be opened by the others.
+        if (TeamYear != null)
+        {
+            var tooNew = targets.Where(IsSolidWorksFile).Where(p => SavedInYear(p) > TeamYear).ToList();
+            if (tooNew.Count > 0)
+            {
+                MessageBox.Show(_sw.MainWindow,
+                    $"{PathList.Format(tooNew)} {(tooNew.Count == 1 ? "was" : "were")} last saved in a newer SolidWorks than the team's {TeamYear}, " +
+                    $"so teammates on {TeamYear} couldn't open {(tooNew.Count == 1 ? "it" : "them")}. Nothing was checked in.\n\n" +
+                    $"Fix: Undo Check Out to get the vault version back, then redo the change in SolidWorks {TeamYear}.",
+                    "Capstone PDM — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
 
         await RunAsync("Checking in…", async progress =>
         {

@@ -29,6 +29,13 @@ public sealed class VaultConfig
 
     public NotifySettings Notify { get; set; } = new NotifySettings();
 
+    /// <summary>
+    /// The SolidWorks version (year) everyone saves vault files in, e.g. 2024. Files saved in a newer
+    /// version can't be opened in an older one, so the add-in refuses check-ins of newer files and
+    /// turns off editing when run in a newer SolidWorks. Null means no check.
+    /// </summary>
+    public int? SolidWorksVersion { get; set; }
+
     public bool IsAdmin(string? gitHubLogin) =>
         !string.IsNullOrWhiteSpace(gitHubLogin) && Admins.Any(a => string.Equals(a, gitHubLogin, StringComparison.OrdinalIgnoreCase));
 

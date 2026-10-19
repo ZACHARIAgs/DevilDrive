@@ -74,6 +74,40 @@ internal sealed class SolidWorksSession
 
     public IModelDoc2? FindOpen(string path) => _sw.GetOpenDocumentByName(path) as IModelDoc2;
 
+    /// <summary>The running SolidWorks as a year, e.g. 2024 (revision 32.x).</summary>
+    public int RunningYear
+    {
+        get
+        {
+            var revision = _sw.RevisionNumber() ?? "";
+            var dot = revision.IndexOf('.');
+            return int.TryParse(dot > 0 ? revision.Substring(0, dot) : revision, out var major) ? major + 1992 : 0;
+        }
+    }
+
+    /// <summary>
+    /// The SolidWorks version (year) that last saved the file, read without opening it. VersionHistory
+    /// returns entries like "17000[2024/282]"; file version 17000 is SolidWorks 2024, 19000 is 2026.
+    /// </summary>
+    public int? SavedInYear(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            if (!(_sw.VersionHistory(path) is Array history) || history.Length == 0) return null;
+            var last = history.GetValue(history.Length - 1)?.ToString() ?? "";
+            var digits = new string(last.TakeWhile(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var fileVersion) ? FileVersionToYear(fileVersion) : null;
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write($"Couldn't read the SolidWorks version of {path}: {ex.Message}");
+            return null;
+        }
+    }
+
+    public static int? FileVersionToYear(int fileVersion) => fileVersion >= 8000 ? fileVersion / 1000 + 2007 : null;
+
     public static bool HasReferences(string path)
     {
         var ext = Path.GetExtension(path);

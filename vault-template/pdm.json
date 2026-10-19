@@ -3,6 +3,10 @@
   "vaultName": "Capstone Vault",
   "branch": "main",
 
+  // The SolidWorks version everyone saves vault files in. Files saved in a newer version can't be
+  // opened in an older one, so the add-in blocks check-ins of newer files. Use null for no check.
+  "solidWorksVersion": 2024,
+
   // Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.
   "discordWebhookUrl": "",
 

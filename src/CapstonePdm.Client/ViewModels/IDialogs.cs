@@ -33,7 +33,7 @@ public interface IDialogs
     void ShowError(PdmException error);
     void ShowMessage(string title, string message, bool isWarning);
     bool Confirm(string title, string message);
-    CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null);
+    CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null);
     SettingsRequest? AskSettings(string vaultPath, string? gitHubLogin);
     void ShowHistory(string relativePath);
 }

@@ -381,7 +381,11 @@ public sealed class MainViewModel : ViewModelBase
     private Task CheckInAsync()
     {
         var targets = CheckInTargets().Select(r => r.Path).ToList();
-        var request = _dialogs.AskCheckIn("Check In", "Check In", targets, "", allowKeepCheckedOut: true);
+        var team = _vault?.Config.SolidWorksVersion;
+        var footnote = team != null
+            ? $"Close the files in SolidWorks first. Only check in files saved in SolidWorks {team}: newer versions can't be opened by the team."
+            : null;
+        var request = _dialogs.AskCheckIn("Check In", "Check In", targets, "", allowKeepCheckedOut: true, footnote: footnote);
         if (request == null) return Task.CompletedTask;
         return RunAsync("Checking in…", async (vault, progress) =>
             Report(await vault.CheckInAsync(targets, request.Comment, request.KeepCheckedOut, progress), "Checked in"));

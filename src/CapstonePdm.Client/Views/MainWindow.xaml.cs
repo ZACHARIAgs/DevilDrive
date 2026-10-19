@@ -43,9 +43,9 @@ public partial class MainWindow : Window, IDialogs
     public bool Confirm(string title, string message) =>
         MessageBox.Show(this, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK;
 
-    public CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null)
+    public CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null)
     {
-        var dialog = new CheckInWindow(title, okText, files, defaultComment, allowKeepCheckedOut, prompt) { Owner = this };
+        var dialog = new CheckInWindow(title, okText, files, defaultComment, allowKeepCheckedOut, prompt, footnote) { Owner = this };
         return dialog.ShowDialog() == true ? new CheckInRequest(dialog.Comment, dialog.KeepCheckedOut) : null;
     }
 
