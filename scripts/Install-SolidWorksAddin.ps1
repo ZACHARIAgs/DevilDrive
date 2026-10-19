@@ -84,6 +84,10 @@ try {
         New-Item -ItemType Directory -Force $InstallDir | Out-Null
         Copy-Item (Join-Path $Source '*.dll') $InstallDir -Force
         Get-ChildItem $InstallDir | Unblock-File
+        # Only administrators (and Windows) may change the add-in files; everyone else can only read them.
+        # Otherwise another account on this PC could drop a DLL here that SolidWorks would load.
+        & icacls.exe $InstallDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /T /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
         & $RegAsm $Dll /codebase /nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "RegAsm failed (exit code $LASTEXITCODE)." }
         Write-Host "Capstone PDM add-in installed to $InstallDir."

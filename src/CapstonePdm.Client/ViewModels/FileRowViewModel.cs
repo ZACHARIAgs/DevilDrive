@@ -58,6 +58,7 @@ public sealed class FileRowViewModel : ViewModelBase
             if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
             if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
             if (File.NotDownloaded) text += " (not downloaded: right-click, Download)";
+            if (File.ChangedSinceDrawing.Count > 0) text += " (drawing may be out of date)";
             return text;
         }
     }

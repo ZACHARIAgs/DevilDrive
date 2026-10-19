@@ -120,6 +120,13 @@ public sealed class VaultFile
 
     /// <summary>Only a small placeholder is on this PC (its folder isn't in "only download my folders"). Download it before opening.</summary>
     public bool NotDownloaded { get; set; }
+
+    /// <summary>Drawings that show this part/assembly (from the index).</summary>
+    public IReadOnlyList<string> Drawings { get; set; } = Array.Empty<string>();
+    /// <summary>For a drawing: models checked in after the drawing's last check-in, so it may be out of date.</summary>
+    public IReadOnlyList<string> ChangedSinceDrawing { get; set; } = Array.Empty<string>();
+    /// <summary>For a part/assembly: its drawings that haven't been checked in since it changed.</summary>
+    public IReadOnlyList<string> StaleDrawings { get; set; } = Array.Empty<string>();
 }
 
 public sealed class VaultSnapshot

@@ -293,9 +293,46 @@ public sealed class VaultService : IVaultService
             });
         }
 
+        LinkDrawings(files);
         snapshot.Files = files;
         snapshot.RetrievedAt = DateTimeOffset.Now;
         return snapshot;
+    }
+
+    /// <summary>
+    /// Connects drawings with the models they show (from the index) and flags drawings that are older
+    /// than a model they show: the model was checked in after the drawing, so the drawing may need updating.
+    /// </summary>
+    private static void LinkDrawings(List<VaultFile> files)
+    {
+        var byPath = files.ToDictionary(f => f.RelativePath, f => f, StringComparer.OrdinalIgnoreCase);
+        var drawingsOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var staleOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var drawing in files.Where(f => f.RelativePath.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase) && f.Index != null))
+        {
+            var changed = new List<string>();
+            foreach (var model in drawing.Index!.References)
+            {
+                if (!byPath.TryGetValue(model, out var modelFile)) continue;
+                if (!drawingsOf.TryGetValue(model, out var list)) drawingsOf[model] = list = new List<string>();
+                list.Add(drawing.RelativePath);
+
+                if (drawing.LatestVersion != null && modelFile.LatestVersion != null && modelFile.LatestVersion.Date > drawing.LatestVersion.Date)
+                {
+                    changed.Add(model);
+                    if (!staleOf.TryGetValue(model, out var stale)) staleOf[model] = stale = new List<string>();
+                    stale.Add(drawing.RelativePath);
+                }
+            }
+            drawing.ChangedSinceDrawing = changed;
+        }
+
+        foreach (var file in files)
+        {
+            if (drawingsOf.TryGetValue(file.RelativePath, out var drawings)) file.Drawings = drawings;
+            if (staleOf.TryGetValue(file.RelativePath, out var stale)) file.StaleDrawings = stale;
+        }
     }
 
     private static bool IsHidden(string path) =>

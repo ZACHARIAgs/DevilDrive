@@ -375,6 +375,8 @@ internal sealed class VaultPane : UserControl
             .Where(s => !string.IsNullOrWhiteSpace(s)));
         if (identity.Length > 0) lines.Insert(0, identity);
         if (file.UsedIn.Count > 0) lines.Add("Used in: " + PathList.Format(file.UsedIn, 3));
+        if (file.ChangedSinceDrawing.Count > 0) lines.Add($"\u26A0 May be out of date: {PathList.Format(file.ChangedSinceDrawing)} changed after this drawing was last checked in.");
+        if (file.StaleDrawings.Count > 0) lines.Add($"\u26A0 {PathList.Format(file.StaleDrawings)} not updated since this changed.");
         if (index != null && index.ExternalReferences.Count > 0)
         {
             lines.Add($"\u26A0 References {index.ExternalReferences.Count} file(s) outside the vault: teammates won't have them.");
@@ -488,9 +490,25 @@ internal sealed class VaultPane : UserControl
 
         var targets = new List<string> { top };
         var references = _sw.GetReferences(top).Where(IsInVault).ToList();
-        if (references.Count > 0)
+        // Its drawings too: changing a part usually means updating the drawing.
+        var drawings = (FileAt(top)?.Drawings ?? Array.Empty<string>()).Select(_vault.ToFullPath).ToList();
+        if (references.Count > 0 || drawings.Count > 0)
         {
             var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
+            foreach (var drawing in drawings.OrderBy(Path.GetFileName))
+            {
+                var file = FileAt(drawing);
+                if (file == null) continue;
+                var free = file.State == FileState.Available;
+                var label = Path.GetFileName(drawing) + (file.State switch
+                {
+                    FileState.CheckedOutByOther => $"  (drawing, checked out by {file.CheckedOutBy})",
+                    FileState.CheckedOutByMe => "  (drawing, already checked out to you)",
+                    FileState.Frozen => "  (drawing, frozen)",
+                    _ => file.ChangedSinceDrawing.Count > 0 ? "  (drawing, may be out of date)" : "  (drawing)",
+                });
+                items.Add(new PickItem(drawing, label, false, !free));
+            }
             foreach (var path in references.OrderBy(Path.GetFileName))
             {
                 var file = FileAt(path);
@@ -508,7 +526,7 @@ internal sealed class VaultPane : UserControl
             if (items.Count > 1)
             {
                 using var picker = new FilePickerForm("Check Out",
-                    "Check out this document only, or also the files it references:", items, "Check Out", askComment: false, askKeep: false);
+                    "Check out this document only, or also its drawings and the files it references:", items, "Check Out", askComment: false, askKeep: false);
                 if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
                 targets = picker.SelectedPaths;
             }

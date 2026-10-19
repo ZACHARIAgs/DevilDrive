@@ -239,6 +239,15 @@ public sealed class MainViewModel : ViewModelBase
             facts.Add(new PropertyRow("Saved in", $"SolidWorks {index.SavedIn}"));
             if (team != null && index.SavedIn > team) warnings.Add($"Saved in SolidWorks {index.SavedIn}, newer than the team's {team}: teammates on {team} can't open it.");
         }
+        if (f.ChangedSinceDrawing.Count > 0)
+        {
+            warnings.Add($"This drawing may be out of date: {PathList.Format(f.ChangedSinceDrawing)} changed after it was last checked in.");
+        }
+        if (f.StaleDrawings.Count > 0)
+        {
+            warnings.Add($"{PathList.Format(f.StaleDrawings)} {(f.StaleDrawings.Count == 1 ? "hasn't" : "haven't")} been checked in since this file changed. Update the drawing?");
+        }
+        if (f.Drawings.Count > 0) facts.Add(new PropertyRow("Drawings", string.Join(", ", f.Drawings.Select(PathList.Name))));
         if (index != null && index.ExternalReferences.Count > 0)
         {
             warnings.Add("References files outside the vault, which teammates won't have:\n" + string.Join("\n", index.ExternalReferences));
@@ -600,6 +609,19 @@ public sealed class MainViewModel : ViewModelBase
     private Task CheckOutAsync()
     {
         var targets = CheckOutTargets().Select(r => r.Path).ToList();
+
+        // Changing a part usually means updating its drawing too: offer the drawings that are free.
+        var drawings = CheckOutTargets().SelectMany(r => r.File.Drawings).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(d => !targets.Contains(d, StringComparer.OrdinalIgnoreCase))
+            .Where(d => _rows.TryGetValue(d, out var row) && row.File.State == FileState.Available)
+            .ToList();
+        if (drawings.Count > 0 && _dialogs.Confirm("Check Out",
+                $"Also check out {(drawings.Count == 1 ? "its drawing" : "their drawings")}?\n\n{string.Join("\n", drawings.Select(d => "\u2022 " + d))}\n\n" +
+                "Changes to a part usually need the drawing updated too. Click Cancel to check out only what you selected."))
+        {
+            targets.AddRange(drawings);
+        }
+
         return RunAsync("Checking out…", async (vault, progress) =>
             Report(await vault.CheckOutAsync(targets, progress), "Checked out"));
     }

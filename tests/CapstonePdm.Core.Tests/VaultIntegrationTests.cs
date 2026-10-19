@@ -465,6 +465,34 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Drawing_IsFlaggedOutOfDate_WhenItsPartChangesLater()
+    {
+        // A drawing of frame.sldprt, recorded in the index.
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm", "index"));
+        Write(_alice, "frame.slddrw", "drawing v1");
+        Write(_alice, ".pdm/index/frame.slddrw.json", "{ \"references\": [ \"frame.sldprt\" ] }");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "Drawing of the frame");
+        Git(_alice, "push", "-q");
+
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        var before = await bob.GetSnapshotAsync(contactVault: false);
+        Assert.Equal(new[] { "frame.slddrw" }, before.Files.Single(f => f.RelativePath == "frame.sldprt").Drawings);
+        Assert.Empty(before.Files.Single(f => f.RelativePath == "frame.slddrw").ChangedSinceDrawing);
+
+        // The part changes afterwards; the drawing doesn't.
+        Write(_alice, "frame.sldprt", "v2");
+        Git(_alice, "commit", "-qam", "Thicker frame", "--date", DateTime.Now.AddDays(1).ToString("s"));
+        Git(_alice, "push", "-q");
+        await bob.GetLatestAsync();
+        var after = await bob.GetSnapshotAsync(contactVault: false);
+
+        Assert.Equal(new[] { "frame.sldprt" }, after.Files.Single(f => f.RelativePath == "frame.slddrw").ChangedSinceDrawing);
+        Assert.Equal(new[] { "frame.slddrw" }, after.Files.Single(f => f.RelativePath == "frame.sldprt").StaleDrawings);
+    }
+
+    [Fact]
     public async Task GitHubRepoAdmin_IsAlwaysAnAdmin()
     {
         var owner = await Open(_bob, "owner-gh", repoAdmin: true);
