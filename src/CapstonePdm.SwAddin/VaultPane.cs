@@ -135,7 +135,6 @@ internal sealed class VaultPane : UserControl
             _snapshot = await _vault.GetSnapshotAsync(contactVault);
             if (contactVault) _lastVaultContact = DateTime.Now;
             _filesByFullPath = _snapshot.Files.ToDictionary(f => _vault.ToFullPath(f.RelativePath), f => f, StringComparer.OrdinalIgnoreCase);
-            UpdateView();
             WarnIfCheckedOutByOther();
         }
         catch (PdmException ex)
@@ -149,6 +148,8 @@ internal sealed class VaultPane : UserControl
         finally
         {
             _busy = false;
+            // Buttons are enabled only when not busy, so redraw after clearing the flag.
+            UpdateView();
         }
     }
 
