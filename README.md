@@ -37,6 +37,9 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material, ...), what it **contains**, and **where it's used**. Check where-used before changing a part, so you know which assemblies it affects.
 * **Search** finds files by name, part number, description or any other SolidWorks property.
 * **Milestones…** lets you view the whole vault as it was at a milestone (e.g. "Design Review 1"). The vault folder switches to those versions, read-only, so assemblies open with the matching parts. Click **Return to Latest** when you're done.
+* **Notify me when it's free:** right-click a file someone else has checked out and choose **Notify Me When It's Free** (or use the button in the SolidWorks pane). You get a message as soon as it's checked in.
+* **Drawings follow their parts:** a drawing shows "may be out of date" when its part or assembly was checked in after the drawing was. Checking out a part offers its drawings too, so you can update them together.
+* **Submit for Review…:** when a part, assembly or drawing is ready to release, select it and submit it with a note. Nobody can change it while it's in review. An admin approves it (it's frozen with the next revision letter) or rejects it with a reason. You can **Withdraw from Review** to keep working on it.
 * **History** shows every version of a file. **Restore This Version** checks the file out, puts the old version back and checks it in as a new version. Nothing is lost, and the newer versions stay in the history.
 
 ### Saving the vault's storage
@@ -62,7 +65,10 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
 * **Check In…**: saves, closes, checks in and reopens the files for you, so you don't have to close them yourself. New parts used by an assembly are pre-ticked, so teammates never get missing references.
 * **Undo Check Out**, **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
 * **Rename / Move**: the safe way to rename or move a file. It finds every assembly and drawing that uses the file, updates their references, and checks everything in together.
-* The card also shows the file's part number, which SolidWorks version saved it, and where it's used.
+* **Submit for review**, and for admins **Approve & release** / **Reject**: see *Review before release* below. Approving a drawing here also saves its PDF.
+* **Export BOM (Excel)**: for an assembly, saves a parts list as a CSV file that opens in Excel: every part at every level with its quantity, part number, description, material and released revision. Suppressed and "excluded from BOM" parts are left out.
+* **Notify me when it's free**: for a file someone else has checked out.
+* The card also shows the file's part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
 * **Open Capstone PDM**: opens the full app (vault view, history, restore).
 
 When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\CapstonePDM\addin.log` to an admin.
@@ -77,6 +83,7 @@ When you open a file someone else has checked out, a warning tells you who has i
 | 🟠 | Edited WITHOUT check-out! | You changed a file you hadn't checked out. Check it out now (your edits are kept), or Undo Check Out. |
 | 🟠 | Edited (check in to save) | A non-CAD file (e.g. a spreadsheet) with changes. Just check it in. |
 | 🟣 | New, not in vault yet | Only on your PC. Check it in to add it. |
+| 🟩 | In review (submitted by *name*) | Waiting for an admin to approve or reject it. Nobody can change it meanwhile. |
 | ⚫ | Frozen by *name* | An admin froze it (e.g. released for production). Nobody can check it out or change it. Ask an admin if it needs to change. |
 | ⚪ | …newer version in vault | Click Get Latest. |
 
@@ -113,7 +120,6 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 
 1. Create a **private, empty** GitHub repo (no README). Add each teammate as a collaborator with **Write** access.
 2. Edit `vault-template/pdm.json`:
-   - `admins`: GitHub usernames with admin rights (break locks, freeze, request check-ins, milestones). People GitHub lists as **admins or maintainers of the repo** are always admins too,
    - `team`: GitHub username → real name (shown in the app and Discord),
    - `discordWebhookUrl`: Discord → Server Settings → Integrations → Webhooks → New Webhook → Copy URL.
 3. Run once, after installing Git (e.g. by running Setup.cmd yourself):
@@ -123,26 +129,35 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 4. In `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` to the repo URL.
 5. Build the teammate zip and share it (see *Publishing the app* below).
 
-`pdm.json` lives in the vault, so you can change admins, names or the webhook later. Edit it in `C:\CapstoneVault` and check it in. Everyone picks up the change on their next Get Latest.
+`pdm.json` lives in the vault, so you can change names or the webhook later. Edit it in `C:\CapstoneVault` and check it in. Everyone picks up the change on their next Get Latest.
 
 ### Who's an admin (and why typing a name doesn't work)
 
-Capstone PDM asks GitHub which account each PC is signed in as, using the sign-in Git already saved, so nobody can claim to be someone else by typing a name. Settings shows the verified account. If a PC is offline, admin buttons stay hidden until it can check with GitHub.
+**Admins are the people GitHub lists as Admin or Maintain on the vault repo. Nothing else counts:** there's no admin list in `pdm.json` anyone could edit. Capstone PDM asks GitHub which account each PC is signed in as, using the sign-in Git already saved, so nobody can claim to be someone else by typing a name, and the vault guard checks the same GitHub roles. Settings shows the verified account. If a PC is offline, admin buttons stay hidden until it can check with GitHub.
+
+On a **personal** GitHub repo only the owner can be Admin; collaborators can only get Write. To have more admins later, move the vault to a free GitHub **organization** (repo **Settings → Transfer**), then give those people the Admin or Maintain role. Local folders keep working: GitHub redirects the old URL.
 
 ### Stopping people from getting around the app with Git commands
 
 The app's rules run on each PC, so someone typing raw Git commands could skip them. These steps move the protection onto GitHub, where nobody but you can change it:
 
-1. **Install the vault guard.** In the app, click **Update Vault Setup** (it appears for admins whenever the guard is missing or was changed). This adds a GitHub Actions check (`.github/workflows/vault-guard.yml`) that runs after every push. It uses GitHub's record of who pushed and undoes any push where a non-admin changed `pdm.json`, the frozen list, `.github`, a frozen file, or someone else's check-in request. It posts to Discord when it does. It also warns about force pushes and files saved in a newer SolidWorks than the team's. Pushes it checks show under the repo's **Actions** tab.
+1. **Install the vault guard.** In the app, click **Update Vault Setup** (it appears for admins whenever the guard is missing or was changed). This adds a GitHub Actions check (`.github/workflows/vault-guard.yml`) that runs after every push. It uses GitHub's record of who pushed and undoes any push where a non-admin changed `pdm.json`, the frozen list, `.github`, a frozen file, a file someone else has checked out, a file in review, someone else's check-in request or review, or pushed a milestone tag. It posts to Discord when it does. It also warns about force pushes and files saved in a newer SolidWorks than the team's. Pushes it checks show under the repo's **Actions** tab.
 2. **Repo roles.** On GitHub, go to **Settings**, then **Collaborators**. Give teammates **Write** and admins **Admin** (or Maintain).
 3. **Protect `main`.** On GitHub, go to **Settings**, then **Branches**, then **Add rule** for `main`. Leave **Allow force pushes** and **Allow deletions** off, so history can't be rewritten or erased. On a private repo this needs GitHub Pro, which is free with the GitHub Student Developer Pack.
 4. **Test file locks once with two accounts.** Have a teammate check out a file, then try to push a change to it from your account with Git. If GitHub accepts it, the lock was only enforced by the app; the vault guard still catches frozen files but not ordinary check-outs.
 
-The guard is also why the app warns admins if `.github` is changed: it's the one thing a determined person could tamper with, and **Update Vault Setup** puts it back.
+The guard is also why the app warns admins if `.github` is changed: it's the one thing a determined person could tamper with, and **Update Vault Setup** puts it back. If the guard is removed or edited, the admin's app also **posts an alert to Discord** (once per change).
+
+**Security notes**
+
+* **Forced unlocks.** GitHub lets anyone with Write access force-unlock a file with raw Git (`git lfs unlock --force`). The app only shows Break Lock to admins, but it can't stop the raw command. What it can do: the vault guard undoes a push that changes a file someone else had checked out, and every version stays in the history. If a lock disappears unexpectedly, look at the repo's **Actions** tab and Discord.
+* **Keep the Discord webhook URL private.** Anyone with it can post messages as the bot. It's stored in `pdm.json`, so everyone with vault access can read it; don't paste it anywhere public. If it leaks, delete the webhook in Discord, make a new one and update `pdm.json`.
+* **The SolidWorks add-in folder** (`C:\ProgramData\CapstonePDM\SolidWorksAddin`) can only be changed by Windows administrators, so another account on the PC can't swap in a DLL that SolidWorks would load.
+* **Updates are checked** against the SHA-256 checksums published with each release before they're installed.
 
 ### Breaking a stale lock
 
-Select the file, then click **Break Lock**. The button only appears for users listed in `admins`. The team is told in Discord. The person who had it loses their check-out. Any changes they hadn't checked in stay on their PC only, and they'll see a conflict or "edited without check-out" state.
+Select the file, then click **Break Lock**. The button only appears for admins. The team is told in Discord. The person who had it loses their check-out. Any changes they hadn't checked in stay on their PC only, and they'll see a conflict or "edited without check-out" state.
 
 GitHub decides whether a forced unlock is allowed. If it's refused, your GitHub role on the repo may need to be raised (Maintain or Admin).
 
@@ -150,14 +165,14 @@ GitHub decides whether a forced unlock is allowed. If it's refused, your GitHub 
 
 Someone has a file checked out and isn't around, but a teammate needs it? Select the file and click **Request Check-In** (in the app or the SolidWorks pane), and add a short note.
 
-* That person's own Capstone PDM, either the app or the SolidWorks add-in, checks in **their last saved version** and releases the file automatically. Both contact the vault every minute, so if their PC is on it usually happens within a minute. They get a message explaining what happened, and the team sees it in Discord.
+* That person's own Capstone PDM, either the app or the SolidWorks add-in, checks in **their last saved version** and releases the file automatically. It waits about **3 minutes** after first seeing the request, so they get a chance to save their work, and the file shows "check-in requested" in the meantime. If their PC is on it usually happens within about 5 minutes. They get a message explaining what happened, and the team sees it in Discord.
 * Changes they hadn't **saved** in SolidWorks aren't included, because those aren't on disk.
 * If their PC is off, the request waits until they next open Capstone PDM or SolidWorks. If you can't wait, **Break Lock** releases the file right away, but their saved work then stays on their PC only.
 * The file shows "check-in requested by *name*" until it's done.
 
 ### Freezing files (released for production)
 
-Select files in the app (or open one in SolidWorks) and click **Freeze…**, then give a reason such as "Released for production, rev A". Only admins listed in `pdm.json` see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
+Select files in the app (or open one in SolidWorks) and click **Freeze…**, then give a reason such as "Released for production, rev A". Only admins see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
 
 * A frozen file shows **Frozen by *name*** with the reason, for everyone, in the app and in SolidWorks. Opening one in SolidWorks shows a warning.
 * **Nobody can check it out**, admins included. Admins click **Unfreeze** first if it really has to change, which also tells the team in Discord.
@@ -180,6 +195,16 @@ The desktop app reminds people at check-in, but only SolidWorks can read a file'
 
 The SolidWorks add-in records each file's custom properties, references and saved-in version whenever it's checked in from SolidWorks. Files added before the add-in, or checked in from the desktop app, aren't recorded until you click **Rebuild Index** in the SolidWorks pane, which reads every SolidWorks file in the vault (it takes a few minutes). The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
 
+### Review before release
+
+Teammates submit finished files with **Submit for Review…** (app or SolidWorks pane) and a note. Admins see a banner with how many files are waiting; filter the vault view by **In review**.
+
+* **Approve & Release…** freezes the files with the next revision letter, like Freeze. Approve drawings from the SolidWorks pane to also save and freeze their PDFs.
+* **Reject…** sends them back with your reason (shown in Discord). The submitter can edit them again.
+* While a file is in review, its submitter keeps the lock, so nobody (the submitter included) can change it. The list lives in `.pdm/reviews.json`, and the vault guard stops non-admins from editing other people's reviews or faking approvals.
+
+Freeze still works directly, for when you don't need the review step.
+
 ### Milestones
 
 Click **Milestones…**, type a name such as "Design Review 1" and an optional description, then click **Create**. This labels the vault exactly as it is now; only admins can create milestones. Everyone can view one later. The team gets a Discord notice.
@@ -201,7 +226,7 @@ The PDM itself works with any version, and the add-in supports SolidWorks 2020 a
 The tool isn't tied to the capstone. For a new team:
 
 1. Create a new **private, empty** GitHub repo, e.g. `club-vault`, and add that team as collaborators.
-2. Edit `vault-template/pdm.json` (admins, names, Discord webhook, `solidWorksVersion`), then run:
+2. Edit `vault-template/pdm.json` (names, Discord webhook, `solidWorksVersion`), then run:
    ```powershell
    .\scripts\Initialize-Vault.ps1 -RepoUrl https://github.com/YOU/club-vault.git -VaultPath C:\ClubVault
    ```
@@ -209,7 +234,9 @@ The tool isn't tied to the capstone. For a new team:
 3. In `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` and `$DefaultVaultPath` to the new repo and folder. Then run `scripts\Publish-Client.ps1` and share that zip with the club.
 4. Click **Update Vault Setup** once in the app to turn on the vault guard.
 
-If you're in both teams, keep both vaults on your PC and switch with **Settings → Vault folder**. The SolidWorks add-in and the File Explorer menu follow the switch. Each vault has its own admins, frozen files, milestones and Discord channel.
+If you're in both teams, keep both vaults on your PC and switch with **Settings → Vault folder**. The SolidWorks add-in and the File Explorer menu follow the switch. Each vault has its own admins (from that repo's GitHub roles), frozen files, milestones and Discord channel.
+
+If the club should get app updates from a different code repo (for example your own fork), change `<UpdateRepo>` in `Directory.Build.props` before building.
 
 ### Storage meter
 
@@ -230,13 +257,14 @@ src/CapstonePdm.Core/     netstandard2.0. All vault logic, no UI. Reused by the 
   Git/                    GitRunner (runs git.exe), GitErrorClassifier (stderr → typed errors)
   Vault/                  VaultService (all PDM commands), models, Git output parsers
   Notifications/          Discord webhook
+  Updates/                automatic updates from GitHub Releases (SHA-256 checked)
   Config/                 pdm.json (team) and settings.json (per PC)
   Errors/                 PdmException and subclasses, with user-facing messages
 src/CapstonePdm.Client/   WPF app (.NET 8), MVVM-lite
 src/CapstonePdm.SwAddin/  SolidWorks add-in (.NET Framework 4.8): task pane, reference-aware check-out/in
 tests/CapstonePdm.Core.Tests/  xUnit: parsers, error classification, and integration tests against real Git
 vault-template/           .gitattributes, .gitignore, pdm.json for a new vault
-scripts/                  Setup (teammates), Initialize-Vault (admin), Publish-Client (build the zip)
+scripts/                  Setup (teammates), Initialize-Vault (admin), Publish-Client (build the zip), Release-Client (publish an update)
 ```
 
 ### Build, test, run
@@ -257,7 +285,16 @@ The integration tests use a local bare repo in place of GitHub. A local remote h
 .\scripts\Publish-Client.ps1
 ```
 
-This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-file `CapstonePDM.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-CapstonePdm.ps1`. Attach it to a GitHub Release of this repo or pin it in Discord.
+This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-file `CapstonePDM.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-CapstonePdm.ps1`, plus the update files `CapstonePDM.exe`, `CapstonePDM-SolidWorksAddin.zip` and `SHA256SUMS`. Setup prints the installed exe's SHA-256 so it can be compared with the release.
+
+### Automatic updates
+
+The app checks this repo's **GitHub Releases** each time it starts. When there's a newer version it asks, downloads it (and the SolidWorks add-in, if installed; Windows asks for permission for that part), **checks every file against the release's `SHA256SUMS`**, swaps the exe and restarts. To publish a version:
+
+1. Raise `<Version>` in `Directory.Build.props`, commit and push.
+2. Run `.\scripts\Release-Client.ps1 -Notes "What changed"`. It builds everything and creates release `v<Version>` with the files attached, using your saved GitHub sign-in.
+
+**The code repo is private**, so teammates' apps can only download updates if they have **Read** access to it (add them as collaborators with Read), or if you make the code repo public. The code contains no passwords or keys; the vault stays private either way. The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
 
 ### How the commands map to Git
 
