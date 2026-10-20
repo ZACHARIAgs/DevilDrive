@@ -471,7 +471,7 @@ public sealed class MainViewModel : ViewModelBase
             _vault = null;
             Files.Clear();
             _rows.Clear();
-            SetBanner("No vault on this PC yet. Click Vaults\u2026 to find your team's vault on GitHub, or to create a new team vault.", InfoBrush);
+            SetBanner("No vault on this PC yet. Click Vaults to find your team's vault on GitHub, or to create a new team vault.", InfoBrush);
             StatusText = "No vault open";
             OnPropertyChanged(nameof(WindowTitle));
             return;

@@ -67,7 +67,7 @@ public static class VaultInvites
             $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (Jarvis, for our SolidWorks files).\n\n" +
             $"1. Accept the GitHub invite: https://github.com/{repoFullName}/invitations (it's also in your email). Sign in to GitHub first.\n" +
             $"2. {install}\n" +
-            "3. Open Jarvis, click Vaults\u2026 then \"Find my vaults\", pick " + vaultName + " and click \"Download and open\".\n\n" +
+            "3. Open Jarvis, click Vaults, then \"Find my vaults\", pick " + vaultName + " and click \"Download and open\".\n\n" +
             $"The vault goes to {localPath} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.";
     }
 

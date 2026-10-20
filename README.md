@@ -36,7 +36,7 @@ The same setup zip works for every team: which vault you get depends only on whi
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material, ...), what it **contains**, and **where it's used**. Check where-used before changing a part, so you know which assemblies it affects.
 * **Search** finds files by name, part number, description or any other SolidWorks property.
-* **Milestones…** lets you view the whole vault as it was at a milestone (e.g. "Design Review 1"). The vault folder switches to those versions, read-only, so assemblies open with the matching parts. Click **Return to Latest** when you're done.
+* **Milestones** lets you view the whole vault as it was at a milestone (e.g. "Design Review 1"). The vault folder switches to those versions, read-only, so assemblies open with the matching parts. Click **Return to Latest** when you're done.
 * **Notify me when it's free:** right-click a file someone else has checked out and choose **Notify Me When It's Free** (or use the button in the SolidWorks pane). You get a message as soon as it's checked in.
 * **Drawings follow their parts:** a drawing shows "may be out of date" when its part or assembly was checked in after the drawing was. Checking out a part offers its drawings too, so you can update them together.
 * **Submit for Review…:** when a part, assembly or drawing is ready to release, select it and submit it with a note. Nobody can change it while it's in review. An admin approves it (it's frozen with the next revision letter) or rejects it with a reason. You can **Withdraw from Review** to keep working on it.
@@ -53,7 +53,7 @@ Other ways to save space: turn off *Save tessellation data* (Tools → Options �
 
 ### From File Explorer
 
-Right-click a file inside the vault and choose **Jarvis**. On Windows 11 it's under **Show more options** (or Shift+right-click), unless you tick **Settings → File Explorer → Show it directly**, which switches your PC to Windows' classic full right-click menu (untick it to go back). From there you can **Check Out**, **Check In…**, **Undo Check Out**, **Download**, or **Show in Jarvis**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
+Right-click a file inside the vault and choose **Jarvis**. On Windows 11 it's under **Show more options** (or Shift+right-click), unless you tick **Settings → File Explorer → Show it directly**, which switches your PC to Windows' classic full right-click menu (untick it to go back). From there you can **Check Out**, **Check In**, **Undo Check Out**, **Download**, or **Show in Jarvis**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
 
 **3D preview pane:** turn on File Explorer's preview pane (**Alt+P**, or View → Details pane/Preview pane) and click a part or assembly in a vault: it shows the 3D model, and you can drag to rotate and scroll to zoom. Files without a 3D preview yet, and SolidWorks files outside your vaults, show the usual SolidWorks picture. Turn it off with **Settings → File Explorer → Rotatable 3D model in the preview pane**.
 
@@ -135,14 +135,14 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 All in the app, no scripts or GitHub settings pages:
 
 1. Install Jarvis (Setup.cmd) and open it. The welcome screen signs you in to GitHub.
-2. Click **New team vault…** (on the welcome screen, or **Vaults…** → **New team vault…**). Enter:
+2. Click **New team vault…** (on the welcome screen, or **Vaults** → **New team vault…**). Enter:
    - the **vault name** (e.g. "Formula SAE Vault"),
    - the **GitHub owner**: your account, or an organization you can create repos in (with an organization, several people can be admins),
    - the **SolidWorks version** everyone saves in (the oldest one on the team; default 2024),
    - the **vault folder**, the same on every PC (e.g. `C:\ClubVault`; keep it outside OneDrive).
    
    The app creates a **private** GitHub repo, puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
-3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults…** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. Then click **Copy welcome message** and send it on Discord or by email: accept the invite, install Jarvis from the release link, then **Vaults → Find my vaults**.
+3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. Then click **Copy welcome message** and send it on Discord or by email: accept the invite, install Jarvis from the release link, then **Vaults → Find my vaults**.
 
    The Team window also shows everyone who has access, invitations not accepted yet (**Cancel invite**; GitHub invitations expire after 7 days, so add them again if needed), and **Remove** for people who leave. Anyone on the team can see the list; only the repo's **Admin** role can add or remove people.
 4. Optionally edit `pdm.json` in the vault and check it in:
@@ -194,7 +194,7 @@ Someone has a file checked out and isn't around, but a teammate needs it? Select
 
 ### Freezing files (released for production)
 
-Select files in the app (or open one in SolidWorks) and click **Freeze…**, then give a reason such as "Released for production, rev A". Only admins see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
+Select files in the app (or open one in SolidWorks) and click **Freeze**, then give a reason such as "Released for production, rev A". Only admins see Freeze and Unfreeze. In SolidWorks you can freeze an assembly's parts at the same time.
 
 * A frozen file shows **Frozen by *name*** with the reason, for everyone, in the app and in SolidWorks. Opening one in SolidWorks shows a warning.
 * **Nobody can check it out**, admins included. Admins click **Unfreeze** first if it really has to change, which also tells the team in Discord.
@@ -229,7 +229,7 @@ Freeze still works directly, for when you don't need the review step.
 
 ### Milestones
 
-Click **Milestones…**, type a name such as "Design Review 1" and an optional description, then click **Create**. This labels the vault exactly as it is now; only admins can create milestones. Everyone can view one later. The team gets a Discord notice.
+Click **Milestones**, type a name such as "Design Review 1" and an optional description, then click **Create**. This labels the vault exactly as it is now; only admins can create milestones. Everyone can view one later. The team gets a Discord notice.
 
 ### Revisions and drawing PDFs
 
@@ -247,9 +247,9 @@ The PDM itself works with any version, and the add-in supports SolidWorks 2020 a
 
 The tool isn't tied to the capstone, and nothing in the setup zip names a team. For a new team (a club, another class):
 
-1. The team lead clicks **Vaults…** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
+1. The team lead clicks **Vaults** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
 2. Click **Team**, add your teammates' GitHub usernames, and send them the welcome message.
-3. Members who already have Jarvis: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `Jarvis-Setup.zip` and the welcome screen takes them there.
+3. Members who already have Jarvis: **Vaults** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `Jarvis-Setup.zip` and the welcome screen takes them there.
 
 The vault guard is included from the start. `Setup-Jarvis.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
 
@@ -257,7 +257,7 @@ The vault guard is included from the start. `Setup-Jarvis.ps1 -RepoUrl <url> -Va
 
 One install of Jarvis works with every group you're in; each group has its own vault (repo and folder).
 
-* **Add a group's vault:** click **Vaults…** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
+* **Add a group's vault:** click **Vaults** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
 * **Switch** with the **Vault** dropdown in the app.
 * **In SolidWorks you don't switch at all:** the pane works in whichever vault the open file is in, so you can have a capstone assembly and a club part open and the pane follows the active window. Its header shows the vault's name.
 * The **File Explorer** menu works in every vault in your list.
