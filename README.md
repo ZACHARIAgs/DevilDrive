@@ -320,7 +320,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 1. Raise `<Version>` in `Directory.Build.props`, commit and push.
 2. Run `.\scripts\Release-Client.ps1 -Notes "What changed"`. It builds everything and creates release `v<Version>` with the files attached, using your saved GitHub sign-in.
 
-**The code repo is private**, so teammates' apps can only download updates (and the install link in invite messages only works) if they have **Read** access to it (add them as collaborators with Read), or if you make the code repo public. The code contains no passwords or keys; the vault stays private either way. The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
+**The code repo is public**, so anyone can download the app from its Releases page (the install link in invite messages) and every copy can update itself without GitHub access to it. The code contains no passwords or keys, and each team's vault stays private. (A fork kept private works too, but then teammates need **Read** access to it for installs and updates.) The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
 
 ### How the commands map to Git
 
