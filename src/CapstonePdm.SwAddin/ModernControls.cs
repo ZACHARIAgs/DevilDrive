@@ -26,6 +26,8 @@ internal static class Theme
     public static readonly Font Strong = new Font("Segoe UI Semibold", 9.5f);
     public static readonly Font Title = new Font("Segoe UI Semibold", 13f);
     public static readonly Font Glyph = new Font("Segoe MDL2 Assets", 10f);
+    public static readonly Font SmallGlyph = new Font("Segoe MDL2 Assets", 7.5f);
+    public static readonly Font SmallBold = new Font("Segoe UI Semibold", 8.25f);
 
     private static float _scale = 1f;
 

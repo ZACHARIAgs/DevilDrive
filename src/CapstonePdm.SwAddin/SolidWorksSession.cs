@@ -136,6 +136,113 @@ internal sealed class SolidWorksSession
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// What an open document uses, for the "files in use" tree: an assembly's component tree (every
+    /// instance, all levels; suppressed ones without their contents), or the models a drawing shows.
+    /// A part uses nothing. Call on the main thread.
+    /// </summary>
+    public List<RawComponent> GetFilesInUse(IModelDoc2 doc)
+    {
+        var path = doc.GetPathName() ?? "";
+        switch ((swDocumentTypes_e)doc.GetType())
+        {
+            case swDocumentTypes_e.swDocASSEMBLY:
+                return AssemblyComponents(doc, path);
+            case swDocumentTypes_e.swDocDRAWING:
+                return path.Length == 0
+                    ? new List<RawComponent>()
+                    : GetReferences(path, allLevels: false).Select(r => new RawComponent { Path = r }).ToList();
+            default:
+                return new List<RawComponent>();
+        }
+    }
+
+    /// <summary>
+    /// An assembly's component instances. Tries the component tree first; if SolidWorks hands back
+    /// nothing (components not loaded yet, lightweight or Large Design Review), falls back to the flat
+    /// component list, then to the files the assembly references (read from the file, no loading needed).
+    /// </summary>
+    private List<RawComponent> AssemblyComponents(IModelDoc2 doc, string path)
+    {
+        var assembly = doc as IAssemblyDoc;
+        var count = ComponentCount(doc);
+        var root = doc.ConfigurationManager?.ActiveConfiguration?.GetRootComponent3(true);
+        var fromTree = root == null ? new List<RawComponent>() : ChildrenOf(root);
+        var fromList = fromTree.Count == 0 && assembly != null ? FromComponentList(assembly) : new List<RawComponent>();
+        var fromFile = fromTree.Count == 0 && fromList.Count == 0 && path.Length > 0
+            ? GetReferences(path, allLevels: false).Select(r => new RawComponent { Path = r }).ToList()
+            : new List<RawComponent>();
+        AddinLog.Write($"Files in use for {Path.GetFileName(path)}: componentCount={count}, root={(root != null)}, " +
+                       $"tree={fromTree.Count}, list={fromList.Count}, references={fromFile.Count}, viewOnly={SafeViewOnly(doc)}");
+        return fromTree.Count > 0 ? fromTree : fromList.Count > 0 ? fromList : fromFile;
+    }
+
+    private static bool SafeViewOnly(IModelDoc2 doc)
+    {
+        try
+        {
+            return doc.IsOpenedViewOnly();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Builds the instance tree from IAssemblyDoc.GetComponents, using each component's parent.</summary>
+    private static List<RawComponent> FromComponentList(IAssemblyDoc assembly)
+    {
+        if (!(assembly.GetComponents(false) is Array all)) return new List<RawComponent>();
+        var byComponent = new Dictionary<string, (RawComponent Raw, string? Parent)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in all)
+        {
+            if (!(item is IComponent2 c)) continue;
+            var name = c.Name2 ?? "";
+            var raw = new RawComponent { Path = c.GetPathName() ?? "", InstanceName = name, Configuration = c.ReferencedConfiguration ?? "", IsSuppressed = c.IsSuppressed() };
+            byComponent[name] = (raw, c.GetParent()?.Name2);
+        }
+        var top = new List<RawComponent>();
+        foreach (var (raw, parent) in byComponent.Values)
+        {
+            if (parent != null && byComponent.TryGetValue(parent, out var p)) p.Raw.Children.Add(raw);
+            else top.Add(raw);
+        }
+        return top;
+    }
+
+    /// <summary>All components at every level (0 for parts and drawings); cheap, used to notice loading and edits.</summary>
+    public static int ComponentCount(IModelDoc2 doc)
+    {
+        try
+        {
+            return doc is IAssemblyDoc assembly ? assembly.GetComponentCount(false) : 0;
+        }
+        catch (Exception)
+        {
+            return -1;
+        }
+    }
+
+    private static List<RawComponent> ChildrenOf(IComponent2 parent)
+    {
+        var result = new List<RawComponent>();
+        if (!(parent.GetChildren() is Array children)) return result;
+        foreach (var item in children)
+        {
+            if (!(item is IComponent2 child)) continue;
+            var raw = new RawComponent
+            {
+                Path = child.GetPathName() ?? "",
+                InstanceName = child.Name2 ?? "",
+                Configuration = child.ReferencedConfiguration ?? "",
+                IsSuppressed = child.IsSuppressed(),
+            };
+            if (!raw.IsSuppressed) raw.Children = ChildrenOf(child);
+            result.Add(raw);
+        }
+        return result;
+    }
+
     /// <summary>Custom properties of an open document (file-level, then the active configuration's), plus a part's material.</summary>
     public Dictionary<string, string> ReadProperties(IModelDoc2 doc, string? configurationName = null)
     {

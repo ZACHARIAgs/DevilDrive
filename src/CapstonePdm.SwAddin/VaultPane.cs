@@ -13,8 +13,9 @@ using CapstonePdm.Core.Vault;
 namespace CapstonePdm.SwAddin;
 
 /// <summary>
-/// The "Capstone PDM" task pane: status of the active document plus PDM commands. Watches the
-/// active document with a timer (no SolidWorks event wiring, which keeps it version-proof).
+/// The "Capstone PDM" task pane: status of the active document, the tree of files it uses, and PDM
+/// commands. Watches the active document with a timer (no SolidWorks event wiring, which keeps it
+/// version-proof): switching, opening, closing or saving a document rebuilds the tree.
 /// All vault work goes through the same Core VaultService as the desktop app.
 /// </summary>
 internal sealed class VaultPane : UserControl
@@ -40,6 +41,10 @@ internal sealed class VaultPane : UserControl
     private readonly PaneHeader _header;
     private readonly NoticeBox _banner;
     private readonly FileCard _card;
+    private readonly CaptionLabel _treeLabel;
+    private readonly FileTreeView _tree;
+    /// <summary>Active document and when it was last saved, as of the last tree rebuild.</summary>
+    private string? _treeStamp;
     private readonly ModernButton _checkOut;
     private readonly ModernButton _checkIn;
     private readonly ModernButton _undo;
@@ -100,6 +105,11 @@ internal sealed class VaultPane : UserControl
         _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Capstone PDM");
         _banner = new NoticeBox();
         _card = new FileCard();
+        _treeLabel = new CaptionLabel("Files in use");
+        _tree = new FileTreeView
+        {
+            StatusOf = node => node.RelativePath != null && _vault != null ? FileAt(_vault.ToFullPath(node.RelativePath)) : null,
+        };
         _checkOut = new ModernButton("Check Out", "");
         _checkIn = new ModernButton("Check In", "");
         _undo = new ModernButton("Undo Check Out", "");
@@ -122,7 +132,7 @@ internal sealed class VaultPane : UserControl
 
         _layout.Controls.AddRange(new Control[]
         {
-            _header, _banner, _card,
+            _header, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
@@ -178,9 +188,10 @@ internal sealed class VaultPane : UserControl
         }
 
         var documentChanged = !string.Equals(path, _currentPath, StringComparison.OrdinalIgnoreCase);
+        if (documentChanged) _currentPath = path;
+        RebuildTreeIfChanged();
         if (documentChanged)
         {
-            _currentPath = path;
             UpdateView();
             // First time we see a file this session, ask the vault who has it.
             var firstLook = path != null && IsInVault(path) && _checkedOnline.Add(path);
@@ -190,6 +201,54 @@ internal sealed class VaultPane : UserControl
         {
             await RefreshAsync(contactVault: true);
         }
+    }
+
+    /// <summary>
+    /// Re-reads the active document's components when it changes: switching, opening or closing a
+    /// document, components finishing loading or being added/removed, or saving. Status-only changes
+    /// just repaint.
+    /// </summary>
+    private void RebuildTreeIfChanged()
+    {
+        var path = _currentPath;
+        var doc = path != null ? _sw.FindOpen(path) : null;
+        string? stamp = null;
+        if (path != null && _vault != null)
+        {
+            long written = 0;
+            try
+            {
+                written = File.GetLastWriteTimeUtc(path).Ticks;
+            }
+            catch (Exception)
+            {
+                // Can't read the date; the path and component count still tell us enough.
+            }
+            stamp = $"{path}|{written}|{(doc != null ? SolidWorksSession.ComponentCount(doc) : -1)}";
+        }
+        if (stamp == _treeStamp) return;
+        _treeStamp = stamp;
+
+        FileTreeNode? root = null;
+        if (doc != null && _vault != null)
+        {
+            try
+            {
+                root = FileTree.Build(path!, _sw.GetFilesInUse(doc), _vault.VaultRoot);
+            }
+            catch (Exception ex)
+            {
+                AddinLog.Write("Couldn't read the files in use: " + ex);
+            }
+        }
+        _tree.Show(root);
+        var count = root?.DistinctFiles().Count() ?? 0;
+        var outside = root?.OutsideVault().Select(n => n.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() ?? 0;
+        _treeLabel.Text = root == null ? "" : outside > 0
+            ? $"Files in use: {count}  \u2022  \u26A0 {outside} outside the vault"
+            : $"Files in use: {count}";
+        _tree.Visible = _treeLabel.Visible = root != null;
+        FitWidths();
     }
 
     private bool VaultContactDue => DateTime.Now - _lastVaultContact > VaultContactInterval;
@@ -366,6 +425,7 @@ internal sealed class VaultPane : UserControl
         _exportBom.Visible = _currentPath != null && Path.GetExtension(_currentPath).Equals(".sldasm", StringComparison.OrdinalIgnoreCase);
         _exportBom.Enabled = !_busy;
 
+        if (_tree.Visible) _tree.RefreshStatus();
         FitWidths();
         _layout.ResumeLayout();
     }

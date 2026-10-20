@@ -2,32 +2,35 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace CapstonePdm.Core.Vault;
 
 /// <summary>
-/// One component as SolidWorks reports it (one instance in its parent), before grouping. The add-in
-/// fills these from the component tree; drawings list the models they show as children.
+/// One component instance as SolidWorks reports it. The add-in fills these from the component tree;
+/// drawings list the models they show as children.
 /// </summary>
 public sealed class RawComponent
 {
     public string Path { get; set; } = "";
+    /// <summary>SolidWorks' instance name, e.g. "bracket-2". Empty for a drawing's models.</summary>
+    public string InstanceName { get; set; } = "";
     public string Configuration { get; set; } = "";
     public bool IsSuppressed { get; set; }
     public List<RawComponent> Children { get; set; } = new List<RawComponent>();
 }
 
-/// <summary>A row in the "files in use" tree: one file (and configuration) under one parent.</summary>
+/// <summary>A row in the "files in use" tree: one component instance (or the top document, or a drawing's model).</summary>
 public sealed class FileTreeNode
 {
     public string FullPath { get; set; } = "";
     public string Name => System.IO.Path.GetFileName(FullPath);
+    /// <summary>What the row shows: "bracket&lt;2&gt;" for an instance (as in the FeatureManager tree), else the file name.</summary>
+    public string DisplayName { get; set; } = "";
     /// <summary>Path relative to the vault root with forward slashes; null when the file is outside the vault.</summary>
     public string? RelativePath { get; set; }
     public bool IsOutsideVault => RelativePath == null;
     public string Configuration { get; set; } = "";
-    /// <summary>How many times the parent uses it (instances with the same file, configuration and suppression).</summary>
-    public int Quantity { get; set; } = 1;
     public bool IsSuppressed { get; set; }
     public List<FileTreeNode> Children { get; } = new List<FileTreeNode>();
 
@@ -41,49 +44,75 @@ public sealed class FileTreeNode
         }
     }
 
-    /// <summary>Files outside the vault anywhere below (teammates won't have them).</summary>
+    /// <summary>Distinct files used anywhere in the tree (several instances of a part count once).</summary>
+    public IEnumerable<string> DistinctFiles() =>
+        SelfAndDescendants().Select(n => n.FullPath).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Rows for files outside the vault anywhere below (teammates won't have them).</summary>
     public IEnumerable<FileTreeNode> OutsideVault() => SelfAndDescendants().Where(n => n.IsOutsideVault);
 }
 
 public static class FileTree
 {
+    private static readonly Regex InstanceSuffix = new Regex(@"-(\d+)$");
+
     /// <summary>
-    /// Groups instances of the same file under each parent into one row with a quantity, keeps
-    /// suppressed instances as their own rows, and marks files outside the vault. Rows are sorted
-    /// with subassemblies first, then by name.
+    /// One row per component instance, like the FeatureManager tree. Suppressed instances are shown
+    /// without their contents, and files outside the vault are marked. Subassemblies come first, then
+    /// parts by name and instance number.
     /// </summary>
     public static FileTreeNode Build(string rootPath, IEnumerable<RawComponent> children, string vaultRoot)
     {
-        var root = new FileTreeNode { FullPath = rootPath, RelativePath = Relative(rootPath, vaultRoot) };
+        var root = new FileTreeNode { FullPath = rootPath, DisplayName = System.IO.Path.GetFileName(rootPath), RelativePath = Relative(rootPath, vaultRoot) };
         AddChildren(root, children, vaultRoot);
         return root;
     }
 
     private static void AddChildren(FileTreeNode parent, IEnumerable<RawComponent> raw, string vaultRoot)
     {
-        var groups = raw
+        var ordered = raw
             .Where(c => !string.IsNullOrWhiteSpace(c.Path))
-            .GroupBy(c => (Path: Normalize(c.Path), Config: c.Configuration ?? "", c.IsSuppressed))
-            .OrderBy(g => IsAssembly(g.Key.Path) ? 0 : 1)
-            .ThenBy(g => System.IO.Path.GetFileName(g.Key.Path), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(g => g.Key.Config, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(g => g.Key.IsSuppressed);
+            .OrderBy(c => c.Path.EndsWith(".sldasm", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(c => BaseName(c), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(InstanceNumber);
 
-        foreach (var group in groups)
+        foreach (var component in ordered)
         {
-            var first = group.First();
             var node = new FileTreeNode
             {
-                FullPath = first.Path,
-                RelativePath = Relative(first.Path, vaultRoot),
-                Configuration = group.Key.Config,
-                Quantity = group.Count(),
-                IsSuppressed = group.Key.IsSuppressed,
+                FullPath = component.Path,
+                DisplayName = DisplayNameOf(component),
+                RelativePath = Relative(component.Path, vaultRoot),
+                Configuration = component.Configuration ?? "",
+                IsSuppressed = component.IsSuppressed,
             };
-            // Every instance of a subassembly in one configuration has the same contents; show them once.
-            if (!node.IsSuppressed) AddChildren(node, first.Children, vaultRoot);
+            if (!node.IsSuppressed) AddChildren(node, component.Children, vaultRoot);
             parent.Children.Add(node);
         }
+    }
+
+    /// <summary>"bracket-2" becomes "bracket&lt;2&gt;", as SolidWorks shows it; a drawing's models show their file name.</summary>
+    public static string DisplayNameOf(RawComponent component)
+    {
+        var name = component.InstanceName ?? "";
+        var slash = name.LastIndexOf('/');
+        if (slash >= 0) name = name.Substring(slash + 1); // Name2 can include parent instances: "sub-1/bracket-2"
+        if (name.Length == 0) return System.IO.Path.GetFileName(component.Path);
+        var match = InstanceSuffix.Match(name);
+        return match.Success ? name.Substring(0, match.Index) + "<" + match.Groups[1].Value + ">" : name;
+    }
+
+    private static string BaseName(RawComponent c)
+    {
+        var display = DisplayNameOf(c);
+        var bracket = display.LastIndexOf('<');
+        return bracket > 0 ? display.Substring(0, bracket) : display;
+    }
+
+    private static int InstanceNumber(RawComponent c)
+    {
+        var match = InstanceSuffix.Match(c.InstanceName ?? "");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : 0;
     }
 
     /// <summary>Vault-relative path with forward slashes, or null if the file isn't inside the vault.</summary>
@@ -102,8 +131,4 @@ public static class FileTree
         }
         return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? full.Substring(root.Length).Replace('\\', '/') : null;
     }
-
-    private static string Normalize(string path) => path.Replace('/', '\\').ToLowerInvariant();
-
-    private static bool IsAssembly(string path) => path.EndsWith(".sldasm", StringComparison.OrdinalIgnoreCase);
 }
