@@ -66,6 +66,7 @@ public sealed class MainViewModel : ViewModelBase
         WithdrawReviewCommand = new RelayCommand(async () => await WithdrawReviewAsync(), () => CanEdit && WithdrawTargets().Count > 0);
         ApproveReviewCommand = new RelayCommand(async () => await ApproveReviewAsync(), () => CanEdit && IsAdmin && InReviewSelected().Count > 0);
         RejectReviewCommand = new RelayCommand(async () => await RejectReviewAsync(), () => CanEdit && IsAdmin && InReviewSelected().Count > 0);
+        ReturnToLatestVersionCommand = new RelayCommand(async () => await ReturnToLatestVersionAsync(), () => CanEdit && _selected.Any(r => r.File.PinnedVersion != null));
         WatchCommand = new RelayCommand(ToggleWatch, () => _vault != null && SingleSelected?.File.State is FileState.CheckedOutByOther);
         DownloadCommand = new RelayCommand(async () => await DownloadAsync(), () => CanEdit && _selected.Any(r => r.File.NotDownloaded));
         UpdateVaultSetupCommand = new RelayCommand(async () => await UpdateVaultSetupAsync(), () => CanEdit && IsAdmin && HasSetupProblems);
@@ -108,6 +109,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand Open3DCommand { get; }
     public ICommand DownloadCommand { get; }
     public ICommand WatchCommand { get; }
+    public ICommand ReturnToLatestVersionCommand { get; }
     public ICommand SubmitReviewCommand { get; }
     public ICommand WithdrawReviewCommand { get; }
     public ICommand ApproveReviewCommand { get; }
@@ -244,6 +246,14 @@ public sealed class MainViewModel : ViewModelBase
             allowKeepCheckedOut: false, prompt: "Reason (required): what needs to change?");
         if (request == null) return Task.CompletedTask;
         return RunAsync("Rejecting\u2026", async (vault, progress) => Report(await vault.RejectReviewAsync(targets, request.Comment, progress), "Rejected"));
+    }
+
+    /// <summary>Files this PC was using an older version of (picked in SolidWorks) go back to the latest.</summary>
+    private Task ReturnToLatestVersionAsync()
+    {
+        var targets = _selected.Where(r => r.File.PinnedVersion != null).Select(r => r.Path).ToList();
+        return RunAsync("Returning to the latest version…", async (vault, progress) =>
+            Report(await vault.ReturnToLatestAsync(targets, progress), "Back to the latest version of"));
     }
 
     private void ToggleWatch()
@@ -883,15 +893,26 @@ public sealed class MainViewModel : ViewModelBase
             : _vault.GitHubLogin == null ? "Not verified yet (are you online and signed in to GitHub?)"
             : $"{_vault.GitHubLogin}{(_vault.IsAdmin ? " (vault admin)" : "")}, verified with GitHub";
         var currentFolders = _snapshot?.DownloadFolders;
-        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu, VaultFolders(), currentFolders);
+        var classicMenu = ExplorerPreview.IsClassicMenu();
+        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu, VaultFolders(), currentFolders, settings.PreviewPane, classicMenu);
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
         settings.VaultPath = request.VaultPath;
         settings.AddVault(request.VaultPath);
         settings.ExplorerMenu = request.ExplorerMenu;
+        settings.PreviewPane = request.PreviewPane;
         settings.Save();
         App.UpdateExplorerMenu(settings);
+        if (request.ClassicMenu != classicMenu)
+        {
+            ExplorerPreview.SetClassicMenu(request.ClassicMenu);
+            if (_dialogs.Confirm("Restart File Explorer",
+                    "The right-click menu changes after File Explorer restarts. Restart it now? Open File Explorer windows close and the taskbar reloads for a moment."))
+            {
+                ExplorerPreview.RestartExplorer();
+            }
+        }
 
         if (pathChanged || _vault == null)
         {

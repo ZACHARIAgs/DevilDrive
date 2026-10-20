@@ -71,10 +71,13 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? new CheckInRequest(dialog.Comment, dialog.KeepCheckedOut) : null;
     }
 
-    public SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders)
+    public SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders,
+        bool previewPane, bool classicMenu)
     {
-        var dialog = new SettingsWindow(vaultPath, signedInAs, explorerMenu, folders, downloadFolders) { Owner = this };
-        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath, dialog.ExplorerMenu, dialog.DownloadFolders) : null;
+        var dialog = new SettingsWindow(vaultPath, signedInAs, explorerMenu, folders, downloadFolders, previewPane, classicMenu) { Owner = this };
+        return dialog.ShowDialog() == true
+            ? new SettingsRequest(dialog.VaultPath, dialog.ExplorerMenu, dialog.DownloadFolders, dialog.PreviewPane, dialog.ClassicMenu)
+            : null;
     }
 
     public (string? OpenFolder, bool Changed) ShowVaults()

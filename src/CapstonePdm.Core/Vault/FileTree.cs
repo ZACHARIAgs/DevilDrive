@@ -25,6 +25,8 @@ public sealed class FileTreeNode
 {
     public string FullPath { get; set; } = "";
     public string Name => System.IO.Path.GetFileName(FullPath);
+    /// <summary>SolidWorks' full instance name (e.g. "sub-1/bracket-2"); empty for the top document and a drawing's models.</summary>
+    public string InstanceName { get; set; } = "";
     /// <summary>What the row shows: "bracket&lt;2&gt;" for an instance (as in the FeatureManager tree), else the file name.</summary>
     public string DisplayName { get; set; } = "";
     /// <summary>Path relative to the vault root with forward slashes; null when the file is outside the vault.</summary>
@@ -82,6 +84,7 @@ public static class FileTree
             {
                 FullPath = component.Path,
                 DisplayName = DisplayNameOf(component),
+                InstanceName = component.InstanceName ?? "",
                 RelativePath = Relative(component.Path, vaultRoot),
                 Configuration = component.Configuration ?? "",
                 IsSuppressed = component.IsSuppressed,

@@ -1,7 +1,12 @@
+using System;
+using System.IO;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
-using HelixToolkit.Wpf;
+using CapstonePdm.Core.Preview;
 
 namespace CapstonePdm.Client.Services;
 
@@ -10,39 +15,48 @@ internal static class StlLoader
 {
     public static Task<Model3D?> LoadAsync(string path) => Task.Run(() =>
     {
-        var reader = new StLReader { DefaultMaterial = SolidMaterial() };
-        var model = reader.Read(path);
-        if (model == null) return null;
-        MakeSolid(model);
-        model.Freeze(); // frozen, so the UI thread (and the pop-out window) can use it
-        return (Model3D?)model;
+        var mesh = PreviewMesh.Load(path);
+        if (mesh.TriangleCount == 0) return null;
+        // Frozen, so the UI thread (and the pop-out window) can use it.
+        return (Model3D?)PreviewModel.Build(mesh);
     });
 
     /// <summary>
-    /// Plain matte grey. A shiny (specular) layer looks nicer but makes WPF show hidden edges through
-    /// the surface, so the part looked see-through.
+    /// Renders a preview to a PNG without opening a window ("--render-preview in.stl out.png"), for
+    /// checking how previews look. Isometric view, same lights and colors as the viewer.
     /// </summary>
-    public static Material SolidMaterial()
+    public static void RenderToPng(string stlPath, string pngPath, int width = 900, int height = 650)
     {
-        var brush = new SolidColorBrush(Color.FromRgb(0xAC, 0xB4, 0xC0));
-        brush.Freeze();
-        return new DiffuseMaterial(brush);
-    }
+        var model = PreviewModel.Build(PreviewMesh.Load(stlPath));
+        var bounds = model.Bounds;
+        var center = new Point3D(bounds.X + bounds.SizeX / 2, bounds.Y + bounds.SizeY / 2, bounds.Z + bounds.SizeZ / 2);
+        var radius = Math.Sqrt(bounds.SizeX * bounds.SizeX + bounds.SizeY * bounds.SizeY + bounds.SizeZ * bounds.SizeZ) / 2;
+        var look = new Vector3D(-1, -0.8, -1.1);
+        look.Normalize();
+        var distance = radius / Math.Tan(15 * Math.PI / 180) * 1.1;
+        var camera = new PerspectiveCamera(center - look * distance, look, new Vector3D(0, 1, 0), 30);
 
-    /// <summary>
-    /// Draws both sides of every triangle. Otherwise, when a mesh's triangles face inward (it varies by
-    /// exporter), WPF skips the outer surfaces and the part looks see-through.
-    /// </summary>
-    public static void MakeSolid(Model3D model)
-    {
-        switch (model)
-        {
-            case Model3DGroup group:
-                foreach (var child in group.Children) MakeSolid(child);
-                break;
-            case GeometryModel3D geometry:
-                geometry.BackMaterial = geometry.Material;
-                break;
-        }
+        var up = new Vector3D(0, 1, 0);
+        var right = Vector3D.CrossProduct(look, up);
+        right.Normalize();
+        var scene = new Model3DGroup();
+        scene.Children.Add(PreviewModel.Lights());
+        scene.Children.Add(new DirectionalLight(Color.FromRgb(0xC4, 0xC4, 0xC0), look - up * 0.45 + right * 0.3));
+        scene.Children.Add(model);
+
+        var viewport = new Viewport3D { Camera = camera, Width = width, Height = height };
+        viewport.Children.Add(new ModelVisual3D { Content = scene });
+        var host = new Grid { Width = width, Height = height, Background = PreviewModel.Background() };
+        host.Children.Add(viewport);
+        host.Measure(new Size(width, height));
+        host.Arrange(new Rect(0, 0, width, height));
+        host.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(host);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(pngPath);
+        encoder.Save(file);
     }
 }

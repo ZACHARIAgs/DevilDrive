@@ -92,6 +92,51 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task UseOlderVersion_StaysThroughGetLatest_CantBeCheckedIn_AndReturnsToLatest()
+    {
+        AliceChecksIn("shared.txt", "v2", "second");
+        AliceChecksIn("shared.txt", "v3", "third");
+        var vault = await Open(_bob);
+        await vault.GetLatestAsync();
+
+        var first = (await vault.GetHistoryAsync("shared.txt")).Single(v => v.Version == 1);
+        await vault.UseVersionAsync("shared.txt", first);
+        Assert.Equal("v1", Read(_bob, "shared.txt"));
+        var file = (await vault.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "shared.txt");
+        Assert.Equal("1/3", file.VersionText);
+        Assert.Equal(FileState.Available, file.State);
+        Assert.False(file.HasLocalChanges);
+        await Assert.ThrowsAsync<PdmException>(() => vault.CheckInAsync(new[] { "shared.txt" }, "oops"));
+
+        AliceChecksIn("shared.txt", "v4", "fourth");
+        await vault.GetLatestAsync();
+        Assert.Equal("v1", Read(_bob, "shared.txt"));
+        Assert.Equal("1/4", (await vault.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "shared.txt").VersionText);
+
+        await vault.ReturnToLatestAsync(new[] { "shared.txt" });
+        Assert.Equal("v4", Read(_bob, "shared.txt"));
+        Assert.Equal("4/4", (await vault.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "shared.txt").VersionText);
+    }
+
+    [Fact]
+    public async Task VersionCopy_HoldsTheOldVersion_AndCantBeCheckedOut()
+    {
+        AliceChecksIn("shared.txt", "v2", "second");
+        var vault = await Open(_bob);
+        await vault.GetLatestAsync();
+        var first = (await vault.GetHistoryAsync("shared.txt")).Single(v => v.Version == 1);
+
+        var copy = await vault.CreateVersionCopyAsync("shared.txt", first);
+
+        Assert.Equal(Path.Combine(_bob, "_versions", "shared v1.txt"), copy);
+        Assert.Equal("v1", File.ReadAllText(copy));
+        Assert.Equal("v2", Read(_bob, "shared.txt")); // the original is untouched
+        Assert.Equal(copy, await vault.CreateVersionCopyAsync("shared.txt", first)); // reused, not made twice
+        var result = await vault.CheckOutAsync(new[] { "_versions/shared v1.txt" });
+        Assert.Contains("read-only copy of version 1", Assert.Single(result.Failures).Error.Message);
+    }
+
+    [Fact]
     public async Task GetLatest_WhenVaultChangedMyEditedFile_StopsWithoutOverwriting()
     {
         Write(_bob, "shared.txt", "bob's version");

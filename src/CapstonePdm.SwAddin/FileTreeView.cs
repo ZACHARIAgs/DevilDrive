@@ -16,17 +16,24 @@ internal sealed class FileTreeView : TreeView
 {
     private const int MaxVisibleRows = 14;
     private readonly HashSet<string> _expanded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    /// <summary>Ticked files (full paths). Ticking one instance ticks the file, so all its rows show ticked.</summary>
+    /// <summary>Ticked rows (node keys), one per instance: ticking bracket&lt;2&gt; doesn't tick bracket&lt;1&gt;.</summary>
     private readonly HashSet<string> _ticked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private TreeNode? _lastClicked;
     private string? _rootKey;
+
+    /// <summary>Extra right-click menu items for a row (e.g. switching versions), shown above the tick items.</summary>
+    public Func<FileTreeNode, IEnumerable<ToolStripItem>> ExtraMenu { get; set; } = _ => Array.Empty<ToolStripItem>();
 
     /// <summary>Raised when the ticked files change.</summary>
     public event EventHandler? TickedChanged;
 
     /// <summary>Ticked files that are still in the tree.</summary>
     public IReadOnlyList<string> TickedFiles =>
-        Root == null ? Array.Empty<string>() : Root.DistinctFiles().Where(_ticked.Contains).ToList();
+        TickedInstances.Select(n => n.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>Ticked rows that are still in the tree (each a component instance, or the top document).</summary>
+    public IReadOnlyList<FileTreeNode> TickedInstances =>
+        AllNodes(Nodes).Where(n => _ticked.Contains(n.Name)).Select(n => (FileTreeNode)n.Tag).ToList();
 
     /// <summary>Looks up a row's vault status (null for files outside the vault or not tracked).</summary>
     public Func<FileTreeNode, VaultFile?> StatusOf { get; set; } = _ => null;
@@ -157,7 +164,7 @@ internal sealed class FileTreeView : TreeView
             }
             else if ((ModifierKeys & Keys.Control) != 0 || (e.X >= BoxLeft(e.Node) && e.X < BoxLeft(e.Node) + Theme.Px(18)))
             {
-                SetTicked(new[] { (FileTreeNode)e.Node.Tag }, !IsTicked(e.Node));
+                SetTicked(new[] { e.Node }, !IsTicked(e.Node));
                 _lastClicked = e.Node;
             }
             else
@@ -176,14 +183,26 @@ internal sealed class FileTreeView : TreeView
         TickedChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private bool IsTicked(TreeNode node) => node.Tag is FileTreeNode f && _ticked.Contains(f.FullPath);
+    private const int WM_CONTEXTMENU = 0x007B;
 
-    private void SetTicked(IEnumerable<FileTreeNode> files, bool ticked)
+    /// <summary>
+    /// Keeps right-clicks to ourselves. Otherwise Windows passes WM_CONTEXTMENU up to SolidWorks, which
+    /// opens its own toolbar menu on top of ours.
+    /// </summary>
+    protected override void WndProc(ref Message m)
     {
-        foreach (var file in files.Where(f => !f.IsOutsideVault))
+        if (m.Msg == WM_CONTEXTMENU) return;
+        base.WndProc(ref m);
+    }
+
+    private bool IsTicked(TreeNode node) => _ticked.Contains(node.Name);
+
+    private void SetTicked(IEnumerable<TreeNode> nodes, bool ticked)
+    {
+        foreach (var node in nodes.Where(n => n.Tag is FileTreeNode f && !f.IsOutsideVault))
         {
-            if (ticked) _ticked.Add(file.FullPath);
-            else _ticked.Remove(file.FullPath);
+            if (ticked) _ticked.Add(node.Name);
+            else _ticked.Remove(node.Name);
         }
         Invalidate();
         TickedChanged?.Invoke(this, EventArgs.Empty);
@@ -196,27 +215,35 @@ internal sealed class FileTreeView : TreeView
         for (var n = Nodes.Count > 0 ? Nodes[0] : null; n != null; n = n.NextVisibleNode) visible.Add(n);
         int a = visible.IndexOf(from), b = visible.IndexOf(to);
         if (a < 0 || b < 0) return;
-        SetTicked(visible.GetRange(Math.Min(a, b), Math.Abs(a - b) + 1).Select(n => (FileTreeNode)n.Tag), true);
+        SetTicked(visible.GetRange(Math.Min(a, b), Math.Abs(a - b) + 1), true);
     }
 
     private void ShowTickMenu(TreeNode node, Point location)
     {
         var file = (FileTreeNode)node.Tag;
         var menu = new ContextMenuStrip();
+        var extra = ExtraMenu(file).ToList();
+        if (extra.Count > 0)
+        {
+            menu.Items.AddRange(extra.ToArray());
+            menu.Items.Add(new ToolStripSeparator());
+        }
         if (file.Children.Count > 0)
         {
-            menu.Items.Add("Tick this and everything inside", null, (_, _) => SetTicked(file.SelfAndDescendants(), true));
-            menu.Items.Add("Untick this and everything inside", null, (_, _) => SetTicked(file.SelfAndDescendants(), false));
+            menu.Items.Add("Tick this and everything inside", null, (_, _) => SetTicked(SelfAndBelow(node), true));
+            menu.Items.Add("Untick this and everything inside", null, (_, _) => SetTicked(SelfAndBelow(node), false));
         }
         else
         {
-            menu.Items.Add(IsTicked(node) ? "Untick" : "Tick", null, (_, _) => SetTicked(new[] { file }, !IsTicked(node)));
+            menu.Items.Add(IsTicked(node) ? "Untick" : "Tick", null, (_, _) => SetTicked(new[] { node }, !IsTicked(node)));
         }
-        menu.Items.Add("Tick everything", null, (_, _) => { if (Root != null) SetTicked(Root.SelfAndDescendants(), true); });
+        menu.Items.Add("Tick everything", null, (_, _) => SetTicked(AllNodes(Nodes).ToList(), true));
         menu.Items.Add("Untick everything", null, (_, _) => { _ticked.Clear(); Invalidate(); TickedChanged?.Invoke(this, EventArgs.Empty); });
         menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
         menu.Show(this, location);
     }
+
+    private static IEnumerable<TreeNode> SelfAndBelow(TreeNode node) => new[] { node }.Concat(AllNodes(node.Nodes));
 
     private int ChevronLeft(TreeNode node) => Theme.Px(4) + node.Level * Indent;
 
@@ -243,7 +270,7 @@ internal sealed class FileTreeView : TreeView
         if (!file.IsOutsideVault)
         {
             var box = new Rectangle(x + Theme.Px(1), row.Top + Theme.Px(4), Theme.Px(13), Theme.Px(13));
-            var ticked = _ticked.Contains(file.FullPath);
+            var ticked = _ticked.Contains(e.Node.Name);
             using (var fill = new SolidBrush(ticked ? Theme.Accent : Theme.Card)) g.FillRectangle(fill, box);
             using (var pen = new Pen(ticked ? Theme.Accent : Color.FromArgb(0x9C, 0xA3, 0xAF))) g.DrawRectangle(pen, box);
             if (ticked)
@@ -262,14 +289,16 @@ internal sealed class FileTreeView : TreeView
         x += dot + Theme.Px(6);
 
         // Version on the right: local/vault, orange when this PC is behind.
-        var version = status?.VersionText ?? "";
-        var behind = status != null && status.Version < status.VaultVersion;
+        var copyOf = VersionCopies.VersionOf(file.FullPath);
+        var version = copyOf != null ? $"v{copyOf}" : status?.VersionText ?? "";
+        var pinned = status?.PinnedVersion != null || copyOf != null;
+        var behind = status != null && status.Version < status.VaultVersion && !pinned;
         var versionWidth = version.Length == 0 ? 0 : TextRenderer.MeasureText(version, Theme.Small).Width;
         var right = row.Right - Theme.Px(6);
         if (versionWidth > 0)
         {
-            TextRenderer.DrawText(g, version, behind ? Theme.SmallBold : Theme.Small, new Rectangle(right - versionWidth, row.Top + Theme.Px(3), versionWidth, Theme.Px(16)),
-                behind ? Color.FromArgb(0xC2, 0x41, 0x0C) : Theme.Muted, TextFormatFlags.Right);
+            TextRenderer.DrawText(g, version, behind || pinned ? Theme.SmallBold : Theme.Small, new Rectangle(right - versionWidth, row.Top + Theme.Px(3), versionWidth, Theme.Px(16)),
+                pinned ? Color.FromArgb(0x7C, 0x3A, 0xED) : behind ? Color.FromArgb(0xC2, 0x41, 0x0C) : Theme.Muted, TextFormatFlags.Right);
             right -= versionWidth + Theme.Px(6);
         }
 
@@ -296,6 +325,16 @@ internal sealed class FileTreeView : TreeView
             var partNumber = status?.Index?.GetProperty(IndexEntry.PartNumberNames) ?? System.IO.Path.GetFileNameWithoutExtension(file.Name);
             var description = status?.Index?.GetProperty(IndexEntry.DescriptionNames) ?? "";
             detail = description.Length > 0 ? $"{partNumber} \u2014 {description}" : partNumber;
+            if (copyOf != null)
+            {
+                detail = $"Kept at version {copyOf} (read-only copy) \u2022 {detail}";
+                detailColor = Color.FromArgb(0x7C, 0x3A, 0xED);
+            }
+            else if (status?.PinnedVersion != null)
+            {
+                detail = $"Older version (this PC only) \u2022 {detail}";
+                detailColor = Color.FromArgb(0x7C, 0x3A, 0xED);
+            }
         }
         TextRenderer.DrawText(g, detail, Theme.Small, new Rectangle(x, row.Top + Theme.Px(19), Math.Max(1, row.Right - Theme.Px(6) - x), Theme.Px(16)),
             detailColor, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -337,7 +376,11 @@ internal sealed class FileTreeView : TreeView
             _ => status!.State.ToString(),
         };
         var lines = new List<string> { file.RelativePath ?? file.FullPath, state };
-        if (status != null && status.VaultVersion > 0)
+        if (status?.PinnedVersion != null)
+        {
+            lines.Add($"Using version {status.PinnedVersion.Version} on this PC only (the vault has {status.VaultVersion}). Right-click \u2192 Return to the latest version.");
+        }
+        else if (status != null && status.VaultVersion > 0)
         {
             lines.Add(status.Version < status.VaultVersion
                 ? $"Version {status.Version} on this PC, {status.VaultVersion} in the vault: click Get Latest"

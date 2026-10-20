@@ -19,6 +19,8 @@ internal enum CloseMode
     Save,
     /// <summary>Throw away unsaved changes in the target files only (Undo Check Out).</summary>
     DiscardTargets,
+    /// <summary>Close read-only (not checked out) documents even with unsaved changes: they can't be saved anyway (switching versions).</summary>
+    DiscardReadOnly,
 }
 
 internal sealed class ClosedDocuments
@@ -657,6 +659,7 @@ internal sealed class SolidWorksSession
                 continue;
             }
             if (mode == CloseMode.DiscardTargets && targetSet.Contains(path)) continue;
+            if (mode == CloseMode.DiscardReadOnly && doc.IsOpenedReadOnly()) continue;
             throw new PdmException($"{Path.GetFileName(path)} has unsaved changes. Save it (or close it without saving), then try again.");
         }
 
@@ -670,6 +673,42 @@ internal sealed class SolidWorksSession
             closed.Paths.Add(path);
         }
         return closed;
+    }
+
+    /// <summary>
+    /// Points the given component instances of an open assembly at another file (SolidWorks' Replace
+    /// Components, keeping mates), live: nothing is closed or reopened. Works on a read-only assembly
+    /// too; it's only saved if the assembly is checked out and the user saves.
+    /// </summary>
+    public bool ReplaceInstances(string assemblyPath, IEnumerable<string> instanceNames, string newPath)
+    {
+        var doc = FindOpen(assemblyPath) ?? throw new PdmException($"{Path.GetFileName(assemblyPath)} isn't open.");
+        if (!(doc is IAssemblyDoc assembly) || !(assembly.GetComponents(false) is Array all)) return false;
+        var names = new HashSet<string>(instanceNames, StringComparer.OrdinalIgnoreCase);
+        var components = all.OfType<IComponent2>().Where(c => names.Contains(c.Name2 ?? "")).ToList();
+        if (components.Count == 0) return false;
+
+        doc.ClearSelection2(true);
+        var first = true;
+        foreach (var component in components)
+        {
+            component.Select4(!first, null, false);
+            first = false;
+        }
+        var replaced = assembly.ReplaceComponents2(newPath, "", false, (int)swReplaceComponentsConfiguration_e.swReplaceComponentsConfiguration_MatchName, true);
+        doc.ClearSelection2(true);
+        return replaced;
+    }
+
+    /// <summary>Open, read-only (not checked out) documents using these files that SolidWorks marks as changed.</summary>
+    public List<string> UnsavedReadOnlyDocumentsUsing(IEnumerable<string> targets)
+    {
+        var targetSet = new HashSet<string>(targets, StringComparer.OrdinalIgnoreCase);
+        return VisibleDocuments()
+            .Where(doc => doc.GetSaveFlag() && doc.IsOpenedReadOnly())
+            .Select(doc => doc.GetPathName())
+            .Where(path => targetSet.Contains(path) || GetReferences(path).Any(targetSet.Contains))
+            .ToList();
     }
 
     /// <summary>Reopens closed documents, the previously active one last so it ends up on top.</summary>

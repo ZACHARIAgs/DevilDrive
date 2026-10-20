@@ -20,6 +20,9 @@ public sealed class UserSettings
     /// <summary>Show the Capstone PDM submenu in File Explorer's right-click menu.</summary>
     public bool ExplorerMenu { get; set; } = true;
 
+    /// <summary>Show vault parts and assemblies as rotatable 3D models in File Explorer's preview pane.</summary>
+    public bool PreviewPane { get; set; } = true;
+
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CapstonePDM", "settings.json");
 
@@ -27,7 +30,12 @@ public sealed class UserSettings
     {
         try
         {
-            if (!File.Exists(FilePath)) return new UserSettings();
+            if (!File.Exists(FilePath))
+            {
+                var defaults = new UserSettings();
+                defaults.Normalize(); // the default vault is in the list even before settings are first saved
+                return defaults;
+            }
             var settings = JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(FilePath), Json.Options) ?? new UserSettings();
             if (string.IsNullOrWhiteSpace(settings.VaultPath)) settings.VaultPath = DefaultVaultPath;
             settings.Normalize();

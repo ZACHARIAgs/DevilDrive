@@ -36,6 +36,32 @@ public class MultiVaultTests
         Assert.Equal(new[] { @"C:\ClubVault" }, settings.Vaults);
     }
 
+    [Fact]
+    public void NewSettings_ListTheDefaultVault()
+    {
+        var settings = new UserSettings();
+        settings.Normalize();
+        Assert.Equal(new[] { UserSettings.DefaultVaultPath }, settings.Vaults);
+    }
+
+    [Theory]
+    [InlineData("frame/bracket.SLDPRT", 3, "frame/_versions/bracket v3.SLDPRT")]
+    [InlineData("top.sldasm", 12, "_versions/top v12.sldasm")]
+    public void VersionCopy_Paths(string original, int version, string copy)
+    {
+        Assert.Equal(copy, VersionCopies.CopyPathFor(original, version));
+        Assert.Equal(original, VersionCopies.OriginalOf(copy));
+        Assert.Equal(version, VersionCopies.VersionOf(copy));
+    }
+
+    [Fact]
+    public void VersionCopy_RecognizesFullPaths_AndIgnoresOtherFiles()
+    {
+        Assert.Equal(@"C:\V\frame\bracket v2 final.SLDPRT", VersionCopies.OriginalOf(@"C:\V\frame\_versions\bracket v2 final v4.SLDPRT"));
+        Assert.False(VersionCopies.IsVersionCopy("frame/bracket v3.SLDPRT"));
+        Assert.False(VersionCopies.IsVersionCopy("_versions/notes.txt"));
+    }
+
     [Theory]
     [InlineData("https://github.com/team/club-vault.git", "https://github.com/Team/club-vault", true)]
     [InlineData("https://github.com/team/club-vault/", "https://github.com/team/club-vault.git", true)]

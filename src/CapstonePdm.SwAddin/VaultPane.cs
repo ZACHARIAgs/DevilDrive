@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using SynchronizationContext = System.Threading.SynchronizationContext;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CapstonePdm.Core.Config;
@@ -66,6 +67,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _openApp;
     private readonly ModernButton _rebuildIndex;
     private readonly CaptionLabel _status;
+    private readonly ActivityBar _activity;
 
     private VaultService? _vault;
     /// <summary>Vaults opened this session, by folder, so switching between groups' files is quick.</summary>
@@ -114,6 +116,7 @@ internal sealed class VaultPane : UserControl
             StatusOf = node => node.RelativePath != null && _vault != null ? FileAt(_vault.ToFullPath(node.RelativePath)) : null,
         };
         _tree.TickedChanged += (_, _) => UpdateView();
+        _tree.ExtraMenu = VersionMenu;
         _saveGuard = new AssemblySaveGuard(sw);
         _saveGuard.Saved += message => { SetStatus(message); _treeStamp = null; };
         _checkOut = new ModernButton("Check Out", "");
@@ -135,40 +138,47 @@ internal sealed class VaultPane : UserControl
         _rebuildIndex = new ModernButton("Rebuild Index", "\uE895");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
+        _activity = new ActivityBar();
 
         _layout.Controls.AddRange(new Control[]
         {
-            _header, _banner, _card, _treeLabel, _tree,
+            _header, _activity, _status, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
-            _status,
         });
         Controls.Add(_layout);
         Resize += (_, _) => FitWidths();
 
-        _checkOut.Click += async (_, _) => await CheckOutAsync();
-        _checkIn.Click += async (_, _) => await CheckInAsync();
-        _undo.Click += async (_, _) => await UndoCheckOutAsync();
-        _freeze.Click += async (_, _) => await FreezeAsync();
-        _unfreeze.Click += async (_, _) => await UnfreezeAsync();
-        _requestCheckIn.Click += async (_, _) => await RequestCheckInAsync();
-        _rename.Click += async (_, _) => await RenameAsync();
-        _submitReview.Click += async (_, _) => await SubmitReviewAsync();
-        _withdrawReview.Click += async (_, _) => await WithdrawReviewAsync();
-        _approveReview.Click += async (_, _) => await ApproveReviewAsync();
-        _rejectReview.Click += async (_, _) => await RejectReviewAsync();
-        _downloadRefs.Click += async (_, _) => await DownloadMissingPartsAsync();
+        _checkOut.Click += async (_, _) => { EnsureUiContext(); await CheckOutAsync(); };
+        _checkIn.Click += async (_, _) => { EnsureUiContext(); await CheckInAsync(); };
+        _undo.Click += async (_, _) => { EnsureUiContext(); await UndoCheckOutAsync(); };
+        _freeze.Click += async (_, _) => { EnsureUiContext(); await FreezeAsync(); };
+        _unfreeze.Click += async (_, _) => { EnsureUiContext(); await UnfreezeAsync(); };
+        _requestCheckIn.Click += async (_, _) => { EnsureUiContext(); await RequestCheckInAsync(); };
+        _rename.Click += async (_, _) => { EnsureUiContext(); await RenameAsync(); };
+        _submitReview.Click += async (_, _) => { EnsureUiContext(); await SubmitReviewAsync(); };
+        _withdrawReview.Click += async (_, _) => { EnsureUiContext(); await WithdrawReviewAsync(); };
+        _approveReview.Click += async (_, _) => { EnsureUiContext(); await ApproveReviewAsync(); };
+        _rejectReview.Click += async (_, _) => { EnsureUiContext(); await RejectReviewAsync(); };
+        _downloadRefs.Click += async (_, _) => { EnsureUiContext(); await DownloadMissingPartsAsync(); };
         _watch.Click += (_, _) => ToggleWatch();
-        _getLatest.Click += async (_, _) => await GetLatestAsync();
-        _refresh.Click += async (_, _) => await RefreshAsync(contactVault: true);
+        _getLatest.Click += async (_, _) => { EnsureUiContext(); await GetLatestAsync(); };
+        _refresh.Click += async (_, _) => { EnsureUiContext(); await RefreshAsync(contactVault: true); };
         _openApp.Click += (_, _) => OpenDesktopApp();
-        _rebuildIndex.Click += async (_, _) => await RebuildIndexAsync();
+        _rebuildIndex.Click += async (_, _) => { EnsureUiContext(); await RebuildIndexAsync(); };
         _exportBom.Click += (_, _) => ExportBom();
         _timer.Tick += async (_, _) => await OnTickAsync();
 
         UpdateView();
         _timer.Start();
+    }
+
+    /// <summary>Right-clicks on the pane itself (between controls) shouldn't open SolidWorks' toolbar menu either.</summary>
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == 0x007B) return; // WM_CONTEXTMENU
+        base.WndProc(ref m);
     }
 
     public void Shutdown()
@@ -179,8 +189,30 @@ internal sealed class VaultPane : UserControl
 
     // ------------------------------------------------------------ watching the active document
 
+    /// <summary>
+    /// SolidWorks sometimes calls add-in code without WinForms' synchronization context, and then code
+    /// after an await resumes on a background thread and can't touch the pane. Put it back at every
+    /// entry point (timer, buttons, menus) so awaits return to the UI thread.
+    /// </summary>
+    private void EnsureUiContext()
+    {
+        if (!(SynchronizationContext.Current is WindowsFormsSynchronizationContext))
+        {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+        }
+    }
+
+    /// <summary>Runs on the UI thread: directly if already there, else posted to it.</summary>
+    private bool OffUiThread(Action action)
+    {
+        if (!InvokeRequired) return false;
+        if (IsHandleCreated && !IsDisposed) BeginInvoke(action);
+        return true;
+    }
+
     private async Task OnTickAsync()
     {
+        EnsureUiContext();
         if (_busy) return;
 
         string? path;
@@ -216,6 +248,7 @@ internal sealed class VaultPane : UserControl
     /// </summary>
     private void RebuildTreeIfChanged()
     {
+        if (OffUiThread(RebuildTreeIfChanged)) return;
         var path = _currentPath;
         var doc = path != null ? _sw.FindOpen(path) : null;
         string? stamp = null;
@@ -262,8 +295,11 @@ internal sealed class VaultPane : UserControl
 
     private async Task RefreshAsync(bool contactVault)
     {
+        EnsureUiContext();
         if (_busy) return;
         _busy = true;
+        var showActivity = contactVault || _vault == null;
+        if (showActivity) StartActivity(_vault == null ? "Opening the vault\u2026" : "Checking the vault\u2026");
         try
         {
             // Work in the vault that holds the open file (each group has its own vault folder). A file
@@ -310,6 +346,7 @@ internal sealed class VaultPane : UserControl
         finally
         {
             _busy = false;
+            if (showActivity) StopActivity();
             // The tree depends on which vault is open (paths outside it are flagged), so re-check it.
             RebuildTreeIfChanged();
             // Buttons are enabled only when not busy, so redraw after clearing the flag.
@@ -369,7 +406,25 @@ internal sealed class VaultPane : UserControl
 
     private void UpdateView()
     {
+        if (OffUiThread(UpdateView)) return;
         _layout.SuspendLayout();
+        try
+        {
+            UpdateViewCore();
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write("Updating the pane failed: " + ex);
+        }
+        finally
+        {
+            // Always resume, or the pane stays grey.
+            _layout.ResumeLayout();
+        }
+    }
+
+    private void UpdateViewCore()
+    {
         UpdateBanner();
         _header.Subtitle = _vault == null ? "Vault not connected" : $"{_vault.Config.VaultName}  \u2022  {_vault.UserDisplayName}";
 
@@ -452,7 +507,6 @@ internal sealed class VaultPane : UserControl
 
         if (_tree.Visible) _tree.RefreshStatus();
         FitWidths();
-        _layout.ResumeLayout();
     }
 
     private void ShowFile(VaultFile file)
@@ -479,6 +533,10 @@ internal sealed class VaultPane : UserControl
             if (file.LatestVersion.CommentFirstLine.Length > 0) lines.Add($"\u201C{file.LatestVersion.CommentFirstLine}\u201D");
         }
         if (file.Revision != null && file.State != FileState.Frozen) lines.Add($"Last released as Rev {file.Revision} (changes since then aren't released).");
+        if (file.PinnedVersion != null)
+        {
+            lines.Add($"This PC uses version {file.PinnedVersion.Version} (the vault has {file.VaultVersion}). Right-click it under Files in use to return to the latest.");
+        }
         if (file.State == FileState.Available && !file.IsOutdated) lines.Add("Check out to edit.");
         if (file.State == FileState.ModifiedWithoutCheckOut) lines.Add("Check it out to keep your edits, or Undo to discard them.");
         if (file.IsOutdated) lines.Add("Click Get Latest to update it.");
@@ -605,7 +663,146 @@ internal sealed class VaultPane : UserControl
                ext.Equals(".slddrw", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void SetStatus(string text) => _status.Text = text;
+    /// <summary>Shows the activity bar; the status line hides meanwhile so the text isn't shown twice.</summary>
+    private void StartActivity(string text)
+    {
+        _activity.Start(text);
+        _status.Visible = false;
+    }
+
+    private void StopActivity()
+    {
+        _activity.Stop();
+        _status.Visible = true;
+    }
+
+    private void SetStatus(string text)
+    {
+        if (OffUiThread(() => SetStatus(text))) return;
+        _status.Text = text;
+        _activity.SetText(text);
+    }
+
+    /// <summary>
+    /// Right-click items for a tree row: put this instance (or the ticked instances of the same part) on
+    /// another version, live in the open assembly. Other instances, other assemblies and the part file
+    /// itself are untouched.
+    /// </summary>
+    private IEnumerable<ToolStripItem> VersionMenu(FileTreeNode node)
+    {
+        if (_vault == null || _busy || _snapshot?.ViewingMilestone != null || node.IsOutsideVault) yield break;
+        var file = FileAt(node.FullPath);
+        if (file?.PinnedVersion != null)
+        {
+            // Left over from the earlier whole-file switch.
+            yield return new ToolStripMenuItem($"Return the file to the latest version (this PC uses {file.PinnedVersion.Version})", null,
+                async (_, _) => await ReturnToLatestAsync(node.FullPath));
+        }
+        if (node.InstanceName.Length == 0) yield break; // only component instances in an assembly
+
+        var original = VersionCopies.OriginalOf(node.FullPath) ?? node.FullPath;
+        var sameParts = _tree.TickedInstances
+            .Where(n => n.InstanceName.Length > 0 && string.Equals(VersionCopies.OriginalOf(n.FullPath) ?? n.FullPath, original, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var targets = sameParts.Any(n => n.InstanceName == node.InstanceName) ? sameParts : new List<FileTreeNode> { node };
+        var which = targets.Count == 1 ? targets[0].DisplayName : $"the {targets.Count} ticked instances";
+
+        yield return new ToolStripMenuItem($"Use another version for {which}\u2026", null, async (_, _) => await UseVersionForInstancesAsync(targets, original, which));
+        var onCopies = targets.Where(n => VersionCopies.IsVersionCopy(n.FullPath)).ToList();
+        if (onCopies.Count > 0)
+        {
+            var whichCopies = onCopies.Count == 1 ? onCopies[0].DisplayName : $"{onCopies.Count} instances";
+            yield return new ToolStripMenuItem($"Return {whichCopies} to the latest version", null, async (_, _) => await ReplaceInstancesAsync(onCopies, original, null, whichCopies));
+        }
+    }
+
+    private async Task UseVersionForInstancesAsync(List<FileTreeNode> targets, string original, string which)
+    {
+        EnsureUiContext();
+        if (_vault == null) return;
+        var file = FileAt(original);
+        IReadOnlyList<FileVersion> history;
+        try
+        {
+            history = await _vault.GetHistoryAsync(original);
+        }
+        catch (PdmException ex)
+        {
+            SetStatus(ex.Message);
+            return;
+        }
+        if (history.Count < 2)
+        {
+            SetStatus($"{Path.GetFileName(original)} has only one version so far.");
+            return;
+        }
+        var current = VersionCopies.VersionOf(targets[0].FullPath) ?? file?.LatestLocalVersion ?? 0;
+        using var picker = new VersionPickerForm(Path.GetFileName(original), history, current, file?.VaultVersion ?? history.Max(v => v.Version),
+            $"Only {which} change, right now, in this assembly. Other instances, other assemblies and the part itself stay as they are. " +
+            "If the assembly is checked out to you, save and check it in to keep it that way for everyone.");
+        if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK || picker.SelectedVersion == null) return;
+        await ReplaceInstancesAsync(targets, original, picker.SelectedVersion, which);
+    }
+
+    /// <summary>Points instances at a version copy (or back at the original file when <paramref name="version"/> is null or the latest).</summary>
+    private async Task ReplaceInstancesAsync(List<FileTreeNode> targets, string original, FileVersion? version, string which)
+    {
+        EnsureUiContext();
+        var assembly = _currentPath;
+        if (_vault == null || assembly == null) return;
+        var latestHere = FileAt(original)?.LatestLocalVersion;
+        await RunAsync(version == null ? "Returning to the latest version\u2026" : $"Switching to version {version.Version}\u2026", async progress =>
+        {
+            var useOriginal = version == null || version.Version == latestHere;
+            var newPath = useOriginal ? original : await _vault.CreateVersionCopyAsync(original, version!);
+            // Only instances that aren't already on it.
+            var names = targets.Where(t => !string.Equals(t.FullPath, newPath, StringComparison.OrdinalIgnoreCase)).Select(t => t.InstanceName).ToList();
+            if (names.Count > 0 && !_sw.ReplaceInstances(assembly, names, newPath))
+            {
+                throw new PdmException($"SolidWorks couldn't switch {which}. Try again, or use Replace Components in SolidWorks.");
+            }
+            _treeStamp = null;
+            var label = useOriginal ? "the latest version" : $"version {version!.Version}";
+            var keep = FileAt(assembly)?.State == FileState.CheckedOutByMe
+                ? " Save and check in the assembly to keep it."
+                : " The assembly isn't checked out, so this is just for viewing; check it out to save it.";
+            return $"{char.ToUpper(which[0])}{which.Substring(1)} now {(names.Count == 1 ? "uses" : "use")} {label}.{keep}";
+        });
+    }
+
+    /// <summary>
+    /// Switching versions closes and reopens the documents that use the file. Read-only ones (not
+    /// checked out) that SolidWorks marks as changed, often just from a rebuild, can't be saved anyway:
+    /// ask before closing them without saving. Checked-out documents with unsaved work still stop it.
+    /// </summary>
+    private bool ConfirmDiscardReadOnly(string path)
+    {
+        var unsaved = _sw.UnsavedReadOnlyDocumentsUsing(new[] { path });
+        if (unsaved.Count == 0) return true;
+        return MessageBox.Show(_sw.MainWindow,
+            $"{PathList.Format(unsaved.Select(Path.GetFileName))} {(unsaved.Count == 1 ? "is" : "are")} marked as changed, but {(unsaved.Count == 1 ? "isn't" : "aren't")} checked out, " +
+            "so the changes can't be saved anyway (often it's just a rebuild).\n\nClose without saving and reopen with the other version?",
+            "Capstone PDM", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+    }
+
+    private async Task ReturnToLatestAsync(string path)
+    {
+        EnsureUiContext();
+        if (_vault == null || !ConfirmDiscardReadOnly(path)) return;
+        await RunAsync("Returning to the latest version\u2026", async progress =>
+        {
+            var closed = _sw.CloseDocumentsUsing(new[] { path }, CloseMode.DiscardReadOnly);
+            try
+            {
+                return Report(await _vault.ReturnToLatestAsync(new[] { path }, progress), "Back to the latest version of");
+            }
+            finally
+            {
+                _treeStamp = null;
+                _sw.Reopen(closed);
+            }
+        });
+    }
 
     /// <summary>Distinct vault files in the files-in-use tree (just the active document if there's no tree).</summary>
     private List<VaultFile> TreeFiles()
@@ -614,7 +811,7 @@ internal sealed class VaultPane : UserControl
         return paths.Select(FileAt).Where(f => f != null).Select(f => f!).ToList();
     }
 
-    private static bool CanCheckOutFile(VaultFile f) => f.IsLockable && f.State is FileState.Available or FileState.ModifiedWithoutCheckOut;
+    private static bool CanCheckOutFile(VaultFile f) => f.IsLockable && f.PinnedVersion == null && !f.IsVersionCopy && f.State is FileState.Available or FileState.ModifiedWithoutCheckOut;
 
     private static bool CanCheckInFile(VaultFile f) => f.State is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
 
@@ -792,9 +989,16 @@ internal sealed class VaultPane : UserControl
         var comment = picker.Comment;
         var keep = picker.KeepCheckedOut;
 
+        // Version copies the assembly's instances use must go in with it, or teammates get missing parts.
+        if (targets.Any(p => Path.GetExtension(p).Equals(".sldasm", StringComparison.OrdinalIgnoreCase)))
+        {
+            var copies = TreeFiles().Where(f => f.IsVersionCopy && f.State == FileState.NotInVault).Select(f => _vault.ToFullPath(f.RelativePath));
+            targets = targets.Union(copies, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         // First check-in of a SolidWorks file: ask what it is.
         var newDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var newSolidWorks = targets.Where(p => FileAt(p)?.State == FileState.NotInVault && IsSolidWorksFile(p)).ToList();
+        var newSolidWorks = targets.Where(p => FileAt(p)?.State == FileState.NotInVault && IsSolidWorksFile(p) && !VersionCopies.IsVersionCopy(p)).ToList();
         if (newSolidWorks.Count > 0)
         {
             using var describe = new DescriptionForm(newSolidWorks.Select(p => (p, CurrentDescription(p))).ToList());
@@ -1510,8 +1714,10 @@ internal sealed class VaultPane : UserControl
 
     private async Task RunAsync(string busyText, Func<IProgress<string>, Task<string>> operation)
     {
+        EnsureUiContext();
         if (_busy || _vault == null) return;
         _busy = true;
+        StartActivity(busyText);
         UpdateView();
         SetStatus(busyText);
 
@@ -1536,6 +1742,7 @@ internal sealed class VaultPane : UserControl
         finally
         {
             _busy = false;
+            StopActivity();
         }
 
         await RefreshAsync(contactVault: true);

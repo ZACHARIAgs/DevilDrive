@@ -228,6 +228,7 @@ public sealed class VaultService : IVaultService
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
         var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+        var pins = PinnedVersions.Load(VaultRoot);
         var index = VaultIndex.ReadAll(VaultRoot);
         var usedIn = VaultIndex.WhereUsed(index);
         var locks = _lastLocks;
@@ -250,6 +251,9 @@ public sealed class VaultService : IVaultService
         foreach (var path in all)
         {
             changes.TryGetValue(path, out var change);
+            // An older version used on purpose (this PC only) differs from the latest, but isn't an edit.
+            var pin = pins.Find(path);
+            if (pin != null && change != null && !change.IsUntracked && !change.IsDeleted) change = null;
             var fileLock = FindLock(locks, path);
             var isLockable = lockable.Contains(path);
 
@@ -287,6 +291,7 @@ public sealed class VaultService : IVaultService
                 ExistsLocally = File.Exists(ToFullPath(path)),
                 LatestVersion = version,
                 VaultVersion = (version?.Version ?? 0) + newer,
+                PinnedVersion = pin,
                 Freeze = freeze,
                 FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
                 Revision = frozen.RevisionOf(path),
@@ -381,7 +386,8 @@ public sealed class VaultService : IVaultService
         if (behind == 0) return GetLatestResult.UpToDate;
 
         var incoming = await GetIncomingChangesAsync(ct).ConfigureAwait(false);
-        var local = await GetLocalChangesAsync(ct).ConfigureAwait(false);
+        var pins = PinnedVersions.Load(VaultRoot);
+        var local = (await GetLocalChangesAsync(ct).ConfigureAwait(false)).Where(c => pins.Find(c.Path) == null).ToList();
 
         // The promise: never overwrite a file you've changed. Git would refuse anyway, but we
         // check first so the message is clear and nothing is half-done.
@@ -401,6 +407,10 @@ public sealed class VaultService : IVaultService
             throw new FileInUseException(inUse, "The vault has a newer version. Close them in SolidWorks so they can be updated, then try again.");
         }
 
+        // Files this PC uses an older version of: back to the latest for the update, pinned again after.
+        var pinnedIncoming = pins.Pins.Where(p => incoming.Contains(p.Path)).ToList();
+        foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, "HEAD", ct).ConfigureAwait(false);
+
         progress?.Report($"Getting {incoming.Count} updated file(s) from the vault…");
         var merge = await RunAsync(new[] { "merge", "--ff", "--no-edit", "--no-stat", "-m", "Merge vault changes", Upstream }, ct, TransferTimeout).ConfigureAwait(false);
         if (!merge.Success)
@@ -409,8 +419,16 @@ public sealed class VaultService : IVaultService
             {
                 await RunAsync(new[] { "merge", "--abort" }, ct).ConfigureAwait(false);
             }
+            foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, pin.Commit, ct).ConfigureAwait(false);
             throw GitErrorClassifier.Classify(merge, "get the latest versions");
         }
+        foreach (var pin in pinnedIncoming)
+        {
+            // A file deleted from the vault can't stay pinned.
+            if (File.Exists(ToFullPath(pin.Path))) await RestoreWorkingFileAsync(pin.Path, pin.Commit, ct).ConfigureAwait(false);
+            else pins.Remove(pin.Path);
+        }
+        pins.Save(VaultRoot);
 
         return new GetLatestResult(behind, incoming.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList());
     }
@@ -436,9 +454,16 @@ public sealed class VaultService : IVaultService
         var result = new OperationResult();
         var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
         var targets = new List<string>();
+        var pins = PinnedVersions.Load(VaultRoot);
         foreach (var rel in relatives)
         {
-            if (lockable.Contains(rel)) targets.Add(rel);
+            if (pins.Find(rel) is { } pin) result.Fail(rel, PinnedError(rel, pin));
+            else if (VersionCopies.IsVersionCopy(rel))
+            {
+                result.Fail(rel, new PdmException($"{PathList.Name(rel)} is a read-only copy of version {VersionCopies.VersionOf(rel)} of " +
+                                                  $"{PathList.Name(VersionCopies.OriginalOf(rel)!)}. Check out the original to make changes."));
+            }
+            else if (lockable.Contains(rel)) targets.Add(rel);
             else result.Fail(rel, new PdmException($"{PathList.Name(rel)} isn't a lockable file type, so it doesn't need checking out. Just edit it and check it in."));
         }
         if (targets.Count == 0) return result;
@@ -597,6 +622,9 @@ public sealed class VaultService : IVaultService
             throw new PdmException("Enter a check-in comment that says what changed, for example \"added mounting holes\".");
         }
         comment = comment.Trim();
+        var pinnedFiles = PinnedVersions.Load(VaultRoot);
+        var pinned = relatives.Where(r => pinnedFiles.Find(r) != null).ToList();
+        if (pinned.Count > 0) throw PinnedError(pinned[0], pinnedFiles.Find(pinned[0])!);
         var result = new OperationResult();
 
         var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
@@ -873,6 +901,138 @@ public sealed class VaultService : IVaultService
             _gate.Release();
         }
     }
+
+    // ---------------------------------------------------------------- Older versions on this PC
+
+    /// <summary>
+    /// Uses an older version of a file on this PC only (e.g. an assembly with last week's part). The
+    /// vault and teammates keep the latest; Get Latest keeps the choice; <see cref="ReturnToLatestAsync"/> undoes it.
+    /// </summary>
+    public async Task<OperationResult> UseVersionAsync(string path, FileVersion version, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var rel = ToRelativePath(path);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await EnsureNotViewingMilestoneAsync(ct).ConfigureAwait(false);
+            var result = new OperationResult();
+            var pins = PinnedVersions.Load(VaultRoot);
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            if (pins.Find(rel) == null && changes.ContainsKey(rel))
+            {
+                throw new PdmException($"{PathList.Name(rel)} has changes on this PC. Check it in or undo them before switching versions.");
+            }
+            if (FindLock(_lastLocks, rel)?.IsMine == true)
+            {
+                throw new PdmException($"{PathList.Name(rel)} is checked out to you. Check it in or undo the check-out before using an older version.");
+            }
+
+            progress?.Report($"Getting version {version.Version} of {PathList.Name(rel)}…");
+            await RestoreWorkingFileAsync(rel, version.CommitId, ct).ConfigureAwait(false);
+            var latest = (await GetLatestVersionsAsync(ct).ConfigureAwait(false)).TryGetValue(rel, out var head) ? head : null;
+            if (latest != null && latest.CommitId == version.CommitId) pins.Remove(rel); // that's just the latest
+            else pins.Set(rel, version.CommitId, version.Version);
+            pins.Save(VaultRoot);
+            result.Succeeded.Add(rel);
+            result.Notes.Add($"This PC now uses version {version.Version} of {PathList.Name(rel)}. The vault and your teammates still have the latest.");
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Makes (or reuses) the read-only copy of a version of a file, for assembly instances that should
+    /// stay on that version. Returns the copy's full path. It's a new file until checked in; checking in
+    /// the assembly that uses it brings it along.
+    /// </summary>
+    public async Task<string> CreateVersionCopyAsync(string path, FileVersion version, CancellationToken ct = default)
+    {
+        var rel = ToRelativePath(path);
+        var copyRel = VersionCopies.CopyPathFor(rel, version.Version);
+        var copy = ToFullPath(copyRel);
+        if (File.Exists(copy)) return copy;
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var scratch = Path.Combine(Path.GetTempPath(), "capstone-version-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // Check the old version out into a scratch folder (LFS filters run, so it's the real file), then move it in.
+            Directory.CreateDirectory(scratch);
+            var gitExe = GitRunner.FindGit() ?? throw new PdmException("Git isn't installed on this PC.");
+            var git = new GitRunner(scratch, gitExe);
+            var restore = await git.RunAsync(new[] { "--git-dir=" + Path.Combine(VaultRoot, ".git"), "--work-tree=" + scratch,
+                "restore", "--source=" + version.CommitId, "--worktree", "--", rel }, null, TransferTimeout, ct).ConfigureAwait(false);
+            var restored = Path.Combine(scratch, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!restore.Success || !File.Exists(restored)) throw GitErrorClassifier.Classify(restore, $"get version {version.Version} of {PathList.Name(rel)}");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            File.Move(restored, copy);
+            FileUtil.SetReadOnly(copy, true);
+            return copy;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Temp files; Windows cleans them up eventually.
+            }
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Goes back to the latest version of files this PC was using an older version of.</summary>
+    public async Task<OperationResult> ReturnToLatestAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var relatives = Normalize(paths);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            var pins = PinnedVersions.Load(VaultRoot);
+            foreach (var rel in relatives)
+            {
+                if (pins.Find(rel) == null)
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} already uses the latest version."));
+                    continue;
+                }
+                progress?.Report($"Getting the latest {PathList.Name(rel)}…");
+                await RestoreWorkingFileAsync(rel, "HEAD", ct).ConfigureAwait(false);
+                pins.Remove(rel);
+                result.Succeeded.Add(rel);
+            }
+            pins.Save(VaultRoot);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Puts a file's content from a commit into the vault folder only (nothing staged), keeping lockable files read-only.</summary>
+    private async Task RestoreWorkingFileAsync(string rel, string commit, CancellationToken ct)
+    {
+        var full = ToFullPath(rel);
+        FileUtil.SetReadOnly(full, false);
+        var restore = await RunAsync(new[] { "restore", "--source=" + commit, "--worktree", "--", rel }, ct, TransferTimeout).ConfigureAwait(false);
+        if ((await GetLockableAsync(new[] { rel }, ct).ConfigureAwait(false)).Contains(rel)) FileUtil.SetReadOnly(full, true);
+        if (!restore.Success)
+        {
+            if (FileUtil.IsInUse(full)) throw new FileInUseException(new[] { rel }, "Close it in SolidWorks (and any assembly that uses it), then try again.");
+            throw GitErrorClassifier.Classify(restore, "switch the file's version");
+        }
+    }
+
+    private static PdmException PinnedError(string rel, PinnedVersion pin) =>
+        new PdmException($"This PC is using version {pin.Version} of {PathList.Name(rel)} (an older version). Return to the latest version before checking it out or in.");
 
     /// <summary>Checks the file out if needed, puts the old version in place and checks it in as a new version.</summary>
     public async Task<OperationResult> RestoreVersionAsync(string path, FileVersion version, string comment, IProgress<string>? progress = null, CancellationToken ct = default)

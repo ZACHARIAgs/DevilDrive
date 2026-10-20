@@ -15,6 +15,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CapstonePdm.Core\CapstonePdm.Core.csproj" />
+    <!-- File Explorer preview pane add-on (.NET Framework COM server): built first, embedded in the exe, installed per user. -->
+    <ProjectReference Include="..\CapstonePdm.PreviewHandler\CapstonePdm.PreviewHandler.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\CapstonePdm.PreviewHandler\bin\$(Configuration)\net48\CapstonePdm.PreviewHandler.dll" LogicalName="PreviewHandler/CapstonePdm.PreviewHandler.dll" />
+    <EmbeddedResource Include="..\CapstonePdm.PreviewHandler\bin\$(Configuration)\net48\HelixToolkit.Wpf.dll" LogicalName="PreviewHandler/HelixToolkit.Wpf.dll" />
   </ItemGroup>
 
   <ItemGroup>

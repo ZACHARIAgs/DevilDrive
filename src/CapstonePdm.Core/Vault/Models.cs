@@ -100,7 +100,7 @@ public sealed class VaultFile
     public bool ExistsLocally { get; set; }
     public FileVersion? LatestVersion { get; set; }
     /// <summary>Check-ins of this file on this PC (the "7" in 7/10).</summary>
-    public int Version => LatestVersion?.Version ?? 0;
+    public int Version => PinnedVersion?.Version ?? LatestVersion?.Version ?? 0;
     /// <summary>Check-ins of this file in the vault, including ones this PC hasn't got yet (the "10" in 7/10).</summary>
     public int VaultVersion { get; set; }
     /// <summary>"7/10" style text; empty for files never checked in.</summary>
@@ -127,6 +127,14 @@ public sealed class VaultFile
 
     /// <summary>Only a small placeholder is on this PC (its folder isn't in "only download my folders"). Download it before opening.</summary>
     public bool NotDownloaded { get; set; }
+
+    /// <summary>Set when this PC uses an older version of the file (this PC only; the vault keeps the latest).</summary>
+    public PinnedVersion? PinnedVersion { get; set; }
+    /// <summary>A read-only copy of an older version of another file (see <see cref="VersionCopies"/>).</summary>
+    public bool IsVersionCopy => VersionCopies.IsVersionCopy(RelativePath);
+
+    /// <summary>The latest version this PC has (what "Return to latest" goes back to).</summary>
+    public int LatestLocalVersion => LatestVersion?.Version ?? 0;
 
     /// <summary>Set while the file is waiting for review.</summary>
     public ReviewEntry? Review { get; set; }

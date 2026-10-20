@@ -25,6 +25,14 @@ public partial class App : Application
             return;
         }
 
+        if (args.Length >= 3 && args[0] == "--render-preview")
+        {
+            // Developer check of how 3D previews look: --render-preview in.stl out.png
+            StlLoader.RenderToPng(args[1], args[2]);
+            Shutdown();
+            return;
+        }
+
         if (args.Length >= 3 && args[0] == "--explorer")
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -49,6 +57,8 @@ public partial class App : Application
         {
             var exe = Environment.ProcessPath;
             if (exe == null) return;
+            ExplorerPreview.WriteVaultList(settings.Vaults);
+            UpdatePreviewPane(settings, force);
             if (!settings.ExplorerMenu)
             {
                 ExplorerIntegration.Unregister();
@@ -61,6 +71,21 @@ public partial class App : Application
         catch (Exception)
         {
             // The menu is a convenience; never block the app over it.
+        }
+    }
+
+    /// <summary>Installs or removes the 3D preview pane add-on to match Settings (installed copy only, like the menu).</summary>
+    private static void UpdatePreviewPane(UserSettings settings, bool force)
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!settings.PreviewPane) ExplorerPreview.Unregister();
+            else if (exe != null && (force || ExplorerIntegration.IsInstalledCopy(exe))) ExplorerPreview.Register();
+        }
+        catch (Exception)
+        {
+            // A convenience; never block the app over it.
         }
     }
 

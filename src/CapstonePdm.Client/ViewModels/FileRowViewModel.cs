@@ -67,7 +67,8 @@ public sealed class FileRowViewModel : ViewModelBase
                 FileState.Frozen => (File.Revision != null ? $"Frozen (Rev {File.Revision}) by " : "Frozen by ") + $"{File.FrozenBy}: {File.Freeze?.Reason}" + (File.FreezeLockMissing ? " (lock missing, freeze again!)" : ""),
                 _ => File.State.ToString(),
             };
-            if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
+            if (File.PinnedVersion != null) text += $" (using older version {File.PinnedVersion.Version} on this PC; right-click, Return to Latest Version)";
+            else if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
             if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
             if (File.NotDownloaded) text += " (not downloaded: right-click, Download)";
             if (File.ChangedSinceDrawing.Count > 0) text += " (drawing may be out of date)";

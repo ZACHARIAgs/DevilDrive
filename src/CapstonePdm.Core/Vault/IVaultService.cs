@@ -86,6 +86,11 @@ public interface IVaultService
     Task DownloadAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
     /// <summary>Submit files for review before release (the submitter holds them meanwhile).</summary>
+    /// <summary>Use an older version of a file on this PC only.</summary>
+    Task<OperationResult> UseVersionAsync(string path, FileVersion version, IProgress<string>? progress = null, CancellationToken ct = default);
+    /// <summary>Read-only copy of a version of a file, for assembly instances that stay on that version.</summary>
+    Task<string> CreateVersionCopyAsync(string path, FileVersion version, CancellationToken ct = default);
+    Task<OperationResult> ReturnToLatestAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
     Task<OperationResult> SubmitForReviewAsync(IEnumerable<string> paths, string note, IProgress<string>? progress = null, CancellationToken ct = default);
     Task<OperationResult> WithdrawReviewAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
     /// <summary>Admin: approve and release (freeze with the next revision).</summary>

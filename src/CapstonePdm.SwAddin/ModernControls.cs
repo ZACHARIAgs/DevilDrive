@@ -363,6 +363,77 @@ internal sealed class CaptionLabel : PaneControl, IFitWidth
     }
 }
 
+/// <summary>
+/// Shows that Capstone PDM is working: a sliding accent bar with a line of text ("Checking the
+/// vault..."), so a slow vault or a big assembly never looks frozen. Hidden when idle.
+/// </summary>
+internal sealed class ActivityBar : PaneControl, IFitWidth
+{
+    private readonly Timer _animation = new Timer { Interval = 30 };
+    private float _position;
+    private string _text = "";
+
+    public ActivityBar()
+    {
+        Margin = new Padding(0, Theme.Px(2), 0, Theme.Px(6));
+        Height = Theme.Px(30);
+        Visible = false;
+        _animation.Tick += (_, _) =>
+        {
+            _position = (_position + 0.018f) % 1.4f;
+            Invalidate();
+        };
+    }
+
+    public bool IsActive => Visible;
+
+    public void Start(string text)
+    {
+        _text = text;
+        if (!Visible)
+        {
+            _position = 0;
+            Visible = true;
+            _animation.Start();
+        }
+        Invalidate();
+    }
+
+    public void SetText(string text)
+    {
+        if (!Visible || text == _text) return;
+        _text = text;
+        Invalidate();
+    }
+
+    public void Stop()
+    {
+        _animation.Stop();
+        Visible = false;
+    }
+
+    public void FitTo(int width) => Width = width;
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = Prepare(e, BackColor);
+        var track = new Rectangle(0, 0, Width, Theme.Px(4));
+        using (var trackBrush = new SolidBrush(Theme.Border)) g.FillRectangle(trackBrush, track);
+        // A segment a third of the width slides across and wraps around.
+        var segment = Width / 3f;
+        var x = (_position - 0.4f) * Width;
+        using (var accent = new SolidBrush(Theme.Accent)) g.FillRectangle(accent, x, 0, segment, track.Height);
+        TextRenderer.DrawText(g, _text, Theme.Small, new Rectangle(0, Theme.Px(7), Width, Height - Theme.Px(7)), Theme.Muted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _animation.Dispose();
+        base.Dispose(disposing);
+    }
+}
+
 /// <summary>Thin horizontal rule between button groups.</summary>
 internal sealed class Divider : PaneControl, IFitWidth
 {
