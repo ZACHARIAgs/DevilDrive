@@ -16,7 +16,17 @@ internal sealed class FileTreeView : TreeView
 {
     private const int MaxVisibleRows = 14;
     private readonly HashSet<string> _expanded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Ticked files (full paths). Ticking one instance ticks the file, so all its rows show ticked.</summary>
+    private readonly HashSet<string> _ticked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private TreeNode? _lastClicked;
     private string? _rootKey;
+
+    /// <summary>Raised when the ticked files change.</summary>
+    public event EventHandler? TickedChanged;
+
+    /// <summary>Ticked files that are still in the tree.</summary>
+    public IReadOnlyList<string> TickedFiles =>
+        Root == null ? Array.Empty<string>() : Root.DistinctFiles().Where(_ticked.Contains).ToList();
 
     /// <summary>Looks up a row's vault status (null for files outside the vault or not tracked).</summary>
     public Func<FileTreeNode, VaultFile?> StatusOf { get; set; } = _ => null;
@@ -59,6 +69,8 @@ internal sealed class FileTreeView : TreeView
                 {
                     _rootKey = root.FullPath;
                     _expanded.Clear();
+                    _ticked.Clear();
+                    _lastClicked = null;
                     _expanded.Add(Key(null, root));
                 }
                 var top = Add(Nodes, null, root);
@@ -126,12 +138,89 @@ internal sealed class FileTreeView : TreeView
 
     protected override void OnNodeMouseClick(TreeNodeMouseClickEventArgs e)
     {
-        // Our own chevron (the built-in plus/minus is off because the rows are custom-drawn).
-        if (e.Node.Nodes.Count > 0 && e.X < ChevronRight(e.Node)) e.Node.Toggle();
+        if (e.Button == MouseButtons.Right)
+        {
+            SelectedNode = e.Node;
+            ShowTickMenu(e.Node, e.Location);
+        }
+        else if (e.Button == MouseButtons.Left)
+        {
+            var left = ChevronLeft(e.Node);
+            if (e.Node.Nodes.Count > 0 && e.X >= left && e.X < left + Theme.Px(16))
+            {
+                // Our own chevron (the built-in plus/minus is off because the rows are custom-drawn).
+                e.Node.Toggle();
+            }
+            else if ((ModifierKeys & Keys.Shift) != 0 && _lastClicked != null && _lastClicked.TreeView == this)
+            {
+                TickRange(_lastClicked, e.Node);
+            }
+            else if ((ModifierKeys & Keys.Control) != 0 || (e.X >= BoxLeft(e.Node) && e.X < BoxLeft(e.Node) + Theme.Px(18)))
+            {
+                SetTicked(new[] { (FileTreeNode)e.Node.Tag }, !IsTicked(e.Node));
+                _lastClicked = e.Node;
+            }
+            else
+            {
+                _lastClicked = e.Node;
+            }
+        }
         base.OnNodeMouseClick(e);
     }
 
-    private int ChevronRight(TreeNode node) => Theme.Px(6) + node.Level * Indent + Theme.Px(16);
+    public void ClearTicks()
+    {
+        if (_ticked.Count == 0) return;
+        _ticked.Clear();
+        Invalidate();
+        TickedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool IsTicked(TreeNode node) => node.Tag is FileTreeNode f && _ticked.Contains(f.FullPath);
+
+    private void SetTicked(IEnumerable<FileTreeNode> files, bool ticked)
+    {
+        foreach (var file in files.Where(f => !f.IsOutsideVault))
+        {
+            if (ticked) _ticked.Add(file.FullPath);
+            else _ticked.Remove(file.FullPath);
+        }
+        Invalidate();
+        TickedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Shift-click: ticks every visible row between the last clicked row and this one.</summary>
+    private void TickRange(TreeNode from, TreeNode to)
+    {
+        var visible = new List<TreeNode>();
+        for (var n = Nodes.Count > 0 ? Nodes[0] : null; n != null; n = n.NextVisibleNode) visible.Add(n);
+        int a = visible.IndexOf(from), b = visible.IndexOf(to);
+        if (a < 0 || b < 0) return;
+        SetTicked(visible.GetRange(Math.Min(a, b), Math.Abs(a - b) + 1).Select(n => (FileTreeNode)n.Tag), true);
+    }
+
+    private void ShowTickMenu(TreeNode node, Point location)
+    {
+        var file = (FileTreeNode)node.Tag;
+        var menu = new ContextMenuStrip();
+        if (file.Children.Count > 0)
+        {
+            menu.Items.Add("Tick this and everything inside", null, (_, _) => SetTicked(file.SelfAndDescendants(), true));
+            menu.Items.Add("Untick this and everything inside", null, (_, _) => SetTicked(file.SelfAndDescendants(), false));
+        }
+        else
+        {
+            menu.Items.Add(IsTicked(node) ? "Untick" : "Tick", null, (_, _) => SetTicked(new[] { file }, !IsTicked(node)));
+        }
+        menu.Items.Add("Tick everything", null, (_, _) => { if (Root != null) SetTicked(Root.SelfAndDescendants(), true); });
+        menu.Items.Add("Untick everything", null, (_, _) => { _ticked.Clear(); Invalidate(); TickedChanged?.Invoke(this, EventArgs.Empty); });
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+        menu.Show(this, location);
+    }
+
+    private int ChevronLeft(TreeNode node) => Theme.Px(4) + node.Level * Indent;
+
+    private int BoxLeft(TreeNode node) => ChevronLeft(node) + Theme.Px(16);
 
     protected override void OnDrawNode(DrawTreeNodeEventArgs e)
     {
@@ -142,11 +231,25 @@ internal sealed class FileTreeView : TreeView
         using (var back = new SolidBrush(selected ? Color.FromArgb(0xE8, 0xF0, 0xFE) : Theme.Card)) g.FillRectangle(back, row);
 
         var status = StatusOf(file);
-        var x = Theme.Px(6) + e.Node.Level * Indent;
+        var x = ChevronLeft(e.Node);
         if (e.Node.Nodes.Count > 0)
         {
-            TextRenderer.DrawText(g, e.Node.IsExpanded ? "" : "", Theme.SmallGlyph, new Rectangle(x, row.Top, Theme.Px(16), Theme.Px(22)),
+            TextRenderer.DrawText(g, e.Node.IsExpanded ? "\uE70D" : "\uE76C", Theme.SmallGlyph, new Rectangle(x, row.Top, Theme.Px(16), Theme.Px(22)),
                 Theme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+        x = BoxLeft(e.Node);
+
+        // Tick box (files outside the vault can't be ticked: there's nothing to check out or in).
+        if (!file.IsOutsideVault)
+        {
+            var box = new Rectangle(x + Theme.Px(1), row.Top + Theme.Px(4), Theme.Px(13), Theme.Px(13));
+            var ticked = _ticked.Contains(file.FullPath);
+            using (var fill = new SolidBrush(ticked ? Theme.Accent : Theme.Card)) g.FillRectangle(fill, box);
+            using (var pen = new Pen(ticked ? Theme.Accent : Color.FromArgb(0x9C, 0xA3, 0xAF))) g.DrawRectangle(pen, box);
+            if (ticked)
+            {
+                TextRenderer.DrawText(g, "\uE73E", Theme.SmallGlyph, box, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
         }
         x += Theme.Px(18);
 
@@ -181,7 +284,7 @@ internal sealed class FileTreeView : TreeView
         var detailColor = Theme.Muted;
         if (file.IsOutsideVault)
         {
-            detail = "⚠ Outside the vault: teammates won't have it";
+            detail = "\u26A0 Outside the vault: teammates won't have it";
             detailColor = Color.FromArgb(0xB4, 0x53, 0x09);
         }
         else if (file.IsSuppressed)
@@ -192,7 +295,7 @@ internal sealed class FileTreeView : TreeView
         {
             var partNumber = status?.Index?.GetProperty(IndexEntry.PartNumberNames) ?? System.IO.Path.GetFileNameWithoutExtension(file.Name);
             var description = status?.Index?.GetProperty(IndexEntry.DescriptionNames) ?? "";
-            detail = description.Length > 0 ? $"{partNumber} — {description}" : partNumber;
+            detail = description.Length > 0 ? $"{partNumber} \u2014 {description}" : partNumber;
         }
         TextRenderer.DrawText(g, detail, Theme.Small, new Rectangle(x, row.Top + Theme.Px(19), Math.Max(1, row.Right - Theme.Px(6) - x), Theme.Px(16)),
             detailColor, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);

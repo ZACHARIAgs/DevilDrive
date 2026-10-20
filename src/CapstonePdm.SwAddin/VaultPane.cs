@@ -110,6 +110,7 @@ internal sealed class VaultPane : UserControl
         {
             StatusOf = node => node.RelativePath != null && _vault != null ? FileAt(_vault.ToFullPath(node.RelativePath)) : null,
         };
+        _tree.TickedChanged += (_, _) => UpdateView();
         _checkOut = new ModernButton("Check Out", "");
         _checkIn = new ModernButton("Check In", "");
         _undo = new ModernButton("Undo Check Out", "");
@@ -385,9 +386,17 @@ internal sealed class VaultPane : UserControl
         // Show only the actions that make sense for this file; the main one is highlighted.
         var state = file?.State;
         var ready = _vault != null && !_busy;
-        var canCheckIn = state is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
-        var canCheckOut = file != null && file.IsLockable && state is FileState.Available or FileState.ModifiedWithoutCheckOut;
-        var canUndo = state is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified;
+        // Check Out / Check In / Undo cover every file in the tree, not just the active document.
+        var treeFiles = TreeFiles();
+        var checkOutCount = treeFiles.Count(CanCheckOutFile);
+        var checkInCount = treeFiles.Count(CanCheckInFile);
+        var undoCount = treeFiles.Count(CanUndoFile);
+        var canCheckIn = checkInCount > 0;
+        var canCheckOut = checkOutCount > 0;
+        var canUndo = undoCount > 0;
+        _checkOut.Text = ActionLabel("Check Out", Ticked(CanCheckOutFile).Count, checkOutCount, "available");
+        _checkIn.Text = ActionLabel("Check In", Ticked(CanCheckInFile).Count, checkInCount, "to check in");
+        _undo.Text = ActionLabel("Undo Check Out", Ticked(CanUndoFile).Count, undoCount, "checked out");
 
         _checkIn.Visible = canCheckIn;
         _checkOut.Visible = canCheckOut;
@@ -582,6 +591,48 @@ internal sealed class VaultPane : UserControl
 
     private void SetStatus(string text) => _status.Text = text;
 
+    /// <summary>Distinct vault files in the files-in-use tree (just the active document if there's no tree).</summary>
+    private List<VaultFile> TreeFiles()
+    {
+        var paths = _tree.Root?.DistinctFiles().ToList() ?? (_currentPath != null ? new List<string> { _currentPath } : new List<string>());
+        return paths.Select(FileAt).Where(f => f != null).Select(f => f!).ToList();
+    }
+
+    private static bool CanCheckOutFile(VaultFile f) => f.IsLockable && f.State is FileState.Available or FileState.ModifiedWithoutCheckOut;
+
+    private static bool CanCheckInFile(VaultFile f) => f.State is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
+
+    private static bool CanUndoFile(VaultFile f) => f.State is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified;
+
+    /// <summary>Ticked files in the tree that the command can act on.</summary>
+    private List<string> Ticked(Func<VaultFile, bool> can) => _tree.TickedFiles.Where(p => FileAt(p) is VaultFile f && can(f)).ToList();
+
+    private static string ActionLabel(string verb, int ticked, int available, string what) =>
+        ticked > 0 ? $"{verb} ({ticked} ticked)" : available > 1 ? $"{verb}\u2026 ({available} {what})" : verb;
+
+    /// <summary>
+    /// Picker rows for the files in the tree a command can act on: the active document first, then
+    /// the rest by name. Ticked files (or, with none ticked, the active document) start ticked.
+    /// </summary>
+    private List<PickItem> TreePickItems(IEnumerable<string> paths, Func<VaultFile, bool> can, Func<VaultFile, string> describe, Func<VaultFile, bool>? preTick = null)
+    {
+        var top = _currentPath;
+        var ticked = new HashSet<string>(Ticked(can), StringComparer.OrdinalIgnoreCase);
+        var items = new List<PickItem>();
+        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(p => string.Equals(p, top, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                     .ThenBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        {
+            var file = FileAt(path);
+            if (file == null) continue;
+            var isTop = string.Equals(path, top, StringComparison.OrdinalIgnoreCase);
+            var allowed = can(file);
+            var check = allowed && (ticked.Count > 0 ? ticked.Contains(path) : isTop || preTick?.Invoke(file) == true);
+            items.Add(new PickItem(path, Path.GetFileName(path) + (isTop ? "  (this document)" : "") + describe(file), check, !allowed));
+        }
+        return items;
+    }
+
     private void FitWidths()
     {
         var scrollbar = _layout.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
@@ -600,52 +651,52 @@ internal sealed class VaultPane : UserControl
         var top = _currentPath;
         if (top == null || _vault == null) return;
 
-        var targets = new List<string> { top };
-        var references = _sw.GetReferences(top).Where(IsInVault).ToList();
-        // Its drawings too: changing a part usually means updating the drawing.
-        var drawings = (FileAt(top)?.Drawings ?? Array.Empty<string>()).Select(_vault.ToFullPath).ToList();
-        if (references.Count > 0 || drawings.Count > 0)
-        {
-            var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
-            foreach (var drawing in drawings.OrderBy(Path.GetFileName))
-            {
-                var file = FileAt(drawing);
-                if (file == null) continue;
-                var free = file.State == FileState.Available;
-                var label = Path.GetFileName(drawing) + (file.State switch
-                {
-                    FileState.CheckedOutByOther => $"  (drawing, checked out by {file.CheckedOutBy})",
-                    FileState.CheckedOutByMe => "  (drawing, already checked out to you)",
-                    FileState.Frozen => "  (drawing, frozen)",
-                    _ => file.ChangedSinceDrawing.Count > 0 ? "  (drawing, may be out of date)" : "  (drawing)",
-                });
-                items.Add(new PickItem(drawing, label, false, !free));
-            }
-            foreach (var path in references.OrderBy(Path.GetFileName))
-            {
-                var file = FileAt(path);
-                if (file == null || !file.IsLockable) continue;
-                var locked = file.State == FileState.CheckedOutByOther;
-                var label = Path.GetFileName(path) + (file.State switch
-                {
-                    FileState.CheckedOutByOther => $"  (checked out by {file.CheckedOutBy})",
-                    FileState.CheckedOutByMe => "  (already checked out to you)",
-                    _ => "",
-                });
-                items.Add(new PickItem(path, label, false, locked || file.State == FileState.CheckedOutByMe));
-            }
+        // Fresh lock info first, so the list shows who has what right now.
+        SetStatus("Checking who has what\u2026");
+        await RefreshAsync(contactVault: true);
+        if (_vault == null) return;
 
-            if (items.Count > 1)
-            {
-                using var picker = new FilePickerForm("Check Out",
-                    "Check out this document only, or also its drawings and the files it references:", items, "Check Out", askComment: false, askKeep: false);
-                if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
-                targets = picker.SelectedPaths;
-            }
+        // Every lockable file in the tree, plus the active document's drawings (changing a part usually means updating its drawing).
+        var drawings = (FileAt(top)?.Drawings ?? Array.Empty<string>()).Select(_vault.ToFullPath);
+        var paths = TreeFiles().Where(f => f.IsLockable && f.State != FileState.NotInVault).Select(f => _vault.ToFullPath(f.RelativePath)).Concat(drawings).ToList();
+        var items = TreePickItems(paths, CanCheckOutFile, f => f.State switch
+        {
+            FileState.CheckedOutByOther => $"  (checked out by {f.CheckedOutBy})",
+            FileState.CheckedOutByMe => "  (already checked out to you)",
+            FileState.Frozen => "  (frozen)",
+            FileState.InReview => $"  (in review, submitted by {f.ReviewSubmittedBy})",
+            _ when f.ChangedSinceDrawing.Count > 0 => "  (drawing, may be out of date)",
+            _ => f.IsOutdated ? "  (newer version in vault)" : "",
+        });
+        if (!items.Any(i => !i.IsLocked))
+        {
+            SetStatus("Nothing in this document can be checked out right now.");
+            return;
         }
 
-        await RunAsync("Checking out…", async progress =>
+        List<string> targets;
+        if (items.Count == 1)
         {
+            targets = new List<string> { items[0].Path };
+        }
+        else
+        {
+            var taken = items.Count(i => i.IsLocked && FileAt(i.Path)?.State == FileState.CheckedOutByOther);
+            using var picker = new FilePickerForm("Check Out",
+                "Tick the files to check out." + (taken > 0 ? $" {taken} file(s) are checked out by someone else and can't be ticked." : ""),
+                items, "Check Out", askComment: false, askKeep: false);
+            if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+            targets = picker.SelectedPaths;
+        }
+
+        await RunAsync("Checking out\u2026", async progress =>
+        {
+            // Pull the newest versions first, so nobody edits an old copy.
+            if ((_snapshot?.UpdatesAvailable ?? 0) > 0)
+            {
+                progress.Report("Getting latest first\u2026");
+                if (await GetLatestCoreAsync(progress) == null) return "Check Out cancelled.";
+            }
             // Outdated files must be replaced on disk, which needs SolidWorks to let go of them.
             var outdated = targets.Where(p => FileAt(p)?.IsOutdated == true).ToList();
             var closed = outdated.Count > 0 ? _sw.CloseDocumentsUsing(outdated, CloseMode.RequireSaved) : null;
@@ -659,6 +710,7 @@ internal sealed class VaultPane : UserControl
                 if (closed != null) _sw.Reopen(closed);
             }
             _sw.MakeWritable(result.Succeeded.Select(_vault.ToFullPath));
+            if (result.Failures.Count == 0) _tree.ClearTicks();
             return Report(result, "Checked out");
         });
     }
@@ -668,19 +720,20 @@ internal sealed class VaultPane : UserControl
         var top = _currentPath;
         if (top == null || _vault == null) return;
 
-        static bool CanCheckIn(VaultFile? f) => f != null && f.State is FileState.CheckedOutByMe or FileState.NotInVault or FileState.Modified;
-
-        var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
-        var newReferences = 0;
-        foreach (var path in _sw.GetReferences(top).Where(IsInVault).OrderBy(Path.GetFileName))
+        // Everything in the tree you can check in; new references must go in too, or teammates get missing parts.
+        var candidates = TreeFiles().Where(CanCheckInFile).Select(f => _vault.ToFullPath(f.RelativePath)).ToList();
+        var newFiles = TreeFiles().Where(f => f.State == FileState.NotInVault).Select(f => _vault.ToFullPath(f.RelativePath)).ToList();
+        foreach (var path in _sw.GetReferences(top).Where(IsInVault).Where(p => FileAt(p)?.State == FileState.NotInVault)) newFiles.Add(path);
+        candidates.AddRange(newFiles);
+        if (candidates.Count == 0)
         {
-            var file = FileAt(path);
-            if (!CanCheckIn(file)) continue;
-            var isNew = file!.State == FileState.NotInVault;
-            if (isNew) newReferences++;
-            var label = Path.GetFileName(path) + (isNew ? "  (new)" : file.HasLocalChanges ? "  (edited)" : "  (checked out, unchanged)");
-            items.Add(new PickItem(path, label, isNew || file.HasLocalChanges));
+            SetStatus("Nothing in this document is checked out to you.");
+            return;
         }
+        var items = TreePickItems(candidates, CanCheckInFile,
+            f => f.State == FileState.NotInVault ? "  (new)" : f.HasLocalChanges ? "  (edited)" : "  (checked out, unchanged)",
+            preTick: f => f.State == FileState.NotInVault || f.HasLocalChanges);
+        var newReferences = items.Count(i => FileAt(i.Path)?.State == FileState.NotInVault);
 
         var note = newReferences > 0
             ? $"{newReferences} referenced file(s) are new. Check them in too, or teammates will get missing-reference errors."
@@ -693,6 +746,14 @@ internal sealed class VaultPane : UserControl
         var targets = picker.SelectedPaths;
         var comment = picker.Comment;
         var keep = picker.KeepCheckedOut;
+
+        var unsaved = targets.Where(p => _sw.FindOpen(p)?.GetSaveFlag() == true).ToList();
+        if (unsaved.Count > 0 &&
+            MessageBox.Show(_sw.MainWindow, $"{PathList.Format(unsaved)} {(unsaved.Count == 1 ? "has" : "have")} unsaved changes in SolidWorks.\n\nSave and check in?",
+                "Capstone PDM \u2014 Unsaved changes", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+        {
+            return;
+        }
 
         // Version guard: a file last saved in a newer SolidWorks than the team's can't be opened by the others.
         if (TeamYear != null)
@@ -737,7 +798,9 @@ internal sealed class VaultPane : UserControl
             try
             {
                 var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
-                return Report(await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews), "Checked in");
+                var checkedIn = await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews);
+                if (checkedIn.Failures.Count == 0) _tree.ClearTicks();
+                return Report(checkedIn, "Checked in");
             }
             finally
             {
@@ -751,14 +814,12 @@ internal sealed class VaultPane : UserControl
         var top = _currentPath;
         if (top == null || _vault == null) return;
 
-        var targets = new List<string> { top };
-        var mine = _sw.GetReferences(top).Where(IsInVault)
-            .Where(p => FileAt(p)?.State is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut)
-            .ToList();
-        if (mine.Count > 0)
+        var mine = TreeFiles().Where(CanUndoFile).Select(f => _vault.ToFullPath(f.RelativePath)).ToList();
+        if (mine.Count == 0) return;
+        var targets = new List<string> { mine[0] };
+        if (mine.Count > 1)
         {
-            var items = new List<PickItem> { new PickItem(top, Path.GetFileName(top) + "  (this document)", true) };
-            items.AddRange(mine.OrderBy(Path.GetFileName).Select(p => new PickItem(p, Path.GetFileName(p), false)));
+            var items = TreePickItems(mine, CanUndoFile, f => f.HasLocalChanges ? "  (edited)" : "");
             using var picker = new FilePickerForm("Undo Check Out",
                 "Your changes to the selected files will be thrown away (a backup copy is kept).", items, "Undo Check Out",
                 askComment: false, askKeep: false);
@@ -768,7 +829,7 @@ internal sealed class VaultPane : UserControl
         else
         {
             var answer = MessageBox.Show(_sw.MainWindow,
-                $"Undo check-out of {Path.GetFileName(top)}?\n\nAny changes will be thrown away and the file will be reloaded from the vault. " +
+                $"Undo check-out of {Path.GetFileName(mine[0])}?\n\nAny changes will be thrown away and the file will be reloaded from the vault. " +
                 $"A backup copy is kept in {FileUtil.BackupRoot}.",
                 "Undo Check Out", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.OK) return;
@@ -1320,7 +1381,13 @@ internal sealed class VaultPane : UserControl
     {
         if (_vault == null) return;
 
-        await RunAsync("Getting latest…", async progress =>
+        await RunAsync("Getting latest\u2026", async progress => await GetLatestCoreAsync(progress) ?? "Get Latest cancelled.");
+    }
+
+    /// <summary>Gets the latest versions, offering to close and reopen open files that changed. Null if the user cancels.</summary>
+    private async Task<string?> GetLatestCoreAsync(IProgress<string> progress)
+    {
+        if (_vault == null) return null;
         {
             GetLatestResult result;
             try
@@ -1336,7 +1403,7 @@ internal sealed class VaultPane : UserControl
                     $"{PathList.Format(paths)} {(paths.Count == 1 ? "has" : "have")} a newer version in the vault but {(paths.Count == 1 ? "is" : "are")} open in SolidWorks.\n\n" +
                     "Close them, update them, and reopen them?",
                     "Get Latest", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-                if (answer != DialogResult.OK) return "Get Latest cancelled.";
+                if (answer != DialogResult.OK) return null;
 
                 var closed = _sw.CloseDocumentsUsing(paths, CloseMode.RequireSaved);
                 try
@@ -1349,7 +1416,7 @@ internal sealed class VaultPane : UserControl
                 }
             }
             return result.CheckInsReceived == 0 ? "Already up to date." : $"Got latest: {result.UpdatedFiles.Count} file(s) updated.";
-        });
+        }
     }
 
     private void OpenDesktopApp()

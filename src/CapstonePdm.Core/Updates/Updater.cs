@@ -130,7 +130,7 @@ public sealed class Updater
 
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, assetName);
-        progress?.Report($"Downloading {assetName} ({asset.Size / 1048576.0:0.#} MB)…");
+        progress?.Report($"Downloading {assetName} ({asset.Size / 1048576.0:0.#} MB)\u2026");
         File.WriteAllBytes(path, await DownloadBytesAsync(asset, ct).ConfigureAwait(false));
 
         var actual = Sha256(path);

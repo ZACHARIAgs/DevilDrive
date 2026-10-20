@@ -55,7 +55,7 @@ public static class AppUpdater
         if (release == null || release.Version <= current || release.Find(Updater.AppAsset) == null) return;
 
         var notes = release.Notes.Trim();
-        if (notes.Length > 600) notes = notes.Substring(0, 600) + "…";
+        if (notes.Length > 600) notes = notes.Substring(0, 600) + "\u2026";
         var answer = MessageBox.Show(owner,
             $"Capstone PDM {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
             (notes.Length > 0 ? notes + "\n\n" : "") + "Update now? It takes about a minute and the app restarts.",
