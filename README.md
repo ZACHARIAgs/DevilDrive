@@ -27,7 +27,7 @@ You must accept the GitHub collaborator invite for the vault repo before setup c
 | 1. **Get Latest** | Start every session with this. It downloads everyone's newest check-ins. Files you're editing are never overwritten. |
 | 2. **Check Out** | Select the files you'll edit, then click Check Out. This locks them so nobody else can edit them, and makes them writable. |
 | 3. **Edit** | Open the files from `C:\CapstoneVault` in SolidWorks and save as usual. |
-| 4. **Close** | Close the files in SolidWorks so the saved version is complete. |
+| 4. **Save** | Save in SolidWorks. Only saved changes get checked in; the files can stay open. |
 | 5. **Check In** | Select the files, click Check In and write a real comment ("added mounting holes", not "update"). This saves a new version to the vault and releases your check-out. |
 
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
@@ -59,16 +59,27 @@ Right-click a file inside the vault and choose **Capstone PDM** (on Windows 11, 
 
 Setup offers to install the **Capstone PDM add-in** (SolidWorks 2020 or newer, tested on 2024 and 2026; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
 
-In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the state of the document you're looking at, plus buttons:
+In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the document you're looking at and, below it, **Files in use**: everything that document uses, without opening any of the parts.
 
-* **Check Out**: for an assembly or drawing, you can tick the referenced parts to check out at the same time. The document becomes editable right away; there's no need to reopen it.
-* **Check In…**: saves, closes, checks in and reopens the files for you, so you don't have to close them yourself. New parts used by an assembly are pre-ticked, so teammates never get missing references.
-* **Undo Check Out**, **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
+* **Files in use tree.** For an assembly, every component instance at every level, like the FeatureManager tree (`bracket<1>`, `bracket<2>`); click the arrow to open a subassembly. For a drawing, the models it shows. Each row has:
+  * a **dot**: 🟢 available, 🔵 checked out to you, 🔴 checked out by someone else (hover for who), ⚫ frozen, 🟩 in review, 🟠 edited without check-out;
+  * the **version as on-your-PC/in-the-vault**, e.g. `4/4` (up to date) or `7/10` (**orange**: the vault has 3 newer check-ins, click Get Latest);
+  * the **part number and description** (the file name when there's no part number).
+  Suppressed components are greyed out, and files **outside the vault** are flagged in orange (teammates won't have them). The tree updates when you switch, open, close or save a document.
+* **Tick boxes.** Tick rows to work on several files at once: click the box, Ctrl-click a row, or Shift-click to tick a range. Right-click a subassembly for **Tick this and everything inside**.
+* **Check Out / Check In / Undo Check Out** work on the whole tree, and their labels say how many files they apply to ("Check Out… (5 available)", "Check In (2 ticked)").
+  * With rows ticked, the ticked files are checked out or in straight away. Check In only asks for the comment; Check Out tells you which ticked files someone else has and checks out the rest.
+  * With nothing ticked, a list of everything in the tree you can check out (or in) opens.
+  * **Check Out** first gets the latest versions if the vault has newer ones, so you never edit an old copy. The files become editable right away.
+  * **Check In** saves the files being checked in and checks them in. **You don't need to close anything**, including the assembly you edited a part in, even if that assembly isn't checked out.
+  * **New files:** the first time a SolidWorks file is checked in, a window asks for its **description** (saved into the file's `Description` property, so it shows everywhere).
+* **Saving a part inside an assembly that isn't checked out:** press Save as usual. The add-in saves the checked-out parts you changed and leaves the read-only assembly alone, instead of SolidWorks asking to save the assembly as a new file.
+* **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
 * **Rename / Move**: the safe way to rename or move a file. It finds every assembly and drawing that uses the file, updates their references, and checks everything in together.
 * **Submit for review**, and for admins **Approve & release** / **Reject**: see *Review before release* below. Approving a drawing here also saves its PDF.
 * **Export BOM (Excel)**: for an assembly, saves a parts list as a CSV file that opens in Excel: every part at every level with its quantity, part number, description, material and released revision. Suppressed and "excluded from BOM" parts are left out.
 * **Notify me when it's free**: for a file someone else has checked out.
-* The card also shows the file's part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
+* The card at the top shows the active document's state, its version (`7/10`), part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
 * **Open Capstone PDM**: opens the full app (vault view, history, restore).
 
 When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\CapstonePDM\addin.log` to an admin.
@@ -95,7 +106,7 @@ A **read-only file means you haven't checked it out.** Don't clear the read-only
 2. Check out before editing.
 3. **Never rename or move files in Windows Explorer.** Use **Rename / Move** in the SolidWorks pane, which updates every assembly and drawing that uses the file.
 4. Check in at least daily, with a real comment.
-5. Close the file in SolidWorks before checking in from the app. The add-in does this for you.
+5. Save the file in SolidWorks before checking in from the app (only saved changes are checked in). The add-in saves it for you.
 6. Follow the team's file naming scheme.
 
 ### When something goes wrong
@@ -107,7 +118,7 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 | **Vault offline** | No internet, or GitHub is down. Nothing was changed. Try again when you're back online. The vault view still shows the last known status. |
 | **Checked out by someone else** | *Name* has the file. Ask them to check it in. If they're unreachable and it's stale, ask an admin to **Break Lock**. |
 | **Check-in not sent to the vault** | Your new version is saved on your PC but didn't reach GitHub (offline, or the vault refused it). Your files stay checked out to you. Fix the cause and click **Check In** again: it sends what's waiting. A yellow banner reminds you until it's sent. |
-| **File in use** | The file is open in SolidWorks. Close it and retry. |
+| **File in use** | Get Latest or Undo needs to replace a file that's open in SolidWorks. Close it (the add-in offers to close and reopen it) and retry. Check-in works with files open. |
 | **Not checked out** | You edited a file without checking it out. Check it out (your edits are kept), then check in. |
 | **Conflict** | The vault has a newer version of a file you also changed. Usually someone broke your check-out. Nothing was overwritten. Copy your version somewhere safe, Undo Check Out, Get Latest, then sort it out with whoever made the other change. |
 | **Sign-in or permission problem** | Git Credential Manager will ask you to sign in again. If it still fails, ask an admin to check you're a collaborator on the repo. |
@@ -306,6 +317,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Undo Check Out | back up, `checkout HEAD -- file`, `lfs unlock` |
 | History / Restore | `log -- file` / `checkout <commit> -- file`, then Check In |
 | Break Lock | `lfs unlock --force --id` |
+| Version `7/10` | check-ins touching the file in `HEAD` / plus those in `HEAD..origin/main` (`git log --name-only`) |
 | Version guard | add-in reads `ISldWorks.VersionHistory` (file version 17000 = 2024, 19000 = 2026) and compares with `pdm.json` `solidWorksVersion` |
 | Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in; Rebuild Index commits them all |
 | Milestones | annotated tag `milestone/<name>` on the vault's latest commit; viewing = `checkout --detach <tag>`, Return to Latest = `checkout main` + Get Latest |
@@ -323,7 +335,9 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 * **Building** needs SolidWorks installed (it references the interop DLLs in `C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS`; override with `/p:SolidWorksDir=...`). Without SolidWorks, build the other projects individually.
 * **Version support:** built against the SolidWorks **2024** interop files with *Embed Interop Types* on. It only uses API calls that already existed in SolidWorks 2017 (the multi-size task pane icon, with a fallback for older versions), so one build supports **2020 and newer**. It has been tested on 2024 and 2026. Don't add newer API calls without a version check (`ISldWorks.RevisionNumber()`; 2020 is 28, 2024 is 32, 2026 is 34).
 * **Install for development:** close SolidWorks, build, then run `scripts\Install-SolidWorksAddin.ps1`. It copies the Release (or Debug) build to `C:\ProgramData\CapstonePDM\SolidWorksAddin` and registers it with RegAsm (admin prompt). Run with `-Uninstall` to remove it. Re-run after every rebuild.
-* **Design:** `CapstonePdmAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `SolidWorksSession` (references, save, close/reopen so Git can replace files SolidWorks has open).
+* **Design:** `CapstonePdmAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `FileTreeView` (owner-drawn files-in-use tree with tick boxes), `SolidWorksSession` (component tree, references, properties, save, close/reopen), `AssemblySaveGuard` (the one SolidWorks event hook: Save in a read-only assembly saves only checked-out parts), `DescriptionForm` (descriptions for new files).
+* **Files in use:** `SolidWorksSession.GetFilesInUse` walks `GetRootComponent3().GetChildren()`, falling back to `IAssemblyDoc.GetComponents(false)` grouped by `GetParent()` (the root walk comes back empty for read-only assemblies whose parts aren't loaded), then to `GetDocumentDependencies2`. `Core/Vault/FileTree.cs` turns that into rows (unit-tested). The tree rebuilds when the active path, its save time or its component count changes.
+* **SolidWorks doesn't lock files.** It keeps a *shared* handle on every loaded file, so Git can read a saved file while it's open. Check-in therefore saves the targets in place (`SaveTargets`) instead of closing documents, and Core only refuses files nobody can read (`FileUtil.IsUnreadable`). Get Latest and Undo still close and reopen, because they replace files on disk.
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.
 * **Log:** `%LocalAppData%\CapstonePDM\addin.log`.
 * **Rename / Move** (`VaultPane.RenameAsync`) finds referencing files by reading them with `GetDocumentDependencies2` rather than trusting the index, and rolls back if any reference update fails.
