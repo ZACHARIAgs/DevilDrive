@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Jarvis</AssemblyName>
+    <RootNamespace>Jarvis.Client</RootNamespace>
+    <ApplicationIcon>..\..\assets\vault.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\vault.ico" Link="Assets\vault.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Jarvis.Core\Jarvis.Core.csproj" />
+    <!-- File Explorer preview pane add-on (.NET Framework COM server): built first, embedded in the exe, installed per user. -->
+    <ProjectReference Include="..\Jarvis.PreviewHandler\Jarvis.PreviewHandler.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\Jarvis.PreviewHandler\bin\$(Configuration)\net48\Jarvis.PreviewHandler.dll" LogicalName="PreviewHandler/Jarvis.PreviewHandler.dll" />
+    <EmbeddedResource Include="..\Jarvis.PreviewHandler\bin\$(Configuration)\net48\HelixToolkit.Wpf.dll" LogicalName="PreviewHandler/HelixToolkit.Wpf.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 3D viewer for the STL previews the SolidWorks add-in saves (MIT licensed). -->
+    <PackageReference Include="HelixToolkit.Core.Wpf" Version="2.25.0" />
+  </ItemGroup>
+
+</Project>

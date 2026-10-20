@@ -1,0 +1,54 @@
+<Window x:Class="Jarvis.Client.Views.MilestonesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Milestones" Width="780" Height="500" MinWidth="520" MinHeight="320"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <DockPanel Margin="12">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,10"
+                   Text="A milestone is a snapshot of the whole vault, for example a design review. View one to see every file exactly as it was then; assemblies open with the matching part versions. While viewing, nothing can be checked out or in until you click Return to Latest." />
+
+        <Border x:Name="CreatePanel" DockPanel.Dock="Top" Background="#F6F7F9" BorderBrush="#E1E4E9" BorderThickness="1"
+                CornerRadius="6" Padding="10" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="New milestone:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBox x:Name="NameBox" Grid.Column="1" Height="24" VerticalContentAlignment="Center" TextChanged="OnNameChanged"
+                         ToolTip="For example: Design Review 1" />
+                <TextBlock Grid.Column="2" Text="Description:" VerticalAlignment="Center" Margin="12,0,8,0" />
+                <TextBox x:Name="DescriptionBox" Grid.Column="3" Height="24" VerticalContentAlignment="Center" />
+                <Button x:Name="CreateButton" Grid.Column="4" Style="{StaticResource DialogButton}" Content="Create" IsEnabled="False" Click="OnCreate"
+                        ToolTip="Labels the vault exactly as it is in the vault now (admin)." />
+            </Grid>
+        </Border>
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" LastChildFill="False">
+            <TextBlock x:Name="StatusText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#666" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource DialogButton}" Content="Close" IsCancel="True" Click="OnClose" />
+            <Button x:Name="ViewButton" DockPanel.Dock="Right" Style="{StaticResource DialogButton}" Content="View This Milestone"
+                    IsEnabled="False" Click="OnView" />
+        </DockPanel>
+
+        <DataGrid x:Name="MilestonesGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                  SelectionMode="Single" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#EEEEEE" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Milestone" Binding="{Binding Name}" Width="200" />
+                <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt.LocalDateTime, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="120" />
+                <DataGridTextColumn Header="By" Binding="{Binding CreatedBy}" Width="120" />
+                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextWrapping" Value="Wrap" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>

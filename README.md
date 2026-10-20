@@ -4,7 +4,7 @@ A small PDM (product data management) tool for our SolidWorks files. It stops tw
 
 Under the hood the vault is a private GitHub repo using Git LFS file locking. You never need to type a Git command.
 
-Jarvis used to be called Capstone PDM. Some file names keep the old name so existing installs keep updating: `CapstonePDM-Setup.zip`, `CapstonePDM.exe` and the settings folder `%AppData%\CapstonePDM`.
+Jarvis used to be called Capstone PDM. If you had Capstone PDM, just accept the update: Jarvis moves itself, your settings, shortcuts, right-click menu and SolidWorks add-in to the new name the first time it starts.
 
 ---
 
@@ -13,7 +13,7 @@ Jarvis used to be called Capstone PDM. Some file names keep the old name so exis
 ### One-time setup (about 10 minutes)
 
 1. **Accept the GitHub invite** for your team's vault (it's in your email, or at `https://github.com/<owner>/<vault repo>/invitations`). No GitHub account? Make a free one at github.com and send your username to the team lead.
-2. Get **CapstonePDM-Setup.zip** (the link is in the invite message from your team lead, or GitHub Releases) and unzip it anywhere.
+2. Get **Jarvis-Setup.zip** (the link is in the invite message from your team lead, or GitHub Releases) and unzip it anywhere.
 3. Double-click **Setup.cmd**. It will:
    - install Git and Git LFS (a Windows permission prompt may appear),
    - ask for your **name** and **email** (the one on your GitHub account),
@@ -34,7 +34,7 @@ The same setup zip works for every team: which vault you get depends only on whi
 
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
-* **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\CapstonePDM\Backups`.
+* **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\Jarvis\Backups`.
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material, ...), what it **contains**, and **where it's used**. Check where-used before changing a part, so you know which assemblies it affects.
 * **Search** finds files by name, part number, description or any other SolidWorks property.
@@ -87,7 +87,7 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
 * The card at the top shows the active document's state, its version (`7/10`), part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
 * **Open Jarvis**: opens the full app (vault view, history, restore).
 
-When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\CapstonePDM\addin.log` to an admin.
+When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\Jarvis\addin.log` to an admin.
 
 ### What the states mean
 
@@ -174,7 +174,7 @@ The guard is also why the app warns admins if `.github` is changed: it's the one
 
 * **Forced unlocks.** GitHub lets anyone with Write access force-unlock a file with raw Git (`git lfs unlock --force`). The app only shows Break Lock to admins, but it can't stop the raw command. What it can do: the vault guard undoes a push that changes a file someone else had checked out, and every version stays in the history. If a lock disappears unexpectedly, look at the repo's **Actions** tab and Discord.
 * **Keep the Discord webhook URL private.** Anyone with it can post messages as the bot. It's stored in `pdm.json`, so everyone with vault access can read it; don't paste it anywhere public. If it leaks, delete the webhook in Discord, make a new one and update `pdm.json`.
-* **The SolidWorks add-in folder** (`C:\ProgramData\CapstonePDM\SolidWorksAddin`) can only be changed by Windows administrators, so another account on the PC can't swap in a DLL that SolidWorks would load.
+* **The SolidWorks add-in folder** (`C:\ProgramData\Jarvis\SolidWorksAddin`) can only be changed by Windows administrators, so another account on the PC can't swap in a DLL that SolidWorks would load.
 * **Updates are checked** against the SHA-256 checksums published with each release before they're installed.
 
 ### Breaking a stale lock
@@ -249,9 +249,9 @@ The tool isn't tied to the capstone, and nothing in the setup zip names a team. 
 
 1. The team lead clicks **Vaults…** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
 2. **Invite teammates…** and send them the message the app gives you.
-3. Members who already have Jarvis: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `CapstonePDM-Setup.zip` and the welcome screen takes them there.
+3. Members who already have Jarvis: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `Jarvis-Setup.zip` and the welcome screen takes them there.
 
-The vault guard is included from the start. `Setup-CapstonePdm.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
+The vault guard is included from the start. `Setup-Jarvis.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
 
 ### Several groups on one PC
 
@@ -280,17 +280,17 @@ GitHub limits free LFS **storage and bandwidth**, and every Get Latest that down
 ### Layout
 
 ```
-src/CapstonePdm.Core/     netstandard2.0. All vault logic, no UI. Reused by the Phase 2 add-in.
+src/Jarvis.Core/     netstandard2.0. All vault logic, no UI. Reused by the Phase 2 add-in.
   Git/                    GitRunner (runs git.exe), GitErrorClassifier (stderr → typed errors), GitHubApi (create repo, invite), GitHubSignIn (first run)
   Vault/                  VaultService (all PDM commands), models, Git output parsers, VaultCatalog (find/download), VaultCreator (new team vault), VaultInvites
   Notifications/          Discord webhook
   Updates/                automatic updates from GitHub Releases (SHA-256 checked)
   Config/                 pdm.json (team) and settings.json (per PC)
   Errors/                 PdmException and subclasses, with user-facing messages
-src/CapstonePdm.Client/   WPF app (.NET 8), MVVM-lite
-src/CapstonePdm.SwAddin/  SolidWorks add-in (.NET Framework 4.8): task pane, reference-aware check-out/in
-src/CapstonePdm.PreviewHandler/  File Explorer 3D preview pane (.NET Framework 4.8 COM server, embedded in the app)
-tests/CapstonePdm.Core.Tests/  xUnit: parsers, error classification, and integration tests against real Git
+src/Jarvis.Client/   WPF app (.NET 8), MVVM-lite
+src/Jarvis.SwAddin/  SolidWorks add-in (.NET Framework 4.8): task pane, reference-aware check-out/in
+src/Jarvis.PreviewHandler/  File Explorer 3D preview pane (.NET Framework 4.8 COM server, embedded in the app)
+tests/Jarvis.Core.Tests/  xUnit: parsers, error classification, and integration tests against real Git
 vault-template/           .gitattributes, .gitignore, pdm.json for a new vault
 scripts/                  Setup (teammates), Initialize-Vault (admin), Publish-Client (build the zip), Release-Client (publish an update)
 ```
@@ -300,9 +300,9 @@ scripts/                  Setup (teammates), Initialize-Vault (admin), Publish-C
 Requires the .NET 8 SDK and Git.
 
 ```powershell
-dotnet build CapstonePdm.sln
-dotnet test CapstonePdm.sln
-dotnet run --project src/CapstonePdm.Client
+dotnet build Jarvis.sln
+dotnet test Jarvis.sln
+dotnet run --project src/Jarvis.Client
 ```
 
 The integration tests use a local bare repo in place of GitHub. A local remote has no LFS lock server, so locking itself is only covered by parser and classifier tests. **Test check-out and check-in against a real GitHub test repo before the team relies on it.**
@@ -313,7 +313,7 @@ The integration tests use a local bare repo in place of GitHub. A local remote h
 .\scripts\Publish-Client.ps1
 ```
 
-This produces `dist/CapstonePDM-Setup.zip`, containing a self-contained single-file `CapstonePDM.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-CapstonePdm.ps1`, plus the update files `CapstonePDM.exe`, `CapstonePDM-SolidWorksAddin.zip` and `SHA256SUMS`. Setup prints the installed exe's SHA-256 so it can be compared with the release.
+This produces `dist/Jarvis-Setup.zip`, containing a self-contained single-file `Jarvis.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-Jarvis.ps1`, plus the update files `Jarvis.exe`, `Jarvis-SolidWorksAddin.zip` and `SHA256SUMS`. Setup prints the installed exe's SHA-256 so it can be compared with the release.
 
 ### Automatic updates
 
@@ -323,6 +323,8 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 2. Run `.\scripts\Release-Client.ps1 -Notes "What changed"`. It builds everything and creates release `v<Version>` with the files attached, using your saved GitHub sign-in.
 
 **The code repo is public**, so anyone can download the app from its Releases page (the install link in invite messages) and every copy can update itself without GitHub access to it. The code contains no passwords or keys, and each team's vault stays private. (A fork kept private works too, but then teammates need **Read** access to it for installs and updates.) The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
+
+**Old Capstone PDM installs (0.4.0 and older)** look for `CapstonePDM.exe` and `CapstonePDM-SolidWorksAddin.zip` in the latest release, so `Publish-Client.ps1` also writes copies of the new files under those names (listed in `SHA256SUMS`). The updated app then moves itself to `%LocalAppData%\Programs\Jarvis\Jarvis.exe`, moves the settings from `%AppData%\CapstonePDM` to `%AppData%\Jarvis`, fixes the shortcuts and right-click menu, and the add-in installer replaces the old add-in. Drop the copies once nobody runs Capstone PDM anymore.
 
 ### How the commands map to Git
 
@@ -342,7 +344,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
 | Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
 | 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; app renders with HelixToolkit |
-| File Explorer | per-user `HKCU\Software\Classes\*\shell\CapstonePDM` cascade with `AppliesTo` = vault path; `CapstonePDM.exe --explorer <command> <path>`; multi-select merged over a named pipe |
+| File Explorer | per-user `HKCU\Software\Classes\*\shell\Jarvis` cascade with `AppliesTo` = vault path; `Jarvis.exe --explorer <command> <path>`; multi-select merged over a named pipe |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
@@ -351,13 +353,13 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 
 * **Building** needs SolidWorks installed (it references the interop DLLs in `C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS`; override with `/p:SolidWorksDir=...`). Without SolidWorks, build the other projects individually.
 * **Version support:** built against the SolidWorks **2024** interop files with *Embed Interop Types* on. It only uses API calls that already existed in SolidWorks 2017 (the multi-size task pane icon, with a fallback for older versions), so one build supports **2020 and newer**. It has been tested on 2024 and 2026. Don't add newer API calls without a version check (`ISldWorks.RevisionNumber()`; 2020 is 28, 2024 is 32, 2026 is 34).
-* **Install for development:** close SolidWorks, build, then run `scripts\Install-SolidWorksAddin.ps1`. It copies the Release (or Debug) build to `C:\ProgramData\CapstonePDM\SolidWorksAddin` and registers it with RegAsm (admin prompt). Run with `-Uninstall` to remove it. Re-run after every rebuild.
-* **Design:** `CapstonePdmAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `FileTreeView` (owner-drawn files-in-use tree with tick boxes), `SolidWorksSession` (component tree, references, properties, save, close/reopen), `AssemblySaveGuard` (the one SolidWorks event hook: Save in a read-only assembly saves only checked-out parts), `DescriptionForm` (descriptions for new files).
+* **Install for development:** close SolidWorks, build, then run `scripts\Install-SolidWorksAddin.ps1`. It copies the Release (or Debug) build to `C:\ProgramData\Jarvis\SolidWorksAddin` and registers it with RegAsm (admin prompt). Run with `-Uninstall` to remove it. Re-run after every rebuild.
+* **Design:** `JarvisAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `FileTreeView` (owner-drawn files-in-use tree with tick boxes), `SolidWorksSession` (component tree, references, properties, save, close/reopen), `AssemblySaveGuard` (the one SolidWorks event hook: Save in a read-only assembly saves only checked-out parts), `DescriptionForm` (descriptions for new files).
 * **Files in use:** `SolidWorksSession.GetFilesInUse` walks `GetRootComponent3().GetChildren()`, falling back to `IAssemblyDoc.GetComponents(false)` grouped by `GetParent()` (the root walk comes back empty for read-only assemblies whose parts aren't loaded), then to `GetDocumentDependencies2`. `Core/Vault/FileTree.cs` turns that into rows (unit-tested). The tree rebuilds when the active path, its save time or its component count changes.
-* **3D previews:** `Core/Preview/PreviewMesh.cs` reads the STL, welds vertices, smooths normals within a 35° crease angle and finds feature edges; `Client/Services/PreviewModel.cs` turns that into WPF geometry (satin material, edge lines as thin tubes, studio lights). `CapstonePDM.exe --render-preview in.stl out.png` renders one to an image for checking.
-* **Explorer preview pane:** `src/CapstonePdm.PreviewHandler` (.NET Framework 4.8 in-process COM server, because prevhost.exe needs one) links those two files instead of referencing Core. The app embeds its DLLs, writes them to `%LocalAppData%\Programs\CapstonePDM\PreviewHandler\<hash>` and registers them under HKCU (`.sldprt`/`.sldasm` → `ShellEx\{8895b1c6-…}`), with `DisableLowILProcessIsolation` so it gets the file path. It finds vaults through `%AppData%\CapstonePDM\vaults.txt`. Log: `%LocalAppData%\CapstonePDM\preview.log`.
+* **3D previews:** `Core/Preview/PreviewMesh.cs` reads the STL, welds vertices, smooths normals within a 35° crease angle and finds feature edges; `Client/Services/PreviewModel.cs` turns that into WPF geometry (satin material, edge lines as thin tubes, studio lights). `Jarvis.exe --render-preview in.stl out.png` renders one to an image for checking.
+* **Explorer preview pane:** `src/Jarvis.PreviewHandler` (.NET Framework 4.8 in-process COM server, because prevhost.exe needs one) links those two files instead of referencing Core. The app embeds its DLLs, writes them to `%LocalAppData%\Programs\Jarvis\PreviewHandler\<hash>` and registers them under HKCU (`.sldprt`/`.sldasm` → `ShellEx\{8895b1c6-…}`), with `DisableLowILProcessIsolation` so it gets the file path. It finds vaults through `%AppData%\Jarvis\vaults.txt`. Log: `%LocalAppData%\Jarvis\preview.log`.
 * **Older versions on this PC:** `VaultService.UseVersionAsync` runs `git restore --source=<commit> --worktree` and records the choice in `.git/capstone-pinned.json` (never committed). Snapshots treat pinned files as unchanged, Get Latest restores and re-pins them around the merge, and check-out/check-in refuse them.
 * **SolidWorks doesn't lock files.** It keeps a *shared* handle on every loaded file, so Git can read a saved file while it's open. Check-in therefore saves the targets in place (`SaveTargets`) instead of closing documents, and Core only refuses files nobody can read (`FileUtil.IsUnreadable`). Get Latest and Undo still close and reopen, because they replace files on disk.
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.
-* **Log:** `%LocalAppData%\CapstonePDM\addin.log`.
+* **Log:** `%LocalAppData%\Jarvis\addin.log`.
 * **Rename / Move** (`VaultPane.RenameAsync`) finds referencing files by reading them with `GetDocumentDependencies2` rather than trusting the index, and rolls back if any reference update fails.

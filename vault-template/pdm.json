@@ -1,11 +1,11 @@
 {
   // Shared Jarvis settings. Admins edit this file and check it in like any other file.
-  "vaultName": "Capstone Vault",
+  "vaultName": "Team Vault",
   "branch": "main",
 
   // The folder every member keeps this vault in. Assembly references are full paths, so it must be
   // the same on every PC. Used when someone adds this vault with "Vaults..." in the app.
-  "localPath": "C:\\CapstoneVault",
+  "localPath": "C:\\TeamVault",
 
   // The SolidWorks version everyone saves vault files in. Files saved in a newer version can't be
   // opened in an older one, so the add-in blocks check-ins of newer files. Use null for no check.

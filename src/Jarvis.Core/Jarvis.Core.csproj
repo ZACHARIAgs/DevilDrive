@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    netstandard2.0 on purpose: the WPF client (.NET 8) and the Phase 2 SolidWorks add-in
+    (.NET Framework 4.8, loaded in-process by SolidWorks) can both reference this library.
+    Keep UI code out of this project.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Jarvis.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jarvis.Core.Tests" />
+  </ItemGroup>
+
+  <!-- The vault guard the app installs into vaults (single source: vault-template/.github). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\vault-template\.github\workflows\vault-guard.yml" LogicalName="Jarvis.Core.VaultGuard.yml" />
+    <EmbeddedResource Include="..\..\vault-template\.github\vault-guard\guard.py" LogicalName="Jarvis.Core.VaultGuard.py" />
+    <!-- The rest of a new vault ("New team vault" in the app). -->
+    <EmbeddedResource Include="..\..\vault-template\.gitattributes" LogicalName="Jarvis.Core.Template.gitattributes" />
+    <EmbeddedResource Include="..\..\vault-template\.gitignore" LogicalName="Jarvis.Core.Template.gitignore" />
+    <EmbeddedResource Include="..\..\vault-template\pdm.json" LogicalName="Jarvis.Core.Template.pdm.json" />
+  </ItemGroup>
+
+</Project>

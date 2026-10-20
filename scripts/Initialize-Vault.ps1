@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    ADMIN ONLY, run once: seeds an empty GitHub repo as the Capstone vault.
+    ADMIN ONLY, run once: seeds an empty GitHub repo as your team's Jarvis vault.
     Easier: in the app, Vaults > New team vault does all of this (and creates the repo for you).
 
 .DESCRIPTION
@@ -73,7 +73,7 @@ try {
     Invoke-Git config lfs.locksverify true
     Invoke-Git add .gitattributes .gitignore pdm.json .github
     & git diff --cached --quiet
-    if ($LASTEXITCODE -ne 0) { Invoke-Git commit -m 'Initialize Capstone vault (LFS + locking rules, team settings)' }
+    if ($LASTEXITCODE -ne 0) { Invoke-Git commit -m 'Initialize the vault (LFS + locking rules, team settings)' }
     Invoke-Git branch -M main
     Invoke-Git push -u origin main
 

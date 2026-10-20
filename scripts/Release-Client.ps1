@@ -6,7 +6,7 @@
 .DESCRIPTION
     1. Bump <Version> in Directory.Build.props, commit and push.
     2. Run this script. It builds everything (Publish-Client.ps1), then creates release v<Version> on
-       the code repo with CapstonePDM.exe, CapstonePDM-SolidWorksAddin.zip, CapstonePDM-Setup.zip and
+       the code repo with Jarvis.exe, Jarvis-SolidWorksAddin.zip, Jarvis-Setup.zip and
        SHA256SUMS attached.
 
     Uses the GitHub sign-in Git already saved on this PC; you need write access to the code repo.
@@ -41,7 +41,7 @@ if (& git -C $root status --porcelain --untracked-files=no) { throw 'There are u
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Publish-Client.ps1')
 }
-$files = @('CapstonePDM.exe', 'CapstonePDM-SolidWorksAddin.zip', 'CapstonePDM-Setup.zip', 'SHA256SUMS') |
+$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'Jarvis-Setup.zip', 'CapstonePDM.exe', 'CapstonePDM-SolidWorksAddin.zip', 'SHA256SUMS') |
     ForEach-Object { Join-Path $dist $_ } | Where-Object { Test-Path $_ }
 if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 
@@ -57,7 +57,7 @@ finally {
 }
 $token = ($fill | Where-Object { $_ -like 'password=*' } | Select-Object -First 1) -replace '^password=', ''
 if (-not $token) { throw 'No saved GitHub sign-in found. Run "git fetch" in the repo once to sign in, then try again.' }
-$headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'CapstonePDM-release' }
+$headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'Jarvis-release' }
 
 try {
     Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag" | Out-Null

@@ -3,7 +3,7 @@
     Installs (or removes) the Jarvis add-in for SolidWorks 2020 and newer.
 
 .DESCRIPTION
-    Copies the add-in to C:\ProgramData\CapstonePDM\SolidWorksAddin and registers it with
+    Copies the add-in to C:\ProgramData\Jarvis\SolidWorksAddin and registers it with
     RegAsm so every installed SolidWorks version loads it. Registration needs administrator
     rights, so Windows asks for permission. Close SolidWorks first.
 
@@ -19,11 +19,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallDir = Join-Path $env:ProgramData 'CapstonePDM\SolidWorksAddin'
-$Dll = Join-Path $InstallDir 'CapstonePdm.SwAddin.dll'
+$InstallDir = Join-Path $env:ProgramData 'Jarvis\SolidWorksAddin'
+$Dll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
 $RegAsm = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'
 $AddinGuid = '{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}'
 $StartupKey = "HKCU:\Software\SolidWorks\AddInsStartup\$AddinGuid"
+# The add-in from before the rename (Capstone PDM). Same add-in ID, so it's replaced, not doubled.
+$LegacyDir = Join-Path $env:ProgramData 'CapstonePDM\SolidWorksAddin'
+$LegacyDll = Join-Path $LegacyDir 'CapstonePdm.SwAddin.dll'
 
 function Test-Admin {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -34,11 +37,11 @@ function Test-Admin {
 if (-not $Uninstall -and -not $Source) {
     $candidates = @(
         (Join-Path $PSScriptRoot 'SolidWorksAddin'),
-        (Join-Path $PSScriptRoot '..\src\CapstonePdm.SwAddin\bin\Release\net48'),
-        (Join-Path $PSScriptRoot '..\src\CapstonePdm.SwAddin\bin\Debug\net48')
+        (Join-Path $PSScriptRoot '..\src\Jarvis.SwAddin\bin\Release\net48'),
+        (Join-Path $PSScriptRoot '..\src\Jarvis.SwAddin\bin\Debug\net48')
     )
-    $Source = $candidates | Where-Object { Test-Path (Join-Path $_ 'CapstonePdm.SwAddin.dll') } | Select-Object -First 1
-    if (-not $Source) { throw 'Add-in files not found. Build src\CapstonePdm.SwAddin first, or pass -Source.' }
+    $Source = $candidates | Where-Object { Test-Path (Join-Path $_ 'Jarvis.SwAddin.dll') } | Select-Object -First 1
+    if (-not $Source) { throw 'Add-in files not found. Build src\Jarvis.SwAddin first, or pass -Source.' }
 }
 if ($Source) { $Source = (Resolve-Path $Source).Path }
 
@@ -74,6 +77,16 @@ if (-not $Elevated) {
 }
 
 # ---- administrator part ----
+function Remove-LegacyAddin {
+    if (Test-Path $LegacyDll) { & $RegAsm $LegacyDll /unregister /nologo | Out-Host }
+    if (Test-Path $LegacyDir) {
+        & takeown.exe /F $LegacyDir /A /R /D Y *> $null
+        & icacls.exe $LegacyDir /reset /T /C /Q | Out-Null
+        Remove-Item (Split-Path $LegacyDir) -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host 'Removed the old Capstone PDM add-in.'
+    }
+}
+
 try {
     if ($Uninstall) {
         if (Test-Path $InstallDir) {
@@ -82,9 +95,11 @@ try {
         }
         if (Test-Path $Dll) { & $RegAsm $Dll /unregister /nologo | Out-Host }
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-LegacyAddin
         Write-Host 'Jarvis add-in removed.'
     }
     else {
+        Remove-LegacyAddin
         New-Item -ItemType Directory -Force $InstallDir | Out-Null
         # Earlier installers could leave the files with no permissions at all; take them back and reset them.
         & takeown.exe /F $InstallDir /A /R /D Y *> $null
