@@ -269,3 +269,56 @@ public class CommitCountTests
         Assert.Equal(1, counts["b.sldasm"]);
     }
 }
+
+public class FileTreeTests
+{
+    private const string Vault = @"C:\CapstoneVault";
+
+    private static RawComponent C(string path, bool suppressed = false, string config = "Default", params RawComponent[] children) =>
+        new RawComponent { Path = path, IsSuppressed = suppressed, Configuration = config, Children = children.ToList() };
+
+    [Fact]
+    public void GroupsRepeatedParts_KeepsSuppressedSeparate_AndShowsSubassembliesOnce()
+    {
+        var wheel = C(@"C:\CapstoneVault\cart\wheel.sldasm", false, "Default",
+            C(@"C:\CapstoneVault\cart\hub.sldprt"), C(@"C:\CapstoneVault\cart\spoke.sldprt"), C(@"C:\CapstoneVault\cart\spoke.sldprt"));
+        var tree = FileTree.Build(@"C:\CapstoneVault\cart\cart.sldasm", new[]
+        {
+            C(@"C:\CapstoneVault\cart\bolt.sldprt"), C(@"C:\CapstoneVault\cart\bolt.sldprt"), C(@"C:\CapstoneVault\cart\BOLT.SLDPRT"),
+            C(@"C:\CapstoneVault\cart\bolt.sldprt", suppressed: true),
+            wheel, wheel,
+        }, Vault);
+
+        Assert.Equal("cart/cart.sldasm", tree.RelativePath);
+        Assert.Equal(new[] { "wheel.sldasm", "bolt.sldprt", "bolt.sldprt" }, tree.Children.Select(n => n.Name.ToLowerInvariant()));
+        var wheelNode = tree.Children[0];
+        Assert.Equal(2, wheelNode.Quantity);
+        Assert.Equal(2, wheelNode.Children.Single(n => n.Name == "spoke.sldprt").Quantity);
+        Assert.Equal(3, tree.Children[1].Quantity);
+        Assert.False(tree.Children[1].IsSuppressed);
+        Assert.True(tree.Children[2].IsSuppressed);
+        Assert.Equal(1, tree.Children[2].Quantity);
+    }
+
+    [Fact]
+    public void DifferentConfigurationsAreSeparateRows()
+    {
+        var tree = FileTree.Build(@"C:\CapstoneVault\a.sldasm", new[]
+        {
+            C(@"C:\CapstoneVault\bolt.sldprt", config: "M6"), C(@"C:\CapstoneVault\bolt.sldprt", config: "M8"),
+        }, Vault);
+        Assert.Equal(new[] { "M6", "M8" }, tree.Children.Select(n => n.Configuration));
+    }
+
+    [Fact]
+    public void FlagsFilesOutsideTheVault()
+    {
+        var tree = FileTree.Build(@"C:\CapstoneVault\a.sldasm", new[]
+        {
+            C(@"C:\Users\sam\Downloads\motor.sldprt"), C(@"C:\CapstoneVaultOld\x.sldprt"), C(@"C:\CapstoneVault\in.sldprt"),
+        }, Vault);
+        Assert.Equal(new[] { "motor.sldprt", "x.sldprt" }, tree.OutsideVault().Select(n => n.Name).OrderBy(n => n));
+        Assert.Equal("in.sldprt", tree.Children.Single(n => !n.IsOutsideVault).RelativePath);
+        Assert.Equal(4, tree.SelfAndDescendants().Count());
+    }
+}
