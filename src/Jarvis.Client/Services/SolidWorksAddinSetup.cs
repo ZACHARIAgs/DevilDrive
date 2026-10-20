@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Jarvis.Core.Errors;
 using Jarvis.Core.Updates;
@@ -51,6 +52,29 @@ internal static class SolidWorksAddinSetup
             using var setup = root.OpenSubKey(name + @"\Setup");
             if (setup?.GetValue("SolidWorks Folder") is string folder && folder.Length > 0) yield return folder;
         }
+    }
+
+    /// <summary>
+    /// Installs the add-in from the latest release (welcome screen and Settings). Throws a
+    /// <see cref="PdmException"/> that says what to do if it didn't work.
+    /// </summary>
+    public static async Task InstallLatestAsync()
+    {
+        if (IsSolidWorksRunning) throw new PdmException("Close SolidWorks first (save your work), then try again.");
+        var repo = Updater.BuiltInRepo(Assembly.GetExecutingAssembly())
+                   ?? throw new PdmException("This build of Jarvis doesn't know where to download the add-in from. Run scripts\\Install-SolidWorksAddin.ps1 instead.");
+        var updater = new Updater(repo);
+        var release = await updater.GetLatestAsync()
+                      ?? throw new PdmException("Couldn't get the add-in from GitHub. Check your internet connection and try again.");
+        try
+        {
+            await InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "Jarvis-addin-" + release.Version), showConsole: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            throw new PdmException("The add-in couldn't be unpacked: " + ex.Message, ex.ToString());
+        }
+        if (!IsAddinInstalled) throw new PdmException("The SolidWorks add-in wasn't installed. Try again, and click Yes when Windows asks for permission.");
     }
 
     /// <summary>

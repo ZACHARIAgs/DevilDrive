@@ -24,6 +24,13 @@
         </CheckBox>
         <CheckBox x:Name="PreviewPaneBox" Margin="0,6,0,0" Content="Rotatable 3D model of parts and assemblies in the preview pane (Alt+P)" />
 
+        <TextBlock FontWeight="SemiBold" Text="SolidWorks add-in" Margin="0,16,0,0" />
+        <DockPanel Margin="0,2,0,0">
+            <Button x:Name="AddinButton" DockPanel.Dock="Right" Content="Install the SolidWorks add-in" Padding="10,2" Margin="8,0,0,0"
+                    VerticalAlignment="Center" Click="OnInstallAddin" />
+            <TextBlock x:Name="AddinText" Foreground="#666" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+
         <TextBlock FontWeight="SemiBold" Text="What to download" Margin="0,16,0,0" />
         <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,6"
                    Text="Downloading only the folders you work on saves the team's monthly download allowance. Files in other folders show as &quot;not downloaded&quot; (their 3D previews still work); right-click one and choose Download to get it. Assemblies that use parts you haven't downloaded show those parts as missing until you download them." />

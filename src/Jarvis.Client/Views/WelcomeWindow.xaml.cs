@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -10,7 +9,6 @@ using Jarvis.Client.Services;
 using Jarvis.Core.Errors;
 using Jarvis.Core.Git;
 using Jarvis.Core.Install;
-using Jarvis.Core.Updates;
 using Jarvis.Core.Vault;
 
 namespace Jarvis.Client.Views;
@@ -305,38 +303,15 @@ public partial class WelcomeWindow : Window
     {
         if (_busy) return;
         StatusText.Text = "";
-        if (SolidWorksAddinSetup.IsSolidWorksRunning)
-        {
-            StatusText.Text = "Close SolidWorks first (save your work), then click Install the SolidWorks add-in again.";
-            return;
-        }
-        var repo = Updater.BuiltInRepo(Assembly.GetExecutingAssembly());
-        if (repo == null)
-        {
-            StatusText.Text = "This build of Jarvis doesn't know where to download the add-in from. Run scripts\\Install-SolidWorksAddin.ps1 instead.";
-            return;
-        }
-
         SetBusy(true);
-        AddinText.Text = "Downloading the add-in\u2026";
+        AddinText.Text = "Downloading and installing. Click Yes when Windows asks for permission\u2026";
         try
         {
-            var updater = new Updater(repo);
-            var release = await updater.GetLatestAsync()
-                          ?? throw new PdmException("Couldn't get the add-in from GitHub. Check your internet connection and try again.");
-            AddinText.Text = "Installing. Click Yes when Windows asks for permission\u2026";
-            await SolidWorksAddinSetup.InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "Jarvis-addin-" + release.Version), showConsole: false);
-            if (SolidWorksAddinSetup.IsAddinInstalled)
-            {
-                AddinText.Text = "\u2713 Installed. Start SolidWorks and look for Jarvis in the Task Pane on the right.";
-                AddinButton.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                AddinText.Text = "The add-in wasn't installed. Click the button to try again.";
-            }
+            await SolidWorksAddinSetup.InstallLatestAsync();
+            AddinText.Text = "\u2713 Installed. Start SolidWorks and look for Jarvis in the Task Pane on the right.";
+            AddinButton.Visibility = Visibility.Collapsed;
         }
-        catch (Exception ex) when (ex is PdmException or IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (PdmException ex)
         {
             AddinText.Text = "Check files out and in from SolidWorks' task pane. Close SolidWorks first; Windows asks for permission once.";
             StatusText.Text = ex.Message;

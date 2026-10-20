@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Windows.Controls;
 using System.Windows;
+using Jarvis.Client.Services;
+using Jarvis.Core.Errors;
 using Microsoft.Win32;
 
 namespace Jarvis.Client.Views;
@@ -28,6 +30,41 @@ public partial class SettingsWindow : Window
         NoFoldersText.Visibility = FolderList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         DownloadSomeRadio.IsChecked = downloadFolders != null;
         DownloadAllRadio.IsChecked = downloadFolders == null;
+        ShowAddin();
+    }
+
+    private void ShowAddin()
+    {
+        var installed = SolidWorksAddinSetup.IsAddinInstalled;
+        var solidWorks = SolidWorksAddinSetup.IsSolidWorksInstalled();
+        AddinText.Text = installed
+            ? "\u2713 Installed. In SolidWorks, Jarvis is in the Task Pane on the right."
+            : solidWorks
+                ? "Not installed. It lets you check files out and in from SolidWorks. Close SolidWorks first; Windows asks for permission once."
+                : "SolidWorks isn't installed on this PC.";
+        AddinButton.Visibility = !installed && solidWorks ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnInstallAddin(object sender, RoutedEventArgs e)
+    {
+        AddinButton.IsEnabled = false;
+        Cursor = System.Windows.Input.Cursors.Wait;
+        AddinText.Text = "Downloading and installing. Click Yes when Windows asks for permission\u2026";
+        try
+        {
+            await SolidWorksAddinSetup.InstallLatestAsync();
+            ShowAddin();
+        }
+        catch (PdmException ex)
+        {
+            ShowAddin();
+            MessageBox.Show(this, ex.Message, "SolidWorks add-in", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            AddinButton.IsEnabled = true;
+            Cursor = null;
+        }
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();

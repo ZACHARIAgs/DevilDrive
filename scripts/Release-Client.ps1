@@ -6,8 +6,8 @@
 .DESCRIPTION
     1. Bump <Version> in Directory.Build.props, commit and push.
     2. Run this script. It builds everything (Publish-Client.ps1), then creates release v<Version> on
-       the code repo with Jarvis.exe, Jarvis-SolidWorksAddin.zip, Jarvis-Setup.zip and
-       SHA256SUMS attached.
+       the code repo with Jarvis.exe, Jarvis-SolidWorksAddin.zip and SHA256SUMS attached,
+       and notes that start with how to install.
 
     Uses the GitHub sign-in Git already saved on this PC; you need write access to the code repo.
     If the code repo is private, teammates need read access to it for updates to download.
@@ -41,7 +41,7 @@ if (& git -C $root status --porcelain --untracked-files=no) { throw 'There are u
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Publish-Client.ps1')
 }
-$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'Jarvis-Setup.zip', 'SHA256SUMS') |
+$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'SHA256SUMS') |
     ForEach-Object { Join-Path $dist $_ } | Where-Object { Test-Path $_ }
 if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 
@@ -68,11 +68,15 @@ catch [System.Net.WebException] {
 }
 
 $sums = Get-Content (Join-Path $dist 'SHA256SUMS') -Raw
+# Every release starts by saying which file to download.
+$install = "## To install: download **Jarvis.exe** below and open it`n`n" +
+    "Windows may warn you: click **More info**, then **Run anyway**. Click **Install Jarvis**, then follow the welcome screen.`n`n" +
+    "You don't need the other files: Jarvis uses them for updates and to install the SolidWorks add-in (welcome screen or Settings)."
 $body = @{
     tag_name         = $tag
     target_commitish = $head
     name             = "Jarvis $version"
-    body             = ($Notes.Trim() + "`n`n**SHA-256 checksums**`n``````n$sums``````").Trim()
+    body             = ($install + "`n`n" + $Notes.Trim() + "`n`n**SHA-256 checksums**`n``````n$sums``````").Trim()
 } | ConvertTo-Json
 $release = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Body $body `
     -Uri "https://api.github.com/repos/$repo/releases"

@@ -50,6 +50,11 @@ if (Test-Path 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SolidWorks.Interop.sl
     New-Item -ItemType Directory -Force (Join-Path $addinZipStage 'SolidWorksAddin') | Out-Null
     Copy-Item (Join-Path $dist 'publish-addin\*.dll') (Join-Path $addinZipStage 'SolidWorksAddin')
     Copy-Item (Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1') $addinZipStage
+    # People who download this zip by mistake: it isn't something to open.
+    $note = "You don't need to open this file.`r`n`r`nJarvis downloads and installs the SolidWorks add-in for you:`r`n" +
+            "1. Download Jarvis.exe from the same release page and open it (click Install Jarvis).`r`n" +
+            "2. Click 'Install the SolidWorks add-in' on the welcome screen, or later in Jarvis's Settings.`r`n"
+    [IO.File]::WriteAllText((Join-Path $addinZipStage 'READ ME FIRST.txt'), $note)
     $addinZip = Join-Path $dist 'Jarvis-SolidWorksAddin.zip'
     if (Test-Path $addinZip) { Remove-Item -Force $addinZip }
     Compress-Archive -Path (Join-Path $addinZipStage '*') -DestinationPath $addinZip
@@ -65,7 +70,8 @@ Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 Copy-Item (Join-Path $dist 'publish\Jarvis.exe') $dist -Force
 
 # Checksums for the release: the app only installs an update whose SHA-256 matches.
-$released = @('Jarvis.exe', 'Jarvis-Setup.zip', 'Jarvis-SolidWorksAddin.zip') |
+# Jarvis-Setup.zip stays in dist for anyone who wants Setup.cmd; releases only carry what users and updates need.
+$released = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip') |
     Where-Object { Test-Path (Join-Path $dist $_) }
 $sums = foreach ($name in $released) { '{0}  {1}' -f (Get-FileHash (Join-Path $dist $name) -Algorithm SHA256).Hash.ToLowerInvariant(), $name }
 [IO.File]::WriteAllText((Join-Path $dist 'SHA256SUMS'), (($sums -join "`n") + "`n"))

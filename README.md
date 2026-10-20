@@ -16,9 +16,9 @@ Under the hood the vault is a private GitHub repo using Git LFS file locking. Yo
 3. On the **welcome screen**, click **Sign in to GitHub** (a browser window opens). No GitHub account? Make a free one at github.com and send your username to the team lead.
 4. Check your **name and email**: Jarvis fills them in from your GitHub profile (the email is GitHub's private `...@users.noreply.github.com` address, so your real email stays out of the vault's history). Change them if you like; they're only set if Git doesn't have them already.
 5. Your team's invitation is listed: click **Accept and download**. The vault goes into the same folder on every PC (e.g. `C:\CapstoneVault`) and opens. (Accepted the invite on github.com already? Click **Find my vaults** instead.)
-6. If SolidWorks is installed, click **Install the SolidWorks add-in** (close SolidWorks first; Windows asks for permission once).
+6. If SolidWorks is installed, click **Install the SolidWorks add-in** (close SolidWorks first; Windows asks for permission once). Skipped it? It's in **Settings** too.
 
-The same Jarvis.exe works for every team: which vault you get depends only on which GitHub invites you accepted. The older **Jarvis-Setup.zip** (unzip, double-click **Setup.cmd**) still works too.
+The same Jarvis.exe works for every team: which vault you get depends only on which GitHub invites you accepted. Only download **Jarvis.exe** from the release page: the other files are what Jarvis uses for updates and the add-in.
 
 ### Daily workflow
 
@@ -309,7 +309,7 @@ The integration tests use a local bare repo in place of GitHub. A local remote h
 .\scripts\Publish-Client.ps1
 ```
 
-This produces `dist/Jarvis-Setup.zip`, containing a self-contained single-file `Jarvis.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-Jarvis.ps1`, plus the update files `Jarvis.exe`, `Jarvis-SolidWorksAddin.zip` and `SHA256SUMS`. Setup prints the installed exe's SHA-256 so it can be compared with the release.
+This produces the release files: a self-contained single-file `Jarvis.exe` (teammates don't need .NET), `Jarvis-SolidWorksAddin.zip` (with a READ ME FIRST note for anyone who opens it) and `SHA256SUMS`. It also builds `dist/Jarvis-Setup.zip` (`Setup.cmd`, `Setup-Jarvis.ps1` and the exe) for anyone who prefers a script; releases don't include it. Release notes always start with "download Jarvis.exe". Setup prints the installed exe's SHA-256 so it can be compared with the release.
 
 `Jarvis.exe` installs itself: run from anywhere but `%LocalAppData%\Programs\Jarvis`, it shows **Install Jarvis** (`Views/InstallWindow`, logic in `Core/Install/AppInstaller.cs`): copy itself there (removing the download mark), Git for Windows with `winget --silent --scope user` (falling back to a machine-wide install, or git-scm.com without winget), shortcuts, `--register-explorer`, then start the installed copy. Development builds (under `bin\`) never offer it. To try it without touching your real install, set `JARVIS_INSTALL_ROOT` to an empty folder and run a published `Jarvis.exe`: everything goes inside that folder and File Explorer is left alone. `Jarvis.exe --welcome` shows the welcome screen even on a PC that already has vaults.
 
