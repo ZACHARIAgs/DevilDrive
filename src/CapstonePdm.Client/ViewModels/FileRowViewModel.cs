@@ -34,10 +34,17 @@ public sealed class FileRowViewModel : ViewModelBase
     public string? CheckedOutBy => File.State == FileState.Frozen ? "Frozen: " + File.FrozenBy : File.State == FileState.InReview ? "In review: " + File.ReviewSubmittedBy : File.CheckedOutBy;
     public DateTime? CheckedOutSince => File.State == FileState.Frozen ? File.Freeze?.At.LocalDateTime : File.Lock?.LockedAt?.LocalDateTime;
     public int Version => File.Version;
-    public string VersionText => File.Version > 0 ? File.Version.ToString() : "—";
+    /// <summary>"7/10": check-ins on this PC / in the vault.</summary>
+    public string VersionText => File.VaultVersion > 0 ? File.VersionText : "—";
+    /// <summary>The vault has check-ins of this file that this PC doesn't have.</summary>
+    public bool IsBehind => File.Version < File.VaultVersion;
     public string LastComment => File.LatestVersion?.CommentFirstLine ?? "";
     public string RevisionText => File.Revision ?? "";
-    public string PartNumber => File.Index?.GetProperty(IndexEntry.PartNumberNames) ?? "";
+    /// <summary>Part number from the index; SolidWorks files without one show their file name.</summary>
+    public string PartNumber => File.Index?.GetProperty(IndexEntry.PartNumberNames) ??
+                                (IsSolidWorksFile ? System.IO.Path.GetFileNameWithoutExtension(File.Name) : "");
+    public bool HasPartNumber => File.Index?.GetProperty(IndexEntry.PartNumberNames) != null;
+    private bool IsSolidWorksFile => System.IO.Path.GetExtension(File.Name).ToLowerInvariant() is ".sldprt" or ".sldasm" or ".slddrw";
     public string Description => File.Index?.GetProperty(IndexEntry.DescriptionNames) ?? "";
     public string Material => File.Index?.GetProperty(IndexEntry.MaterialNames) ?? "";
     public string LastCheckedInBy => File.LatestVersion?.Author ?? "";

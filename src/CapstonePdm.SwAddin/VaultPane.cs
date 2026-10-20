@@ -390,7 +390,7 @@ internal sealed class VaultPane : UserControl
         if (file.Lock?.LockedAt != null) lines.Add($"Checked out {file.Lock.LockedAt.Value.LocalDateTime:ddd MMM d, h:mm tt}");
         if (file.LatestVersion != null)
         {
-            lines.Add($"Version {file.Version}  \u2022  {file.LatestVersion.Author}, {file.LatestVersion.Date.LocalDateTime:MMM d}");
+            lines.Add($"Version {file.VersionText}  \u2022  {file.LatestVersion.Author}, {file.LatestVersion.Date.LocalDateTime:MMM d}");
             if (file.LatestVersion.CommentFirstLine.Length > 0) lines.Add($"\u201C{file.LatestVersion.CommentFirstLine}\u201D");
         }
         if (file.Revision != null && file.State != FileState.Frozen) lines.Add($"Last released as Rev {file.Revision} (changes since then aren't released).");

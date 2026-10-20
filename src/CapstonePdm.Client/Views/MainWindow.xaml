@@ -221,12 +221,37 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="230" />
-                    <DataGridTextColumn Header="Part Number" Binding="{Binding PartNumber}" Width="100" />
+                    <DataGridTextColumn Header="Part Number" Binding="{Binding PartNumber}" Width="100">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <!-- No PartNumber property yet: the file name is shown, greyed out. -->
+                                    <DataTrigger Binding="{Binding HasPartNumber}" Value="False">
+                                        <Setter Property="Foreground" Value="#8A94A6" />
+                                        <Setter Property="ToolTip" Value="No PartNumber property yet, showing the file name" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="170" />
                     <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="250" SortMemberPath="StateSort" />
                     <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="130" />
                     <DataGridTextColumn Header="Since" Binding="{Binding CheckedOutSince, StringFormat='{}{0:ddd MMM d, h:mm tt}'}" Width="130" />
-                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="60" />
+                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="64">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="Check-ins on this PC / in the vault" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBehind}" Value="True">
+                                        <Setter Property="Foreground" Value="#C2410C" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                        <Setter Property="ToolTip" Value="The vault has newer check-ins. Click Get Latest." />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="45" />
                     <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="*" MinWidth="180" />
                     <DataGridTextColumn Header="Checked In By" Binding="{Binding LastCheckedInBy}" Width="120" />

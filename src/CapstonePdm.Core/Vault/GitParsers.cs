@@ -163,6 +163,25 @@ internal static class GitParsers
         return latest;
     }
 
+    /// <summary>
+    /// Parses <c>git log --no-merges --name-only --format=%x1e</c>: how many commits touched each file.
+    /// </summary>
+    public static Dictionary<string, int> CountCommitsPerFile(string output)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var record in output.Split(RecordSep))
+        {
+            foreach (var line in record.Replace("\r", "").Split('\n'))
+            {
+                var path = line.Trim();
+                if (path.Length == 0) continue;
+                counts.TryGetValue(path, out var n);
+                counts[path] = n + 1;
+            }
+        }
+        return counts;
+    }
+
     private static DateTimeOffset ParseDate(string text) =>
         DateTimeOffset.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : DateTimeOffset.MinValue;
 }

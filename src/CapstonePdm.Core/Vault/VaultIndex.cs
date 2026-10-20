@@ -34,7 +34,11 @@ public sealed class IndexEntry
         return null;
     }
 
-    public static readonly string[] PartNumberNames = { "PartNo", "Part Number", "PartNumber", "Part No", "Number", "Drawing Number" };
+    public static readonly string[] PartNumberNames = { PartNumberProperty, "PartNo", "Part Number", "Part No", "Number", "Drawing Number" };
+
+    /// <summary>The custom property names the add-in writes. The other names above are still read, for older files.</summary>
+    public const string PartNumberProperty = "PartNumber";
+    public const string DescriptionProperty = "Description";
     public static readonly string[] DescriptionNames = { "Description", "Title" };
     public static readonly string[] MaterialNames = { "Material" };
     public static readonly string[] RevisionNames = { "Revision", "Rev" };

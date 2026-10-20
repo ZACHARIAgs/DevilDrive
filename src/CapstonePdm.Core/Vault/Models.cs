@@ -99,7 +99,12 @@ public sealed class VaultFile
     public bool IsOutdated { get; set; }
     public bool ExistsLocally { get; set; }
     public FileVersion? LatestVersion { get; set; }
+    /// <summary>Check-ins of this file on this PC (the "7" in 7/10).</summary>
     public int Version => LatestVersion?.Version ?? 0;
+    /// <summary>Check-ins of this file in the vault, including ones this PC hasn't got yet (the "10" in 7/10).</summary>
+    public int VaultVersion { get; set; }
+    /// <summary>"7/10" style text; empty for files never checked in.</summary>
+    public string VersionText => VaultVersion == 0 ? "" : $"{Version}/{VaultVersion}";
 
     /// <summary>Set when an admin froze the file.</summary>
     public FrozenEntry? Freeze { get; set; }

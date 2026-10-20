@@ -61,6 +61,24 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Snapshot_ShowsLocalAndVaultVersionCounts()
+    {
+        AliceChecksIn("shared.txt", "v2", "second");
+        AliceChecksIn("shared.txt", "v3", "third");
+
+        var vault = await Open(_bob);
+        var before = await vault.GetSnapshotAsync(contactVault: true);
+        var shared = before.Files.Single(f => f.RelativePath == "shared.txt");
+        Assert.Equal("1/3", shared.VersionText);
+        Assert.True(shared.IsOutdated);
+        Assert.Equal("1/1", before.Files.Single(f => f.RelativePath == "notes.txt").VersionText);
+
+        await vault.GetLatestAsync();
+        var after = await vault.GetSnapshotAsync(contactVault: false);
+        Assert.Equal("3/3", after.Files.Single(f => f.RelativePath == "shared.txt").VersionText);
+    }
+
+    [Fact]
     public async Task GetLatest_WhenVaultChangedMyEditedFile_StopsWithoutOverwriting()
     {
         Write(_bob, "shared.txt", "bob's version");

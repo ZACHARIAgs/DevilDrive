@@ -257,3 +257,15 @@ public class UpdaterTests
         Assert.Equal(2, sums.Count);
     }
 }
+
+public class CommitCountTests
+{
+    [Fact]
+    public void CountCommitsPerFile_CountsEachCommitThatTouchedAFile()
+    {
+        var output = "\x1e\n\na.sldprt\nb.sldasm\n\x1e\n\na.sldprt\n";
+        var counts = GitParsers.CountCommitsPerFile(output);
+        Assert.Equal(2, counts["A.SLDPRT"]);
+        Assert.Equal(1, counts["b.sldasm"]);
+    }
+}

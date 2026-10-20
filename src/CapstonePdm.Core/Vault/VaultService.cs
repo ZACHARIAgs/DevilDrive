@@ -224,6 +224,7 @@ public sealed class VaultService : IVaultService
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
         var incoming = await GetIncomingChangesAsync(ct).ConfigureAwait(false);
         var latest = await GetLatestVersionsAsync(ct).ConfigureAwait(false);
+        var incomingCheckIns = await GetIncomingCheckInCountsAsync(ct).ConfigureAwait(false);
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
         var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
@@ -273,6 +274,7 @@ public sealed class VaultService : IVaultService
             if (request != null && fileLock?.IsMine == true && freeze == null && IsSettled(request)) snapshot.CheckInRequestsForMe++;
 
             latest.TryGetValue(path, out var version);
+            incomingCheckIns.TryGetValue(path, out var newer);
             files.Add(new VaultFile
             {
                 RelativePath = path,
@@ -284,6 +286,7 @@ public sealed class VaultService : IVaultService
                 IsOutdated = incoming.Contains(path),
                 ExistsLocally = File.Exists(ToFullPath(path)),
                 LatestVersion = version,
+                VaultVersion = (version?.Version ?? 0) + newer,
                 Freeze = freeze,
                 FrozenBy = freeze == null ? null : Config.DisplayNameFor(freeze.By),
                 Revision = frozen.RevisionOf(path),
@@ -2019,6 +2022,14 @@ public sealed class VaultService : IVaultService
         var diff = await RunAsync(new[] { "diff", "--name-only", "-z", "--no-renames", "HEAD..." + Upstream }, ct).ConfigureAwait(false);
         if (diff.Success) set.UnionWith(GitParsers.SplitZ(diff.StdOut));
         return set;
+    }
+
+    /// <summary>Per file: check-ins in the vault that this PC doesn't have yet.</summary>
+    private async Task<Dictionary<string, int>> GetIncomingCheckInCountsAsync(CancellationToken ct)
+    {
+        if (!await UpstreamExistsAsync(ct).ConfigureAwait(false)) return new Dictionary<string, int>();
+        var log = await RunAsync(new[] { "log", "--no-merges", "--name-only", "--no-renames", "--format=%x1e", "HEAD.." + Upstream }, ct).ConfigureAwait(false);
+        return log.Success ? GitParsers.CountCommitsPerFile(log.StdOut) : new Dictionary<string, int>();
     }
 
     private async Task<List<StatusEntry>> GetLocalChangesAsync(CancellationToken ct)
