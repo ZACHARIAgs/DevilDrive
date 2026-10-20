@@ -12,12 +12,12 @@
     </Window.InputBindings>
 
     <DockPanel>
-        <ToolBarTray DockPanel.Dock="Top" IsLocked="True">
+        <ToolBarTray DockPanel.Dock="Top" IsLocked="True" Margin="6,4,6,2">
             <ToolBar>
                 <Button Command="{Binding GetLatestCommand}"
                         ToolTip="Download the newest version of every file. Files you've changed are never overwritten.">
                     <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE896;" />
+                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE896;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Get Latest" />
                     </StackPanel>
                 </Button>
@@ -25,14 +25,14 @@
                 <Button Command="{Binding CheckOutCommand}"
                         ToolTip="Lock the selected files so only you can edit them, and make them writable.">
                     <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72E;" />
+                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE72E;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Check Out" />
                     </StackPanel>
                 </Button>
                 <Button Command="{Binding CheckInCommand}"
                         ToolTip="Save the selected files to the vault as a new version (with nothing selected: everything you can check in).">
                     <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE898;" />
+                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE898;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Check In&#x2026;" />
                     </StackPanel>
                 </Button>
@@ -135,18 +135,23 @@
             </ToolBar>
         </ToolBarTray>
 
-        <Border DockPanel.Dock="Top" Background="{Binding BannerBrush}" Padding="10,6"
+        <Border DockPanel.Dock="Top" Background="{Binding BannerBrush}" Padding="14,9" Margin="12,0,12,8" CornerRadius="8"
+                BorderBrush="#1A000000" BorderThickness="1"
                 Visibility="{Binding HasBanner, Converter={StaticResource BoolToVis}}">
-            <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap" />
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="16"
+                           Foreground="#374151" Margin="0,1,10,0" VerticalAlignment="Top" />
+                <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap" LineHeight="20" />
+            </DockPanel>
         </Border>
 
-        <DockPanel DockPanel.Dock="Top" Margin="8,6">
-            <TextBlock Text="Vault:" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <ComboBox Width="200" ItemsSource="{Binding Vaults}" SelectedItem="{Binding SelectedVault}"
+        <DockPanel DockPanel.Dock="Top" Margin="12,4,12,10">
+            <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center" Margin="2,0,8,0" ToolTip="Vault" />
+            <ComboBox Width="220" ItemsSource="{Binding Vaults}" SelectedItem="{Binding SelectedVault}" FontWeight="SemiBold"
                       ToolTip="Switch to another group's vault." />
-            <Button Content="Vaults&#x2026;" Command="{Binding ManageVaultsCommand}" Padding="8,0" Margin="4,0,14,0"
+            <Button Content="Vaults&#x2026;" Command="{Binding ManageVaultsCommand}" Margin="6,0,16,0"
                     ToolTip="Add another group's vault (from your GitHub repos) or remove one." />
-            <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" />
             <ComboBox DockPanel.Dock="Right" Width="210" Margin="8,0,0,0" SelectedIndex="{Binding FilterIndex}">
                 <ComboBoxItem Content="All files" />
                 <ComboBoxItem Content="Checked out to me" />
@@ -157,35 +162,40 @@
                 <ComboBoxItem Content="Not downloaded" />
                 <ComboBoxItem Content="In review" />
             </ComboBox>
-            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" />
+            <Grid>
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Padding="32,5,8,5"
+                         Tag="Search by name, part number, description or any property" />
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{StaticResource MutedTextBrush}"
+                           VerticalAlignment="Center" HorizontalAlignment="Left" Margin="11,0,0,0" IsHitTestVisible="False" />
+            </Grid>
         </DockPanel>
 
-        <StatusBar DockPanel.Dock="Bottom">
+        <StatusBar DockPanel.Dock="Bottom" Margin="6,0,6,2">
             <StatusBarItem>
                 <ProgressBar Width="80" Height="12" IsIndeterminate="True"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
-                <TextBlock Text="{Binding InfoText}" Foreground="#555" />
+                <TextBlock Text="{Binding InfoText}" Foreground="{StaticResource MutedTextBrush}" />
             </StatusBarItem>
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
             </StatusBarItem>
         </StatusBar>
 
-        <Grid>
+        <Grid Margin="12,0,12,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="400" />
-                <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="310" MinWidth="220" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="320" MinWidth="220" />
             </Grid.ColumnDefinitions>
 
-            <DataGrid x:Name="FilesGrid" Grid.Column="0"
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0,2,0,0">
+            <DataGrid x:Name="FilesGrid"
                       ItemsSource="{Binding FilesView}"
                       AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                       SelectionMode="Extended" SelectionUnit="FullRow"
-                      HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEEEEE"
-                      RowHeight="24" BorderThickness="0,1,0,0"
+                      Margin="4,0,4,4"
                       SelectionChanged="OnSelectionChanged"
                       MouseDoubleClick="OnGridDoubleClick">
                 <DataGrid.ContextMenu>
@@ -218,7 +228,7 @@
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="26" CanUserResize="False" SortMemberPath="StateSort">
+                    <DataGridTemplateColumn Width="32" CanUserResize="False" SortMemberPath="StateSort">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding StateGlyph}" Foreground="{Binding StateBrush}" FontSize="14"
@@ -241,10 +251,10 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
                     <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="170" />
-                    <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="250" SortMemberPath="StateSort" />
+                    <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="210" SortMemberPath="StateSort" />
                     <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="130" />
                     <DataGridTextColumn Header="Since" Binding="{Binding CheckedOutSince, StringFormat='{}{0:ddd MMM d, h:mm tt}'}" Width="130" />
-                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="64">
+                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="70">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="ToolTip" Value="Check-ins on this PC / in the vault" />
@@ -258,27 +268,28 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="45" />
-                    <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="*" MinWidth="180" />
+                    <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="52" />
+                    <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="260" />
                     <DataGridTextColumn Header="Checked In By" Binding="{Binding LastCheckedInBy}" Width="120" />
                     <DataGridTextColumn Header="Checked In" Binding="{Binding LastCheckIn, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="115" />
                     <DataGridTextColumn Header="Material" Binding="{Binding Material}" Width="120" />
                     <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="180" />
                 </DataGrid.Columns>
             </DataGrid>
+            </Border>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#EEF0F3" />
+            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
 
             <!-- Details panel: preview, state, properties, references -->
-            <Border Grid.Column="2" Background="#F6F7F9">
+            <Border Grid.Column="2" Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid>
-                        <TextBlock Margin="16" TextWrapping="Wrap" Foreground="#6B7280"
+                        <TextBlock Margin="18" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}"
                                    Text="Select a file to see its preview and details."
                                    Visibility="{Binding Details, Converter={StaticResource NullToVis}}" />
-                        <StackPanel Margin="16" DataContext="{Binding Details}"
+                        <StackPanel Margin="16,16,16,18" DataContext="{Binding Details}"
                                     Visibility="{Binding Converter={StaticResource NotNullToVis}}">
-                            <Border Background="White" CornerRadius="8" BorderBrush="#E1E4E9" BorderThickness="1" Height="240" ClipToBounds="True">
+                            <Border Background="{StaticResource SubtleSurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Height="240" ClipToBounds="True">
                                 <Grid>
                                     <Grid Visibility="{Binding ShowPicture, Converter={StaticResource BoolToVis}}">
                                         <Image Source="{Binding Thumbnail}" Stretch="Uniform" Margin="10" RenderOptions.BitmapScalingMode="HighQuality" />
@@ -291,14 +302,14 @@
                                                Visibility="{Binding Loading3D, Converter={StaticResource BoolToVis}}" />
                                 </Grid>
                             </Border>
-                            <DockPanel Margin="0,6,0,0" Visibility="{Binding HasPreviewFile, Converter={StaticResource BoolToVis}}">
-                                <ToggleButton DockPanel.Dock="Left" Content="3D view" Padding="10,2" IsChecked="{Binding Show3D}" />
-                                <Button DockPanel.Dock="Right" Content="Open large 3D view" Padding="10,2"
+                            <DockPanel Margin="0,8,0,0" Visibility="{Binding HasPreviewFile, Converter={StaticResource BoolToVis}}">
+                                <ToggleButton DockPanel.Dock="Left" Content="3D view" Padding="12,3" MinHeight="28" IsChecked="{Binding Show3D}" />
+                                <Button DockPanel.Dock="Right" Content="Open large 3D view" Padding="12,3" MinHeight="28"
                                         Command="{Binding DataContext.Open3DCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                 <Border />
                             </DockPanel>
                             <TextBlock Text="{Binding PreviewNote}" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
-                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" Margin="0,12,0,2" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" Margin="0,14,0,2" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding StateText}" Foreground="{Binding StateBrush}" FontWeight="SemiBold" TextWrapping="Wrap" />
 
                             <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,8,0,0"

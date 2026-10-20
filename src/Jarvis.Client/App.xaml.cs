@@ -18,6 +18,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         var args = e.Args;
+        ModernWindows.Apply(this);
 
         if (args.Length >= 1 && args[0] == "--register-explorer")
         {

@@ -4,43 +4,56 @@
              xmlns:views="clr-namespace:Jarvis.Client.Views"
              DispatcherUnhandledException="OnUnhandledException">
     <Application.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <views:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
-        <views:NullToVisibilityConverter x:Key="NotNullToVis" />
-        <views:NullToVisibilityConverter x:Key="NullToVis" Invert="True" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Modern.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-        <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#374151" />
-            <Setter Property="Margin" Value="0,16,0,6" />
-        </Style>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <views:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+            <views:NullToVisibilityConverter x:Key="NotNullToVis" />
+            <views:NullToVisibilityConverter x:Key="NullToVis" Invert="True" />
 
-        <DataTemplate x:Key="PropertyRowTemplate">
-            <Grid Margin="0,2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="110" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Name}" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,0,8,0" />
-                <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
-            </Grid>
-        </DataTemplate>
+            <Style x:Key="SectionHeader" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                <Setter Property="Margin" Value="0,18,0,6" />
+            </Style>
 
-        <Style x:Key="ToolGlyph" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="18" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-        </Style>
+            <DataTemplate x:Key="PropertyRowTemplate">
+                <Grid Margin="0,3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                </Grid>
+            </DataTemplate>
 
-        <Style x:Key="ToolLabel" TargetType="TextBlock">
-            <Setter Property="Margin" Value="0,3,0,0" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-        </Style>
+            <Style x:Key="ToolGlyph" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+                <Setter Property="FontSize" Value="18" />
+                <Setter Property="Foreground" Value="#374151" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
 
-        <Style x:Key="DialogButton" TargetType="Button">
-            <Setter Property="MinWidth" Value="90" />
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Margin" Value="8,0,0,0" />
-        </Style>
+            <!-- The everyday commands (Get Latest, Check Out, Check In) stand out in the accent color. -->
+            <Style x:Key="PrimaryToolGlyph" TargetType="TextBlock" BasedOn="{StaticResource ToolGlyph}">
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+            </Style>
+
+            <Style x:Key="ToolLabel" TargetType="TextBlock">
+                <Setter Property="Margin" Value="0,4,0,0" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                <Setter Property="MinWidth" Value="90" />
+                <Setter Property="Margin" Value="8,0,0,0" />
+            </Style>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -18,10 +18,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="New milestone:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <TextBox x:Name="NameBox" Grid.Column="1" Height="24" VerticalContentAlignment="Center" TextChanged="OnNameChanged"
+                <TextBox x:Name="NameBox" Grid.Column="1" VerticalContentAlignment="Center" TextChanged="OnNameChanged"
                          ToolTip="For example: Design Review 1" />
                 <TextBlock Grid.Column="2" Text="Description:" VerticalAlignment="Center" Margin="12,0,8,0" />
-                <TextBox x:Name="DescriptionBox" Grid.Column="3" Height="24" VerticalContentAlignment="Center" />
+                <TextBox x:Name="DescriptionBox" Grid.Column="3" VerticalContentAlignment="Center" />
                 <Button x:Name="CreateButton" Grid.Column="4" Style="{StaticResource DialogButton}" Content="Create" IsEnabled="False" Click="OnCreate"
                         ToolTip="Labels the vault exactly as it is in the vault now (admin)." />
             </Grid>
