@@ -5,7 +5,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Product>Capstone PDM</Product>
     <Company>Capstone Team</Company>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <!-- GitHub repo (owner/name) whose Releases the app updates itself from. Baked into the build on purpose:
          a setting in the vault could be changed to point everyone at a different exe. Change it for a fork (e.g. a club). -->
     <UpdateRepo>aturne59-stack/capstone-pdm</UpdateRepo>
