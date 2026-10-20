@@ -55,7 +55,7 @@ public partial class App : Application
             }
             else if (force || ExplorerIntegration.IsInstalledCopy(exe))
             {
-                ExplorerIntegration.Register(exe, settings.VaultPath);
+                ExplorerIntegration.Register(exe, settings.Vaults);
             }
         }
         catch (Exception)

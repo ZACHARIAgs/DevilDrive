@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Win32;
 
 namespace CapstonePdm.Client.Services;
@@ -14,10 +16,18 @@ internal static class ExplorerIntegration
     private const string FileMenuKey = @"Software\Classes\*\shell\CapstonePDM";
     private const string FolderMenuKey = @"Software\Classes\Directory\Background\shell\CapstonePDM";
 
-    public static void Register(string exePath, string vaultPath)
+    /// <summary>Adds the menus for files and folders inside any of the vaults (one per group).</summary>
+    public static void Register(string exePath, IReadOnlyCollection<string> vaultPaths)
     {
-        var vault = vaultPath.TrimEnd('\\');
+        var vaults = vaultPaths.Select(v => v.TrimEnd('\\')).Where(v => v.Length > 0).ToList();
+        if (vaults.Count == 0)
+        {
+            Unregister();
+            return;
+        }
         var icon = $"\"{exePath}\",0";
+        var insideFiles = string.Join(" OR ", vaults.Select(v => $"System.ItemPathDisplay:~<\"{v}\\\""));
+        var insideFolders = string.Join(" OR ", vaults.Select(v => $"System.ItemPathDisplay:~<\"{v}\""));
 
         Unregister();
 
@@ -26,7 +36,7 @@ internal static class ExplorerIntegration
             menu.SetValue("MUIVerb", "Capstone PDM");
             menu.SetValue("Icon", icon);
             menu.SetValue("SubCommands", "");
-            menu.SetValue("AppliesTo", $"System.ItemPathDisplay:~<\"{vault}\\\"");
+            menu.SetValue("AppliesTo", insideFiles);
         }
         AddCommand(FileMenuKey, "1checkout", "Check Out", exePath, "checkout", "\"%1\"");
         AddCommand(FileMenuKey, "2checkin", "Check In…", exePath, "checkin", "\"%1\"");
@@ -39,7 +49,7 @@ internal static class ExplorerIntegration
             menu.SetValue("MUIVerb", "Capstone PDM");
             menu.SetValue("Icon", icon);
             menu.SetValue("SubCommands", "");
-            menu.SetValue("AppliesTo", $"System.ItemPathDisplay:~<\"{vault}\"");
+            menu.SetValue("AppliesTo", insideFolders);
         }
         AddCommand(FolderMenuKey, "1getlatest", "Get Latest", exePath, "getlatest", "\"%V\"");
         AddCommand(FolderMenuKey, "2open", "Open Capstone PDM", exePath, "open", "\"%V\"");

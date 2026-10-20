@@ -68,6 +68,8 @@ internal sealed class VaultPane : UserControl
     private readonly CaptionLabel _status;
 
     private VaultService? _vault;
+    /// <summary>Vaults opened this session, by folder, so switching between groups' files is quick.</summary>
+    private readonly Dictionary<string, VaultService> _openedVaults = new Dictionary<string, VaultService>(StringComparer.OrdinalIgnoreCase);
     private string? _vaultProblem;
     private VaultSnapshot? _snapshot;
     private Dictionary<string, VaultFile> _filesByFullPath = new Dictionary<string, VaultFile>(StringComparer.OrdinalIgnoreCase);
@@ -264,16 +266,19 @@ internal sealed class VaultPane : UserControl
         _busy = true;
         try
         {
-            // Follow a vault switch made in the desktop app's Settings (e.g. capstone vault vs. club vault).
-            if (_vault != null && !string.Equals(Path.GetFullPath(UserSettings.Load().VaultPath).TrimEnd('\\'), _vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
+            // Work in the vault that holds the open file (each group has its own vault folder). A file
+            // outside every vault keeps the current one; with no vault yet, use the app's current vault.
+            var settings = UserSettings.Load();
+            var wanted = settings.VaultFor(_currentPath) ?? _vault?.VaultRoot ?? settings.VaultPath;
+            if (_vault != null && !string.Equals(wanted, _vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
             {
                 _vault = null;
                 _snapshot = null;
                 _filesByFullPath = new Dictionary<string, VaultFile>(StringComparer.OrdinalIgnoreCase);
-                _checkedOnline.Clear();
+                _treeStamp = null;
                 contactVault = true;
             }
-            if (_vault == null) await OpenVaultAsync();
+            if (_vault == null) await OpenVaultAsync(wanted);
             if (_vault == null) return;
 
             _snapshot = await _vault.GetSnapshotAsync(contactVault);
@@ -305,16 +310,23 @@ internal sealed class VaultPane : UserControl
         finally
         {
             _busy = false;
+            // The tree depends on which vault is open (paths outside it are flagged), so re-check it.
+            RebuildTreeIfChanged();
             // Buttons are enabled only when not busy, so redraw after clearing the flag.
             UpdateView();
         }
     }
 
-    private async Task OpenVaultAsync()
+    private async Task OpenVaultAsync(string folder)
     {
         try
         {
-            _vault = await VaultService.OpenAsync(UserSettings.Load().VaultPath);
+            if (!_openedVaults.TryGetValue(folder, out var vault))
+            {
+                vault = await VaultService.OpenAsync(folder);
+                _openedVaults[folder] = vault;
+            }
+            _vault = vault;
             _vaultProblem = null;
         }
         catch (PdmException ex)

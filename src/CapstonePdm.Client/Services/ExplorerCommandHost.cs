@@ -82,14 +82,22 @@ internal static class ExplorerCommandHost
         var note = new NotificationWindow();
         try
         {
+            // Each group has its own vault; use the one the clicked files are in.
+            var settings = UserSettings.Load();
+            var vaultFolder = settings.VaultFor(paths[0]) ?? settings.VaultPath;
             if (command == "open" || command == "show")
             {
+                if (!string.Equals(vaultFolder, settings.VaultPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.VaultPath = vaultFolder;
+                    settings.Save();
+                }
                 OpenMainWindow(command == "show" ? paths[0] : null);
                 return;
             }
 
             note.Say("Opening the vault…");
-            var vault = await VaultService.OpenAsync(UserSettings.Load().VaultPath);
+            var vault = await VaultService.OpenAsync(vaultFolder);
             var names = PathList.Format(paths);
 
             switch (command)

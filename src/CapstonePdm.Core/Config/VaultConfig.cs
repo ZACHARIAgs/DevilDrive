@@ -45,6 +45,13 @@ public sealed class VaultConfig
     /// <summary>Ask before checking in files that look like exports (STEP, PDF, DXF, ...).</summary>
     public bool WarnOnExports { get; set; } = true;
 
+    /// <summary>
+    /// Folder every member keeps this vault in, e.g. C:\ClubVault. Assembly references are full paths,
+    /// so it must be the same on every PC. Used when someone adds the vault from the app; null means
+    /// C:\Vaults\&lt;repo name&gt;.
+    /// </summary>
+    public string? LocalPath { get; set; }
+
     public bool IsAdmin(string? gitHubLogin) =>
         !string.IsNullOrWhiteSpace(gitHubLogin) && Admins.Any(a => string.Equals(a, gitHubLogin, StringComparison.OrdinalIgnoreCase));
 

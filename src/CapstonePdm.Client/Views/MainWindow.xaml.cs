@@ -77,6 +77,13 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath, dialog.ExplorerMenu, dialog.DownloadFolders) : null;
     }
 
+    public (string? OpenFolder, bool Changed) ShowVaults()
+    {
+        var dialog = new VaultsWindow { Owner = this };
+        dialog.ShowDialog();
+        return (dialog.OpenFolder, dialog.Changed);
+    }
+
     public void ShowHistory(string relativePath) => new HistoryWindow(_vm, this, relativePath) { Owner = this }.ShowDialog();
 
     public void Notify(string message) => new NotificationWindow().Say(message, System.TimeSpan.FromSeconds(8));

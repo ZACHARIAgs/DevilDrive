@@ -242,10 +242,19 @@ The tool isn't tied to the capstone. For a new team:
    .\scripts\Initialize-Vault.ps1 -RepoUrl https://github.com/YOU/club-vault.git -VaultPath C:\ClubVault
    ```
    Pick a folder name that fits. It just has to be the same on every member's PC.
-3. In `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` and `$DefaultVaultPath` to the new repo and folder. Then run `scripts\Publish-Client.ps1` and share that zip with the club.
+   `Initialize-Vault` writes the folder into the vault's `pdm.json` as `localPath`, so everyone who adds the vault gets the same folder.
+3. Members who already have Capstone PDM: click **Vaults…** next to the vault dropdown, then **Find my vaults**, pick the club's vault and **Download and open**. New members: in `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` and `$DefaultVaultPath` to the new repo and folder, run `scripts\Publish-Client.ps1` and share that zip.
 4. Click **Update Vault Setup** once in the app to turn on the vault guard.
 
-If you're in both teams, keep both vaults on your PC and switch with **Settings → Vault folder**. The SolidWorks add-in and the File Explorer menu follow the switch. Each vault has its own admins (from that repo's GitHub roles), frozen files, milestones and Discord channel.
+### Several groups on one PC
+
+One install of Capstone PDM works with every group you're in; each group has its own vault (repo and folder).
+
+* **Add a group's vault:** click **Vaults…** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, ask its admin to add you to the repo. A vault that's already on your PC can be added with **Add a folder on this PC…**.
+* **Switch** with the **Vault** dropdown in the app.
+* **In SolidWorks you don't switch at all:** the pane works in whichever vault the open file is in, so you can have a capstone assembly and a club part open and the pane follows the active window. Its header shows the vault's name.
+* The **File Explorer** menu works in every vault in your list.
+* Each vault has its own admins (from that repo's GitHub roles), frozen files, reviews, milestones and Discord channel. Removing a vault from the list doesn't delete its files.
 
 If the club should get app updates from a different code repo (for example your own fork), change `<UpdateRepo>` in `Directory.Build.props` before building.
 

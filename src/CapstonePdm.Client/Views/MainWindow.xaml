@@ -141,6 +141,11 @@
         </Border>
 
         <DockPanel DockPanel.Dock="Top" Margin="8,6">
+            <TextBlock Text="Vault:" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <ComboBox Width="200" ItemsSource="{Binding Vaults}" SelectedItem="{Binding SelectedVault}"
+                      ToolTip="Switch to another group's vault." />
+            <Button Content="Vaults&#x2026;" Command="{Binding ManageVaultsCommand}" Padding="8,0" Margin="4,0,14,0"
+                    ToolTip="Add another group's vault (from your GitHub repos) or remove one." />
             <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" />
             <ComboBox DockPanel.Dock="Right" Width="210" Margin="8,0,0,0" SelectedIndex="{Binding FilterIndex}">
                 <ComboBoxItem Content="All files" />

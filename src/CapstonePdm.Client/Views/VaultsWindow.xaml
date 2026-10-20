@@ -1,0 +1,40 @@
+<Window x:Class="CapstonePdm.Client.Views.VaultsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vaults" Width="660" Height="600" MinWidth="520" MinHeight="460"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <DataTemplate x:Key="VaultItem">
+            <StackPanel Margin="2,3">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Detail}" Foreground="#666" FontSize="11" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+    <DockPanel Margin="14">
+        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" FontSize="14" Text="Vaults on this PC" />
+        <TextBlock DockPanel.Dock="Top" Foreground="#555" TextWrapping="Wrap" Margin="0,2,0,6"
+                   Text="One vault per group, for example your capstone team and a club. The SolidWorks add-in works in whichever vault the open file is in." />
+        <ListBox x:Name="LocalList" DockPanel.Dock="Top" Height="150" ItemTemplate="{StaticResource VaultItem}"
+                 SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnOpen" />
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,6,0,16">
+            <Button x:Name="OpenButton" Content="Open in Capstone PDM" Padding="10,3" Click="OnOpen" />
+            <Button Content="Add a folder on this PC&#x2026;" Padding="10,3" Margin="6,0,0,0" Click="OnAddFolder" />
+            <Button x:Name="RemoveButton" Content="Remove from list" Padding="10,3" Margin="6,0,0,0" Click="OnRemove" />
+        </StackPanel>
+
+        <DockPanel DockPanel.Dock="Top">
+            <Button x:Name="FindButton" DockPanel.Dock="Right" Content="Find my vaults" Padding="10,3" Click="OnFind" />
+            <TextBlock FontWeight="SemiBold" FontSize="14" Text="Your vaults on GitHub" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock DockPanel.Dock="Top" Foreground="#555" TextWrapping="Wrap" Margin="0,2,0,6"
+                   Text="Every GitHub repo you can access that has a pdm.json. If a group's vault is missing, ask its admin to add you to the repo." />
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" Padding="16,3" IsCancel="True" />
+            <Button x:Name="DownloadButton" DockPanel.Dock="Right" Content="Download and open" Padding="10,3" Margin="0,0,6,0" Click="OnDownload" />
+            <TextBlock x:Name="StatusText" Foreground="#555" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
+        </DockPanel>
+        <ListBox x:Name="RemoteList" ItemTemplate="{StaticResource VaultItem}" SelectionChanged="OnSelectionChanged" />
+    </DockPanel>
+</Window>

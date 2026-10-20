@@ -58,6 +58,7 @@ public sealed class MainViewModel : ViewModelBase
         OpenCommand = new RelayCommand(OpenSelected, () => SingleSelected?.File.ExistsLocally == true);
         ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
+        ManageVaultsCommand = new RelayCommand(async () => await ManageVaultsAsync(), () => !IsBusy);
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
         Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
@@ -86,6 +87,21 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand OpenCommand { get; }
     public ICommand ShowInExplorerCommand { get; }
     public ICommand SettingsCommand { get; }
+    public ICommand ManageVaultsCommand { get; }
+
+    /// <summary>The vaults (one per group) on this PC, for the dropdown next to the search box.</summary>
+    public ObservableCollection<VaultChoice> Vaults { get; } = new();
+    private VaultChoice? _selectedVault;
+    private bool _loadingVaults;
+
+    public VaultChoice? SelectedVault
+    {
+        get => _selectedVault;
+        set
+        {
+            if (Set(ref _selectedVault, value) && !_loadingVaults && value != null) _ = SwitchVaultAsync(value.Folder);
+        }
+    }
     public ICommand MilestonesCommand { get; }
     public ICommand ReturnToLatestCommand { get; }
     public ICommand UpdateVaultSetupCommand { get; }
@@ -430,6 +446,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
+        LoadVaults();
         await OpenVaultAsync(UserSettings.Load().VaultPath);
         _autoRefresh.Start();
     }
@@ -455,7 +472,71 @@ public sealed class MainViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(IsAdmin));
+        LoadVaults();
         await RefreshAsync(quiet: false);
+    }
+
+    /// <summary>Fills the vault dropdown from Settings, selecting the current vault.</summary>
+    private void LoadVaults()
+    {
+        var settings = UserSettings.Load();
+        _loadingVaults = true;
+        try
+        {
+            Vaults.Clear();
+            foreach (var folder in settings.Vaults) Vaults.Add(new VaultChoice(folder, VaultNameOf(folder)));
+            SelectedVault = Vaults.FirstOrDefault(v => string.Equals(v.Folder, settings.VaultPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _loadingVaults = false;
+        }
+    }
+
+    private static string VaultNameOf(string folder)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(folder, VaultConfig.FileName))) return VaultConfig.Load(folder).VaultName;
+        }
+        catch (PdmException)
+        {
+            // Unreadable pdm.json: show the folder name.
+        }
+        return Path.GetFileName(folder);
+    }
+
+    /// <summary>Shows another group's vault; the SolidWorks add-in follows the open file on its own.</summary>
+    private async Task SwitchVaultAsync(string folder)
+    {
+        var settings = UserSettings.Load();
+        if (string.Equals(folder, _vault?.VaultRoot, StringComparison.OrdinalIgnoreCase)) return;
+        if (IsBusy)
+        {
+            LoadVaults(); // put the dropdown back; try again when the current command is done
+            return;
+        }
+        settings.VaultPath = folder;
+        settings.AddVault(folder);
+        settings.Save();
+        App.UpdateExplorerMenu(settings);
+        await OpenVaultAsync(folder);
+    }
+
+    private async Task ManageVaultsAsync()
+    {
+        var (openFolder, changed) = _dialogs.ShowVaults();
+        var settings = UserSettings.Load();
+        if (changed) App.UpdateExplorerMenu(settings);
+        if (openFolder != null)
+        {
+            await SwitchVaultAsync(openFolder);
+        }
+        else if (_vault != null && !settings.Vaults.Contains(_vault.VaultRoot, StringComparer.OrdinalIgnoreCase))
+        {
+            await OpenVaultAsync(settings.VaultPath); // the open vault was removed from the list
+        }
+        LoadVaults();
     }
 
     public async Task RefreshAsync(bool quiet)
@@ -807,6 +888,7 @@ public sealed class MainViewModel : ViewModelBase
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
         settings.VaultPath = request.VaultPath;
+        settings.AddVault(request.VaultPath);
         settings.ExplorerMenu = request.ExplorerMenu;
         settings.Save();
         App.UpdateExplorerMenu(settings);

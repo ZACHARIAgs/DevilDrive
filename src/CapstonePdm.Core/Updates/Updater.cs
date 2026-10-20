@@ -179,7 +179,7 @@ public sealed class Updater
 
     private async Task<HttpResponseMessage?> SendAsync(string url, string accept, CancellationToken ct)
     {
-        _token ??= await GetTokenAsync(ct).ConfigureAwait(false) ?? "";
+        _token ??= await GitHubCredentials.GetTokenAsync(ct).ConfigureAwait(false) ?? "";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (_token.Length > 0) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
         request.Headers.UserAgent.ParseAdd("CapstonePDM");
@@ -197,18 +197,5 @@ public sealed class Updater
         {
             return null;
         }
-    }
-
-    /// <summary>The GitHub token Git saved when the user signed in (never prompts).</summary>
-    private static async Task<string?> GetTokenAsync(CancellationToken ct)
-    {
-        var gitExe = GitRunner.FindGit();
-        if (gitExe == null) return null;
-        var git = new GitRunner(Path.GetTempPath(), gitExe);
-        var fill = await git.RunAsync(new[] { "-c", "credential.interactive=never", "credential", "fill" },
-            "protocol=https\nhost=github.com\n\n", TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
-        if (!fill.Success) return null;
-        return fill.StdOut.Split('\n').Select(l => l.TrimEnd('\r'))
-            .FirstOrDefault(l => l.StartsWith("password=", StringComparison.Ordinal))?.Substring("password=".Length);
     }
 }

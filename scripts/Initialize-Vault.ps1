@@ -54,6 +54,12 @@ try {
         }
         else {
             Copy-Item (Join-Path $template $file) $file
+            if ($file -eq 'pdm.json') {
+                # Record this vault's folder so members who add it from the app get the same one.
+                $json = Get-Content $file -Raw
+                $json = $json -replace '"localPath":\s*"[^"]*"', ('"localPath": ' + (ConvertTo-Json $VaultPath))
+                [IO.File]::WriteAllText((Join-Path (Get-Location) $file), $json)
+            }
             Write-Host "Added $file"
         }
     }
