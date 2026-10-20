@@ -45,7 +45,7 @@ public partial class App : Application
             return;
         }
 
-        // Run from Downloads (or anywhere but the install folder): offer to install, like Setup.cmd.
+        // Run from Downloads (or anywhere but the install folder): install, like Setup.cmd. This copy then quits.
         if (args.Length == 0 && OfferInstall())
         {
             Shutdown();
@@ -79,18 +79,15 @@ public partial class App : Application
         await AppUpdater.CheckAsync(window);
     }
 
-    /// <summary>Shows the Install window when this exe isn't the installed copy. True if the installed copy was started instead.</summary>
+    /// <summary>Shows the Install window when this exe isn't the installed copy. True if it did (this copy should quit).</summary>
     private bool OfferInstall()
     {
         var exe = Environment.ProcessPath;
         var layout = InstallLayout.ForThisUser();
         if (exe == null || !ExplorerIntegration.IsInstalledCopy(exe) || AppInstaller.IsInstalled(exe, layout)) return false;
-        var shutdownMode = ShutdownMode;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        var install = new InstallWindow(layout, exe);
-        install.ShowDialog();
-        ShutdownMode = shutdownMode;
-        return install.StartedInstalledCopy;
+        new InstallWindow(layout, exe).ShowDialog();
+        return true;
     }
 
     /// <summary>Keeps the right-click menu pointing at this copy and the current vault folder (or removes it).</summary>

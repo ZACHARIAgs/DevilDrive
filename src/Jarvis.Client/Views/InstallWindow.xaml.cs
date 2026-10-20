@@ -18,6 +18,8 @@ namespace Jarvis.Client.Views;
 /// Shown when Jarvis.exe runs from outside the install folder (e.g. straight from Downloads): copies
 /// itself to %LocalAppData%\Programs\Jarvis, installs Git if it's missing, adds shortcuts and the File
 /// Explorer menu, then starts the installed copy. What Setup.cmd does, without the console.
+/// There's no "run without installing": a copy outside the install folder doesn't update itself, has no
+/// shortcuts or File Explorer menu, and the SolidWorks add-in can't find it. Closing the window quits.
 /// </summary>
 public partial class InstallWindow : Window
 {
@@ -41,7 +43,6 @@ public partial class InstallWindow : Window
                              "Open the installed one (it's also on your Desktop and in the Start menu). You can delete this download.";
             StepsPanel.Visibility = Visibility.Collapsed;
             InstallButton.Content = "Open Jarvis";
-            SkipButton.Content = "Run this copy anyway";
         }
         else if (installed != null)
         {
@@ -56,29 +57,25 @@ public partial class InstallWindow : Window
         Closing += (_, e) => e.Cancel = _busy;
     }
 
-    /// <summary>The installed copy was started; this one should exit.</summary>
-    public bool StartedInstalledCopy { get; private set; }
-
     private enum Step { Pending, Working, Done, Problem }
 
     private static void SetStep(TextBlock block, Step step, string text)
     {
         var mark = step switch
         {
-            Step.Working => "\u2192 ",
-            Step.Done => "\u2713 ",
-            Step.Problem => "! ",
-            _ => "\u25CB ",
+            Step.Working => "\u2192  ",
+            Step.Done => "\u2713  ",
+            Step.Problem => "!  ",
+            _ => "\u2022  ", // a plain bullet: what will happen, not something to pick
         };
         block.Text = mark + text;
         block.FontWeight = step == Step.Working ? FontWeights.SemiBold : FontWeights.Normal;
-        block.Foreground = step == Step.Problem ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.Black;
-    }
-
-    private void OnSkip(object sender, RoutedEventArgs e)
-    {
-        if (_busy) return;
-        DialogResult = false;
+        block.Foreground = step switch
+        {
+            Step.Problem => System.Windows.Media.Brushes.Firebrick,
+            Step.Done => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D)),
+            _ => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1F, 0x29, 0x37)),
+        };
     }
 
     private async void OnInstall(object sender, RoutedEventArgs e)
@@ -185,7 +182,6 @@ public partial class InstallWindow : Window
         try
         {
             Process.Start(new ProcessStartInfo(_layout.ExePath) { UseShellExecute = true, WorkingDirectory = _layout.InstallFolder });
-            StartedInstalledCopy = true;
             DialogResult = true;
         }
         catch (Win32Exception ex)
@@ -198,6 +194,6 @@ public partial class InstallWindow : Window
     {
         _busy = busy;
         Cursor = busy ? Cursors.Wait : null;
-        InstallButton.IsEnabled = SkipButton.IsEnabled = !busy;
+        InstallButton.IsEnabled = !busy;
     }
 }
