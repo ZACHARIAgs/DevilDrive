@@ -199,6 +199,27 @@ public class OnboardingTests : IDisposable
         Assert.Equal("Zoe Park", again.Name);
     }
 
+    // ------------------------------------------------------------ vault folder
+
+    [Theory]
+    [InlineData(@"C:\ClubVault", @"C:\ClubVault")]
+    [InlineData(@"C:\ClubVault", @"c:\clubvault\")]
+    [InlineData("C:/ClubVault", @"C:\ClubVault")]
+    [InlineData(null, @"D:\Anywhere")]
+    [InlineData("  ", @"D:\Anywhere")]
+    public void FolderWarning_NoneWhenTheVaultIsWhereTheTeamKeepsIt(string? localPath, string vaultRoot) =>
+        Assert.Null(new Config.VaultConfig { LocalPath = localPath }.FolderWarning(vaultRoot));
+
+    [Fact]
+    public void FolderWarning_SaysWhereToMoveIt()
+    {
+        var warning = new Config.VaultConfig { LocalPath = @"C:\ClubVault" }.FolderWarning(@"D:\Stuff\ClubVault\");
+        Assert.NotNull(warning);
+        Assert.StartsWith(@"This vault is in D:\Stuff\ClubVault, but your team keeps it in C:\ClubVault.", warning);
+        Assert.Contains("missing parts", warning);
+        Assert.Contains(@"move the folder to C:\ClubVault", warning);
+    }
+
     // ------------------------------------------------------------ invitations
 
     private const string InvitationsJson =

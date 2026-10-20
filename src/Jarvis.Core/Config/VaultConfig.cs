@@ -46,6 +46,29 @@ public sealed class VaultConfig
     /// </summary>
     public string? LocalPath { get; set; }
 
+    /// <summary>
+    /// A warning when the vault is open from another folder than <see cref="LocalPath"/>: assembly
+    /// references are full paths, so parts can go missing (here or on teammates' PCs). Null if it matches or isn't set.
+    /// </summary>
+    public string? FolderWarning(string vaultRoot)
+    {
+        if (string.IsNullOrWhiteSpace(LocalPath)) return null;
+        string Normalize(string path) => Path.GetFullPath(path.Trim().Replace('/', '\\')).TrimEnd('\\');
+        try
+        {
+            var expected = Normalize(LocalPath!);
+            var actual = Normalize(vaultRoot);
+            if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase)) return null;
+            return $"This vault is in {actual}, but your team keeps it in {expected}. Assemblies store the full path to each part, " +
+                   $"so files saved here can open with missing parts on teammates' PCs (and theirs here). Check in your work, close SolidWorks and Jarvis, " +
+                   $"move the folder to {expected}, then open it from there (Vaults, Add a folder on this PC).";
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+        {
+            return null; // a malformed localPath isn't worth a warning on every refresh
+        }
+    }
+
     public bool IsAdmin(string? gitHubLogin) =>
         !string.IsNullOrWhiteSpace(gitHubLogin) && Admins.Any(a => string.Equals(a, gitHubLogin, StringComparison.OrdinalIgnoreCase));
 

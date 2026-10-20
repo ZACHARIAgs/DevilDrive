@@ -624,6 +624,11 @@ internal sealed class VaultPane : UserControl
                             "Use Return to Latest in Jarvis to keep working.");
             if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
         }
+        if (_vault?.Config.FolderWarning(_vault.VaultRoot) is { } wrongFolder)
+        {
+            lines.Insert(0, wrongFolder);
+            if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
+        }
         if (NewerThanTeam)
         {
             lines.Insert(0, $"You're using SolidWorks {_runningYear}, but the team works in {TeamYear}. Files saved here can't be opened in {TeamYear}, " +

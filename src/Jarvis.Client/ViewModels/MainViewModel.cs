@@ -654,6 +654,11 @@ public sealed class MainViewModel : ViewModelBase
             lines.Add(snapshot.ConfigProblem);
             brush = ErrorBrush;
         }
+        if (_vault?.Config.FolderWarning(_vault.VaultRoot) is { } wrongFolder)
+        {
+            lines.Add(wrongFolder);
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
         if (snapshot.IsOffline)
         {
             lines.Add("Offline: showing the last known status. " + snapshot.ConnectionProblem);
