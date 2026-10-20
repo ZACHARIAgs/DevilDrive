@@ -198,6 +198,60 @@ internal sealed class PaneHeader : PaneControl, IFitWidth
     }
 }
 
+/// <summary>
+/// The vault the pane works in, as a rounded drop-down ("[vault icon] Capstone Team 13  v").
+/// Clicking it raises <see cref="Opening"/> so the pane can show its list of vaults.
+/// </summary>
+internal sealed class VaultPicker : PaneControl, IFitWidth
+{
+    private bool _hover;
+
+    public VaultPicker()
+    {
+        Height = Theme.Px(36);
+        Margin = new Padding(0, 0, 0, Theme.Px(10));
+        Cursor = Cursors.Hand;
+        Font = Theme.Strong;
+    }
+
+    /// <summary>Raised on click, with the point below the control to show a menu at.</summary>
+    public event Action<Point>? Opening;
+
+    public void FitTo(int width) => Width = width;
+
+    protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
+    protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location)) Opening?.Invoke(new Point(0, Height));
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = Prepare(e, BackColor);
+        var box = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+        using (var path = Theme.RoundedRect(box, Theme.Px(6)))
+        using (var fill = new SolidBrush(_hover ? Theme.SecondaryHover : Theme.Card))
+        using (var border = new Pen(Theme.Border))
+        {
+            g.FillPath(fill, path);
+            g.DrawPath(border, path);
+        }
+        var pad = Theme.Px(10);
+        var glyphWidth = Theme.Px(20);
+        TextRenderer.DrawText(g, "", Theme.Glyph, new Rectangle(pad, 0, glyphWidth, Height), Theme.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+        TextRenderer.DrawText(g, "", Theme.SmallGlyph, new Rectangle(Width - pad - glyphWidth, 0, glyphWidth, Height), Theme.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+        var textLeft = pad + glyphWidth + Theme.Px(4);
+        TextRenderer.DrawText(g, Text, Font, new Rectangle(textLeft, 0, Width - textLeft - pad - glyphWidth, Height), Theme.Text,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+    }
+}
+
 internal enum NoticeKind
 {
     Info,

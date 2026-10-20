@@ -22,9 +22,13 @@ public partial class MainWindow : Window, IDialogs
     /// <summary>A file to select once the vault is loaded ("Show in Jarvis" from File Explorer).</summary>
     public string? PendingSelection { get; set; }
 
+    /// <summary>Open the Vaults window once the vault is loaded.</summary>
+    public bool ShowVaultsOnLoad { get; set; }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         await _vm.InitializeAsync();
+        if (ShowVaultsOnLoad && _vm.ManageVaultsCommand.CanExecute(null)) _vm.ManageVaultsCommand.Execute(null);
         if (PendingSelection == null || _vm.Vault == null) return;
         try
         {

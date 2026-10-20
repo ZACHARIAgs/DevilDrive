@@ -40,6 +40,7 @@ internal sealed class VaultPane : UserControl
 
     private readonly FlowLayoutPanel _layout;
     private readonly PaneHeader _header;
+    private readonly VaultPicker _picker;
     private readonly NoticeBox _banner;
     private readonly FileCard _card;
     private readonly CaptionLabel _treeLabel;
@@ -108,6 +109,8 @@ internal sealed class VaultPane : UserControl
             BackColor = Theme.Background,
         };
         _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Jarvis");
+        _picker = new VaultPicker { Text = "Choose a vault" };
+        _picker.Opening += ShowVaultMenu;
         _banner = new NoticeBox();
         _card = new FileCard();
         _treeLabel = new CaptionLabel("Files in use");
@@ -142,7 +145,7 @@ internal sealed class VaultPane : UserControl
 
         _layout.Controls.AddRange(new Control[]
         {
-            _header, _activity, _status, _banner, _card, _treeLabel, _tree,
+            _header, _picker, _activity, _status, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
@@ -302,10 +305,10 @@ internal sealed class VaultPane : UserControl
         if (showActivity) StartActivity(_vault == null ? "Opening the vault\u2026" : "Checking the vault\u2026");
         try
         {
-            // Work in the vault that holds the open file (each group has its own vault folder). A file
-            // outside every vault keeps the current one; with no vault yet, use the app's current vault.
+            // Work in the vault that holds the open file (each group has its own vault folder). With no
+            // file open, or a file outside every vault, use the vault picked in the pane (or the app).
             var settings = UserSettings.Load();
-            var wanted = settings.VaultFor(_currentPath) ?? _vault?.VaultRoot ?? settings.VaultPath;
+            var wanted = settings.VaultFor(_currentPath) ?? settings.VaultPath;
             if (_vault != null && !string.Equals(wanted, _vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
             {
                 _vault = null;
@@ -426,7 +429,8 @@ internal sealed class VaultPane : UserControl
     private void UpdateViewCore()
     {
         UpdateBanner();
-        _header.Subtitle = _vault == null ? "Vault not connected" : $"{_vault.Config.VaultName}  \u2022  {_vault.UserDisplayName}";
+        _header.Subtitle = _vault == null ? "Vault not connected" : _vault.UserDisplayName;
+        _picker.Text = _vault?.Config.VaultName ?? "Choose a vault";
 
         var file = CurrentFile;
         var name = _currentPath != null ? Path.GetFileName(_currentPath) : _sw.ActiveDocument != null ? "Unsaved document" : "No document open";
@@ -1699,7 +1703,70 @@ internal sealed class VaultPane : UserControl
         }
     }
 
-    private void OpenDesktopApp()
+    // ------------------------------------------------------------ switching vaults
+
+    /// <summary>The list under the vault picker: every vault on this PC, and a way to add one.</summary>
+    private void ShowVaultMenu(Point location)
+    {
+        EnsureUiContext();
+        var settings = UserSettings.Load();
+        var menu = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = true, Font = Theme.Body };
+        foreach (var folder in settings.Vaults)
+        {
+            var onThisPc = Directory.Exists(Path.Combine(folder, ".git"));
+            var item = new ToolStripMenuItem(VaultNameOf(folder) + (onThisPc ? "" : "  (not on this PC)"))
+            {
+                Checked = string.Equals(folder, _vault?.VaultRoot, StringComparison.OrdinalIgnoreCase),
+                Enabled = onThisPc && !_busy,
+                ToolTipText = folder,
+            };
+            var target = folder;
+            item.Click += async (_, _) => { EnsureUiContext(); await SwitchVaultAsync(target); };
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count > 0) menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Add or download a vault\u2026", null, (_, _) => OpenDesktopApp("--vaults"));
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+        menu.Show(_picker, location);
+    }
+
+    /// <summary>Makes <paramref name="folder"/> the vault the pane (and the desktop app) work in.</summary>
+    private async Task SwitchVaultAsync(string folder)
+    {
+        if (_busy) return;
+        var settings = UserSettings.Load();
+        settings.VaultPath = folder;
+        settings.AddVault(folder);
+        settings.Save();
+
+        // An open file decides the vault, so check-outs always go to the vault the file is in.
+        var openIn = settings.VaultFor(_currentPath);
+        await RefreshAsync(contactVault: true);
+        if (openIn != null && !string.Equals(openIn, folder, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus($"{Path.GetFileName(_currentPath)} is in {VaultNameOf(openIn)}, so the pane shows that vault while it's the active file. " +
+                      $"Open a file from {VaultNameOf(folder)}, or close this one, to work there.");
+        }
+        else
+        {
+            SetStatus($"Switched to {VaultNameOf(folder)}.");
+        }
+    }
+
+    private static string VaultNameOf(string folder)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(folder, VaultConfig.FileName))) return VaultConfig.Load(folder).VaultName;
+        }
+        catch (PdmException)
+        {
+            // Unreadable pdm.json: show the folder name.
+        }
+        return Path.GetFileName(folder);
+    }
+
+    private void OpenDesktopApp(string? arguments = null)
     {
         var exe = Path.Combine(Jarvis.Core.Config.AppFolders.InstallFolder, "Jarvis.exe");
         if (!File.Exists(exe))
@@ -1707,7 +1774,7 @@ internal sealed class VaultPane : UserControl
             MessageBox.Show(_sw.MainWindow, $"Jarvis isn't installed at {exe}. Run Setup.cmd.", "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(exe, arguments ?? "") { UseShellExecute = true });
     }
 
     // ------------------------------------------------------------ plumbing

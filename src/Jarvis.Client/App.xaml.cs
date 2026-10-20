@@ -12,7 +12,7 @@ public partial class App : Application
 {
     /// <summary>
     /// Normal start opens the main window. "--explorer &lt;command&gt; &lt;path&gt;" comes from File Explorer's
-    /// right-click menu; "--register-explorer" (run by Setup) adds that menu.
+    /// right-click menu; "--register-explorer" (run by Setup) adds that menu; "--vaults" opens the Vaults window.
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -61,7 +61,8 @@ public partial class App : Application
             ShutdownMode = shutdownMode;
         }
 
-        var window = new MainWindow();
+        // "--vaults" comes from the SolidWorks pane's "Add or download a vault".
+        var window = new MainWindow { ShowVaultsOnLoad = args.Length >= 1 && args[0] == "--vaults" };
         MainWindow = window;
         window.Show();
         UpdateExplorerMenu(UserSettings.Load());
