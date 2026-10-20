@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     ADMIN ONLY, run once: seeds an empty GitHub repo as the Capstone vault.
+    Easier: in the app, Vaults > New team vault does all of this (and creates the repo for you).
 
 .DESCRIPTION
     Clones the empty repo to C:\CapstoneVault, adds the vault rules from vault-template
@@ -85,4 +86,4 @@ finally {
 
 Write-Host ''
 Write-Host "Vault initialized at $VaultPath and pushed to $RepoUrl." -ForegroundColor Green
-Write-Host 'Next: set $DefaultRepoUrl in Setup-CapstonePdm.ps1 and send teammates the setup zip (see README).'
+Write-Host 'Next: in Capstone PDM, Vaults > Invite teammates, and send them the message it gives you (see README).'

@@ -142,6 +142,17 @@ public static class VaultCatalog
         {
             await git.RunAsync(new[] { "config", key, value }, null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
         }
+        await VaultCreator.EnsureCommitIdentityAsync(git, async () =>
+        {
+            try
+            {
+                return await GitHubSignIn.GetSignedInUserAsync(ct).ConfigureAwait(false);
+            }
+            catch (PdmException)
+            {
+                return null; // offline: Setup's name is missing too; check-in explains
+            }
+        }, ct).ConfigureAwait(false);
     }
 
     private static async Task<JsonDocument?> GetJsonAsync(string url, string token, CancellationToken ct)

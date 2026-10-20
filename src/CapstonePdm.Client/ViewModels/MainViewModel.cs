@@ -463,6 +463,17 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task OpenVaultAsync(string path)
     {
+        if (!Directory.Exists(Path.Combine(path, ".git")) && !UserSettings.Load().Vaults.Any(v => Directory.Exists(Path.Combine(v, ".git"))))
+        {
+            // Nothing downloaded yet (first run, welcome screen skipped): no error, just what to do.
+            _vault = null;
+            Files.Clear();
+            _rows.Clear();
+            SetBanner("No vault on this PC yet. Click Vaults\u2026 to find your team's vault on GitHub, or to create a new team vault.", InfoBrush);
+            StatusText = "No vault open";
+            OnPropertyChanged(nameof(WindowTitle));
+            return;
+        }
         try
         {
             StatusText = "Opening vault…";

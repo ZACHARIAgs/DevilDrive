@@ -10,15 +10,15 @@ Under the hood the vault is a private GitHub repo using Git LFS file locking. Yo
 
 ### One-time setup (about 10 minutes)
 
-1. Get **CapstonePDM-Setup.zip** from an admin (GitHub Releases or the Discord pinned message) and unzip it anywhere.
-2. Double-click **Setup.cmd**. It will:
-   - install Git (a Windows permission prompt may appear),
+1. **Accept the GitHub invite** for your team's vault (it's in your email, or at `https://github.com/<owner>/<vault repo>/invitations`). No GitHub account? Make a free one at github.com and send your username to the team lead.
+2. Get **CapstonePDM-Setup.zip** (the link is in the invite message from your team lead, or GitHub Releases) and unzip it anywhere.
+3. Double-click **Setup.cmd**. It will:
+   - install Git and Git LFS (a Windows permission prompt may appear),
    - ask for your **name** and **email** (the one on your GitHub account),
-   - download the vault to **`C:\CapstoneVault`** (a browser window opens so you can sign in to GitHub),
-   - put a **Capstone PDM** shortcut on your Desktop.
-3. Open **Capstone PDM** from the Desktop.
+   - put a **Capstone PDM** shortcut on your Desktop and open the app.
+4. The app's **welcome screen** checks Git, signs you in to GitHub (a browser window opens) and then **Find my vaults**: pick your team's vault and click **Download and open**. It goes into the same folder on every PC (e.g. `C:\CapstoneVault`).
 
-You must accept the GitHub collaborator invite for the vault repo before setup can download it. Ask an admin if you didn't get one.
+The same setup zip works for every team: which vault you get depends only on which GitHub invites you accepted.
 
 ### Daily workflow
 
@@ -132,16 +132,22 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 
 ### First-time vault setup
 
-1. Create a **private, empty** GitHub repo (no README). Add each teammate as a collaborator with **Write** access.
-2. Edit `vault-template/pdm.json`:
+All in the app, no scripts or GitHub settings pages:
+
+1. Install Capstone PDM (Setup.cmd) and open it. The welcome screen signs you in to GitHub.
+2. Click **New team vault…** (on the welcome screen, or **Vaults…** → **New team vault…**). Enter:
+   - the **vault name** (e.g. "Formula SAE Vault"),
+   - the **GitHub owner**: your account, or an organization you can create repos in (with an organization, several people can be admins),
+   - the **SolidWorks version** everyone saves in (the oldest one on the team; default 2024),
+   - the **vault folder**, the same on every PC (e.g. `C:\ClubVault`; keep it outside OneDrive).
+   
+   The app creates a **private** GitHub repo, puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
+3. **Invite teammates** (offered right after creating, or **Vaults…** → select the vault → **Invite teammates…**): paste their GitHub usernames. The app adds them with **Write** access, shows who was invited and who failed (misspelled username, no account), and gives you a message to copy into Discord or email: accept the invite, install from the release link, then **Vaults → Find my vaults**.
+4. Optionally edit `pdm.json` in the vault and check it in:
    - `team`: GitHub username → real name (shown in the app and Discord),
    - `discordWebhookUrl`: Discord → Server Settings → Integrations → Webhooks → New Webhook → Copy URL.
-3. Run once, after installing Git (e.g. by running Setup.cmd yourself):
-   ```powershell
-   .\scripts\Initialize-Vault.ps1 -RepoUrl https://github.com/YOUR-TEAM/capstone-vault.git
-   ```
-4. In `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` to the repo URL.
-5. Build the teammate zip and share it (see *Publishing the app* below).
+
+Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do it). `scripts/Initialize-Vault.ps1` still works for a repo you created yourself.
 
 `pdm.json` lives in the vault, so you can change names or the webhook later. Edit it in `C:\CapstoneVault` and check it in. Everyone picks up the change on their next Get Latest.
 
@@ -237,23 +243,19 @@ The PDM itself works with any version, and the add-in supports SolidWorks 2020 a
 
 ### Using it for another project (e.g. a club)
 
-The tool isn't tied to the capstone. For a new team:
+The tool isn't tied to the capstone, and nothing in the setup zip names a team. For a new team (a club, another class):
 
-1. Create a new **private, empty** GitHub repo, e.g. `club-vault`, and add that team as collaborators.
-2. Edit `vault-template/pdm.json` (names, Discord webhook, `solidWorksVersion`), then run:
-   ```powershell
-   .\scripts\Initialize-Vault.ps1 -RepoUrl https://github.com/YOU/club-vault.git -VaultPath C:\ClubVault
-   ```
-   Pick a folder name that fits. It just has to be the same on every member's PC.
-   `Initialize-Vault` writes the folder into the vault's `pdm.json` as `localPath`, so everyone who adds the vault gets the same folder.
-3. Members who already have Capstone PDM: click **Vaults…** next to the vault dropdown, then **Find my vaults**, pick the club's vault and **Download and open**. New members: in `scripts/Setup-CapstonePdm.ps1`, set `$DefaultRepoUrl` and `$DefaultVaultPath` to the new repo and folder, run `scripts\Publish-Client.ps1` and share that zip.
-4. Click **Update Vault Setup** once in the app to turn on the vault guard.
+1. The team lead clicks **Vaults…** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
+2. **Invite teammates…** and send them the message the app gives you.
+3. Members who already have Capstone PDM: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `CapstonePDM-Setup.zip` and the welcome screen takes them there.
+
+The vault guard is included from the start. `Setup-CapstonePdm.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
 
 ### Several groups on one PC
 
 One install of Capstone PDM works with every group you're in; each group has its own vault (repo and folder).
 
-* **Add a group's vault:** click **Vaults…** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, ask its admin to add you to the repo. A vault that's already on your PC can be added with **Add a folder on this PC…**.
+* **Add a group's vault:** click **Vaults…** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
 * **Switch** with the **Vault** dropdown in the app.
 * **In SolidWorks you don't switch at all:** the pane works in whichever vault the open file is in, so you can have a capstone assembly and a club part open and the pane follows the active window. Its header shows the vault's name.
 * The **File Explorer** menu works in every vault in your list.
@@ -277,8 +279,8 @@ GitHub limits free LFS **storage and bandwidth**, and every Get Latest that down
 
 ```
 src/CapstonePdm.Core/     netstandard2.0. All vault logic, no UI. Reused by the Phase 2 add-in.
-  Git/                    GitRunner (runs git.exe), GitErrorClassifier (stderr → typed errors)
-  Vault/                  VaultService (all PDM commands), models, Git output parsers
+  Git/                    GitRunner (runs git.exe), GitErrorClassifier (stderr → typed errors), GitHubApi (create repo, invite), GitHubSignIn (first run)
+  Vault/                  VaultService (all PDM commands), models, Git output parsers, VaultCatalog (find/download), VaultCreator (new team vault), VaultInvites
   Notifications/          Discord webhook
   Updates/                automatic updates from GitHub Releases (SHA-256 checked)
   Config/                 pdm.json (team) and settings.json (per PC)
@@ -318,7 +320,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 1. Raise `<Version>` in `Directory.Build.props`, commit and push.
 2. Run `.\scripts\Release-Client.ps1 -Notes "What changed"`. It builds everything and creates release `v<Version>` with the files attached, using your saved GitHub sign-in.
 
-**The code repo is private**, so teammates' apps can only download updates if they have **Read** access to it (add them as collaborators with Read), or if you make the code repo public. The code contains no passwords or keys; the vault stays private either way. The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
+**The code repo is private**, so teammates' apps can only download updates (and the install link in invite messages only works) if they have **Read** access to it (add them as collaborators with Read), or if you make the code repo public. The code contains no passwords or keys; the vault stays private either way. The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
 
 ### How the commands map to Git
 

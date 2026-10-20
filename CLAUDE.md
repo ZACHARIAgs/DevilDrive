@@ -9,6 +9,7 @@ and `Capstone PDM Spec.md` (original spec).
 
 - `src/CapstonePdm.Core` (netstandard2.0): **all vault logic**, no UI. Shared by both front ends; never duplicate logic in them.
   - `Vault/VaultService.cs`: every PDM command (check out/in, undo, Get Latest, freeze, reviews, milestones, index, snapshot).
+  - `Vault/VaultCatalog.cs` (find/download vaults), `VaultCreator.cs` (New team vault: private repo + template), `VaultInvites.cs`; `Git/GitHubApi.cs` (REST calls with the saved GCM token), `Git/GitHubSignIn.cs` (first-run checks).
   - `Vault/FileTree.cs`: files-in-use tree rows from SolidWorks components (pure, unit-tested).
   - `Git/GitRunner.cs` runs git.exe; `GitErrorClassifier` maps stderr to typed `PdmException`s with user-facing messages.
   - `Updates/Updater.cs`: GitHub Releases + SHA256SUMS. `Notifications/`: Discord webhook.

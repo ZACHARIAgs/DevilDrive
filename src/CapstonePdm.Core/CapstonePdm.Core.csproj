@@ -22,6 +22,10 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\vault-template\.github\workflows\vault-guard.yml" LogicalName="CapstonePdm.Core.VaultGuard.yml" />
     <EmbeddedResource Include="..\..\vault-template\.github\vault-guard\guard.py" LogicalName="CapstonePdm.Core.VaultGuard.py" />
+    <!-- The rest of a new vault ("New team vault" in the app). -->
+    <EmbeddedResource Include="..\..\vault-template\.gitattributes" LogicalName="CapstonePdm.Core.Template.gitattributes" />
+    <EmbeddedResource Include="..\..\vault-template\.gitignore" LogicalName="CapstonePdm.Core.Template.gitignore" />
+    <EmbeddedResource Include="..\..\vault-template\pdm.json" LogicalName="CapstonePdm.Core.Template.pdm.json" />
   </ItemGroup>
 
 </Project>

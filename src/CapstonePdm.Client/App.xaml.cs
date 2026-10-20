@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using CapstonePdm.Client.Services;
 using CapstonePdm.Client.Views;
 using CapstonePdm.Core.Config;
+using CapstonePdm.Core.Git;
 
 namespace CapstonePdm.Client;
 
@@ -40,6 +41,23 @@ public partial class App : Application
             // "Open"/"Show in Capstone PDM" leave the main window open; everything else is done.
             if (MainWindow == null || !MainWindow.IsVisible) Shutdown();
             return;
+        }
+
+        // First run (no vault on this PC yet): Git, GitHub sign-in, then find or create a vault.
+        var settings = UserSettings.Load();
+        if (GitHubSignIn.NeedsWelcome(settings))
+        {
+            var shutdownMode = ShutdownMode;
+            ShutdownMode = ShutdownMode.OnExplicitShutdown; // closing the welcome screen isn't quitting
+            var welcome = new WelcomeWindow();
+            if (welcome.ShowDialog() == true && welcome.OpenFolder != null)
+            {
+                settings = UserSettings.Load(); // the Vaults window saved the list
+                settings.VaultPath = welcome.OpenFolder;
+                settings.AddVault(welcome.OpenFolder);
+                settings.Save();
+            }
+            ShutdownMode = shutdownMode;
         }
 
         var window = new MainWindow();

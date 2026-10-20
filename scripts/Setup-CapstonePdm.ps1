@@ -6,14 +6,19 @@
     1. Installs Git for Windows (includes Git LFS) with winget if it's missing.
     2. Turns on Git LFS.
     3. Asks for your name and email.
-    4. Clones the vault (to C:\CapstoneVault unless an admin changed it). A browser window opens so you can sign in to GitHub.
-    5. Installs CapstonePDM.exe and adds Desktop and Start menu shortcuts.
+    4. Installs CapstonePDM.exe, adds Desktop and Start menu shortcuts, and opens it.
+    5. Optionally installs the SolidWorks add-in.
+
+    The app does the rest: it signs you in to GitHub and finds your team's vault (Vaults, Find my
+    vaults), or creates a new one for a team lead. So the same setup zip works for every team.
 
     Run it by double-clicking Setup.cmd. It's safe to run again: finished steps are skipped.
 
+.PARAMETER RepoUrl
+    Optional: also download this vault now (to -VaultPath). Normally you leave it out and pick the vault in the app.
+
 .NOTES
-    Admins: set $DefaultRepoUrl and $DefaultVaultPath (and optionally $DefaultClientUrl) below before sharing.
-    Using this for a different project (e.g. a club)? Point them at that project's vault repo and folder.
+    Optionally set $DefaultClientUrl below (a download link for CapstonePDM.exe) if the exe isn't in the zip.
 #>
 [CmdletBinding()]
 param(
@@ -22,10 +27,9 @@ param(
     [string]$ClientUrl
 )
 
-# >>> Admins: fill these in before sharing the script <<<
-$DefaultRepoUrl   = 'https://github.com/aturne59-stack/capstone-vault.git'
-$DefaultVaultPath = 'C:\CapstoneVault'   # same folder on every PC, or assembly references break
+# Optional: where to download CapstonePDM.exe when it isn't next to this script.
 $DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/capstone-pdm/releases/latest/download/CapstonePDM.exe
+$DefaultVaultPath = 'C:\CapstoneVault'   # only used with -RepoUrl
 
 $ErrorActionPreference = 'Stop'
 if (-not $VaultPath) { $VaultPath = $DefaultVaultPath }
@@ -108,29 +112,29 @@ if (-not $name -or -not $email) { Stop-Setup 'Name and email are required.' }
 if (-not $currentName)  { Invoke-Git config --global user.name $name }
 if (-not $currentEmail) { Invoke-Git config --global user.email $email }
 
-# 4. Clone the vault --------------------------------------------------------
-Write-Step "Getting the vault into $VaultPath"
-if (-not $RepoUrl) { $RepoUrl = $DefaultRepoUrl }
-if ($RepoUrl -like '*YOUR-TEAM*') { $RepoUrl = Read-Default 'Vault repo URL (ask an admin)' '' }
-if (-not $RepoUrl) { Stop-Setup 'No vault repo URL.' }
-
-if (Test-Path (Join-Path $VaultPath '.git')) {
-    Write-Ok 'The vault is already on this PC. Skipping download.'
-}
-else {
-    if ((Test-Path $VaultPath) -and (Get-ChildItem -Force $VaultPath | Select-Object -First 1)) {
-        Stop-Setup "$VaultPath already exists and isn't empty. Move or rename it, then run Setup again."
+# 4. The vault (optional) -----------------------------------------------------
+# Normally the app finds the vault (Vaults, Find my vaults). -RepoUrl downloads one now instead.
+$clonedVault = $false
+if ($RepoUrl) {
+    Write-Step "Getting the vault into $VaultPath"
+    if (Test-Path (Join-Path $VaultPath '.git')) {
+        Write-Ok 'The vault is already on this PC. Skipping download.'
     }
-    Write-Host '    Downloading. A browser window may open so you can sign in to GitHub...'
-    Invoke-Git clone $RepoUrl $VaultPath
+    else {
+        if ((Test-Path $VaultPath) -and (Get-ChildItem -Force $VaultPath | Select-Object -First 1)) {
+            Stop-Setup "$VaultPath already exists and isn't empty. Move or rename it, then run Setup again."
+        }
+        Write-Host '    Downloading. A browser window may open so you can sign in to GitHub...'
+        Invoke-Git clone $RepoUrl $VaultPath
+    }
+    Invoke-Git -C $VaultPath config user.name $name
+    Invoke-Git -C $VaultPath config user.email $email
+    Invoke-Git -C $VaultPath config lfs.locksverify true
+    Invoke-Git -C $VaultPath config lfs.setlockablereadonly true
+    Invoke-Git -C $VaultPath config core.longpaths true
+    $clonedVault = $true
+    Write-Ok 'Vault ready.'
 }
-
-Invoke-Git -C $VaultPath config user.name $name
-Invoke-Git -C $VaultPath config user.email $email
-Invoke-Git -C $VaultPath config lfs.locksverify true
-Invoke-Git -C $VaultPath config lfs.setlockablereadonly true
-Invoke-Git -C $VaultPath config core.longpaths true
-Write-Ok 'Vault ready.'
 
 # 5. The Capstone PDM app ---------------------------------------------------
 Write-Step 'Installing the Capstone PDM app'
@@ -151,9 +155,13 @@ else {
     Write-Warn "Put CapstonePDM.exe in $InstallDir yourself, then run Setup again for the shortcuts."
 }
 
-$settingsDir = Join-Path $env:APPDATA 'CapstonePDM'
-New-Item -ItemType Directory -Force $settingsDir | Out-Null
-@{ vaultPath = $VaultPath } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $settingsDir 'settings.json')
+$settingsDir  = Join-Path $env:APPDATA 'CapstonePDM'
+$settingsFile = Join-Path $settingsDir 'settings.json'
+if ($clonedVault -and -not (Test-Path $settingsFile)) {
+    # Only for -RepoUrl, and never over existing settings (they list the user's vaults).
+    New-Item -ItemType Directory -Force $settingsDir | Out-Null
+    @{ vaultPath = $VaultPath; vaults = @($VaultPath) } | ConvertTo-Json | Set-Content -Encoding UTF8 $settingsFile
+}
 
 if (Test-Path $ExePath) {
     # Compare with SHA256SUMS on the release page to be sure this is the real file.
@@ -163,8 +171,8 @@ if (Test-Path $ExePath) {
         $shortcut = $shell.CreateShortcut((Join-Path $folder 'Capstone PDM.lnk'))
         $shortcut.TargetPath = $ExePath
         $shortcut.IconLocation = "$ExePath,0"
-        $shortcut.WorkingDirectory = $VaultPath
-        $shortcut.Description = 'Check files in and out of the Capstone vault'
+        $shortcut.WorkingDirectory = $InstallDir
+        $shortcut.Description = 'Check SolidWorks files in and out of your team''s vault'
         $shortcut.Save()
     }
     Write-Ok 'Shortcuts added to the Desktop and Start menu.'
@@ -187,5 +195,7 @@ if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidW
 }
 
 Write-Host ''
-Write-Host 'All done! Open "Capstone PDM" from your Desktop.' -ForegroundColor Green
-Write-Host "Always open SolidWorks files from $VaultPath, and check out before editing."
+Write-Host 'All done! Capstone PDM is opening (it''s also on your Desktop).' -ForegroundColor Green
+Write-Host 'In the app: sign in to GitHub, then Find my vaults (accept your team''s GitHub invite first),'
+Write-Host 'or New team vault if you''re setting up a team. Always check out before editing.'
+if (Test-Path $ExePath) { Start-Process -FilePath $ExePath }

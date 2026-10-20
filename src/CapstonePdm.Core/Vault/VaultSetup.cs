@@ -19,6 +19,11 @@ internal static class VaultSetup
     public static string GuardWorkflow => ReadResource("CapstonePdm.Core.VaultGuard.yml");
     public static string GuardScript => ReadResource("CapstonePdm.Core.VaultGuard.py");
 
+    // The rest of vault-template, for a brand-new vault.
+    public static string TemplateAttributes => ReadResource("CapstonePdm.Core.Template.gitattributes");
+    public static string TemplateIgnore => ReadResource("CapstonePdm.Core.Template.gitignore");
+    public static string TemplateConfig => ReadResource("CapstonePdm.Core.Template.pdm.json");
+
     public static bool SameText(string? a, string? b) => Normalize(a) == Normalize(b);
 
     private static string Normalize(string? text) => (text ?? "").Replace("\r\n", "\n").Trim();

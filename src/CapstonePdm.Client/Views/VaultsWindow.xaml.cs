@@ -30,11 +30,18 @@ public partial class VaultsWindow : Window
     private IReadOnlyList<RemoteVault> _remote = Array.Empty<RemoteVault>();
     private bool _busy;
 
-    public VaultsWindow()
+    /// <param name="findNow">Look for the user's vaults on GitHub right away.</param>
+    /// <param name="createNew">Start with the New team vault form.</param>
+    public VaultsWindow(bool findNow = false, bool createNew = false)
     {
         InitializeComponent();
         ShowLocal();
         UpdateButtons();
+        Loaded += (_, _) =>
+        {
+            if (createNew) OnNew(this, new RoutedEventArgs());
+            else if (findNow) OnFind(this, new RoutedEventArgs());
+        };
     }
 
     /// <summary>The vault to open in the app after the window closes, if any.</summary>
@@ -96,7 +103,8 @@ public partial class VaultsWindow : Window
         var local = LocalList.SelectedItem as Item;
         OpenButton.IsEnabled = !_busy && local != null && Directory.Exists(Path.Combine(local.Folder, ".git"));
         RemoveButton.IsEnabled = !_busy && local != null;
-        FindButton.IsEnabled = !_busy;
+        InviteButton.IsEnabled = !_busy && local != null && Directory.Exists(Path.Combine(local.Folder, ".git"));
+        FindButton.IsEnabled = NewButton.IsEnabled = !_busy;
         var remote = RemoteList.SelectedItem as Item;
         DownloadButton.IsEnabled = !_busy && remote != null;
         DownloadButton.Content = remote?.Remote?.ExistingFolder != null ? "Open" : "Download and open";
@@ -213,6 +221,42 @@ public partial class VaultsWindow : Window
             SetBusy(false, "");
             MessageBox.Show(this, ex.Message, "Download vault", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private void OnNew(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var dialog = new NewVaultWindow { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is not { } created) return;
+
+        _settings.AddVault(created.Folder);
+        Save();
+        ShowLocal();
+        var invite = MessageBox.Show(this,
+            $"{created.VaultName} is ready in {created.Folder} and on GitHub as {created.Repo.FullName} (private).\n\nInvite your teammates now?",
+            "New team vault", MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.Yes);
+        if (invite == MessageBoxResult.Yes)
+        {
+            new InviteWindow(created.VaultName, created.Repo.CloneUrl, created.Folder) { Owner = this }.ShowDialog();
+        }
+        OpenFolder = created.Folder;
+        DialogResult = true;
+    }
+
+    private async void OnInvite(object sender, RoutedEventArgs e)
+    {
+        if (_busy || !(LocalList.SelectedItem is Item item)) return;
+        var url = await VaultCatalog.RemoteUrlOfAsync(item.Folder);
+        string localPath;
+        try
+        {
+            localPath = VaultConfig.Load(item.Folder).LocalPath is { Length: > 0 } configured ? configured : item.Folder;
+        }
+        catch (PdmException)
+        {
+            localPath = item.Folder;
+        }
+        new InviteWindow(NameOf(item.Folder), url, localPath) { Owner = this }.ShowDialog();
     }
 
     private void Save()
