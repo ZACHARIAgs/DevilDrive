@@ -8,17 +8,9 @@ Under the hood the vault is a private GitHub repo using Git LFS file locking. Yo
 
 ## For teammates
 
-### One-time setup (about 5 minutes)
+### Installing
 
-1. **Download Jarvis.exe** from the link in your team lead's message (`https://github.com/aturne59-stack/jarvis/releases/latest/download/Jarvis.exe`) and open it.
-   - **Windows may warn you** ("Windows protected your PC"): click **More info**, then **Run anyway**. Jarvis isn't signed with a paid certificate; the release page lists each file's SHA-256 in `SHA256SUMS` if you want to check it.
-2. Click **Install Jarvis**. It copies itself to `%LocalAppData%\Programs\Jarvis`, installs **Git and Git LFS** if they're missing (with a progress bar; Windows may ask for permission), adds **Desktop and Start menu shortcuts** and the File Explorer menu, then opens the installed Jarvis. You can delete the download.
-3. On the **welcome screen**, click **Sign in to GitHub** (a browser window opens). No GitHub account? Make a free one at github.com and send your username to the team lead.
-4. Check your **name and email**: Jarvis fills them in from your GitHub profile (the email is GitHub's private `...@users.noreply.github.com` address, so your real email stays out of the vault's history). Change them if you like; they're only set if Git doesn't have them already.
-5. Your team's invitation is listed: click **Accept and download**. The vault goes into the same folder on every PC (e.g. `C:\CapstoneVault`) and opens. (Accepted the invite on github.com already? Click **Find my vaults** instead.)
-6. If SolidWorks is installed, click **Install the SolidWorks add-in** (close SolidWorks first; Windows asks for permission once). Skipped it? It's in **Settings** too.
-
-The same Jarvis.exe works for every team: which vault you get depends only on which GitHub invites you accepted. Only download **Jarvis.exe** from the release page: the other files are what Jarvis uses for updates and the add-in.
+Go to the **[latest release](https://github.com/aturne59-stack/jarvis/releases/latest)** and follow the instructions at the top of it.
 
 ### Daily workflow
 
