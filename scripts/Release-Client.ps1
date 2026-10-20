@@ -46,14 +46,15 @@ $files = @('CapstonePDM.exe', 'CapstonePDM-SolidWorksAddin.zip', 'CapstonePDM-Se
 if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 
 # Token from Git's credential manager (never printed).
-# Fed through .NET so PowerShell doesn't add an encoding mark Git would reject.
-$psi = New-Object System.Diagnostics.ProcessStartInfo 'git', '-c credential.interactive=never credential fill'
-$psi.UseShellExecute = $false; $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true
-$git = [System.Diagnostics.Process]::Start($psi)
-$stdin = New-Object System.IO.StreamWriter($git.StandardInput.BaseStream, (New-Object System.Text.UTF8Encoding $false))
-$stdin.Write("protocol=https`nhost=github.com`n`n"); $stdin.Close()
-$fill = $git.StandardOutput.ReadToEnd() -split "`n" | ForEach-Object { $_.TrimEnd("`r") }
-$git.WaitForExit()
+# Fed from a file through cmd: piping from PowerShell (or .NET's stdin) adds an encoding mark Git rejects.
+$request = Join-Path ([IO.Path]::GetTempPath()) ('capstone-cred-' + [Guid]::NewGuid().ToString('N') + '.txt')
+[IO.File]::WriteAllText($request, "protocol=https`nhost=github.com`n`n", (New-Object System.Text.UTF8Encoding $false))
+try {
+    $fill = & cmd.exe /c "git -c credential.interactive=never credential fill < `"$request`""
+}
+finally {
+    Remove-Item $request -ErrorAction SilentlyContinue
+}
 $token = ($fill | Where-Object { $_ -like 'password=*' } | Select-Object -First 1) -replace '^password=', ''
 if (-not $token) { throw 'No saved GitHub sign-in found. Run "git fetch" in the repo once to sign in, then try again.' }
 $headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'CapstonePDM-release' }
