@@ -1,7 +1,7 @@
 <Window x:Class="Jarvis.Client.Views.WelcomeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Welcome to Jarvis" Width="560" SizeToContent="Height"
+        Title="Welcome to Jarvis" Width="580" SizeToContent="Height"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
     <Window.Resources>
         <Style x:Key="Step" TargetType="TextBlock">
@@ -29,6 +29,7 @@
             <StackPanel>
                 <TextBlock Style="{StaticResource Step}" Text="1. Git and Git LFS" />
                 <TextBlock x:Name="GitText" Style="{StaticResource StepStatus}" Text="Checking&#x2026;" />
+                <ProgressBar x:Name="GitProgress" Height="6" Margin="0,6,0,0" Visibility="Collapsed" />
             </StackPanel>
         </DockPanel>
 
@@ -40,19 +41,70 @@
             </StackPanel>
         </DockPanel>
 
+        <!-- Git's user.name / user.email, filled in from the GitHub profile; only when they aren't set yet. -->
+        <Border x:Name="IdentityPanel" Visibility="Collapsed" Margin="14,2,0,6" Padding="10,8" Background="#F8FAFC"
+                BorderBrush="#E2E5EA" BorderThickness="1" CornerRadius="4">
+            <StackPanel>
+                <TextBlock Style="{StaticResource StepStatus}" Margin="0,0,0,6"
+                           Text="Every check-in is signed with this name and email. Change them if you like:" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Name" VerticalAlignment="Center" />
+                    <TextBox x:Name="NameBox" Grid.Column="1" Margin="0,2" />
+                    <TextBlock Grid.Row="1" Text="Email" VerticalAlignment="Center" />
+                    <TextBox x:Name="EmailBox" Grid.Row="1" Grid.Column="1" Margin="0,2" />
+                </Grid>
+                <TextBlock x:Name="EmailHint" Style="{StaticResource StepStatus}" FontSize="11" Margin="60,2,0,0"
+                           Text="This is GitHub's private address for you: it keeps your real email out of the vault's history." />
+            </StackPanel>
+        </Border>
+        <TextBlock x:Name="IdentityText" Style="{StaticResource StepStatus}" Margin="14,0,0,6" Visibility="Collapsed" />
+
         <StackPanel Margin="0,10,0,6">
             <TextBlock Style="{StaticResource Step}" Text="3. Your team's vault" />
-            <TextBlock Style="{StaticResource StepStatus}"
+            <TextBlock x:Name="VaultText" Style="{StaticResource StepStatus}"
                        Text="Joining a team? Accept the GitHub invite from your team lead first, then find your vault. Starting a team? Create its vault and invite your teammates." />
+            <ItemsControl x:Name="InvitationList" Margin="0,6,0,0" Visibility="Collapsed">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,3" Padding="10,6" Background="#E8F0FE" CornerRadius="4">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Accept and download" Padding="12,4"
+                                        VerticalAlignment="Center" Tag="{Binding}" Click="OnAccept" />
+                                <StackPanel Margin="0,0,10,0">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Detail}" Foreground="#555" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                 <Button x:Name="FindButton" Content="Find my vaults" Padding="14,4" FontWeight="SemiBold" Click="OnFind" />
                 <Button x:Name="NewButton" Content="New team vault&#x2026;" Padding="12,4" Margin="8,0,0,0" Click="OnNew" />
             </StackPanel>
         </StackPanel>
 
+        <DockPanel x:Name="AddinPanel" Margin="0,10,0,6" Visibility="Collapsed">
+            <Button x:Name="AddinButton" DockPanel.Dock="Right" Style="{StaticResource StepButton}" Content="Install the SolidWorks add-in" Click="OnInstallAddin" />
+            <StackPanel>
+                <TextBlock Style="{StaticResource Step}" Text="4. SolidWorks add-in (optional)" />
+                <TextBlock x:Name="AddinText" Style="{StaticResource StepStatus}"
+                           Text="Check files out and in from SolidWorks' task pane. Close SolidWorks first; Windows asks for permission once." />
+            </StackPanel>
+        </DockPanel>
+
         <TextBlock x:Name="StatusText" Foreground="#B91C1C" TextWrapping="Wrap" Margin="0,10,0,0" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Style="{StaticResource DialogButton}" Content="Skip for now" IsCancel="True" />
+            <Button x:Name="SkipButton" Style="{StaticResource DialogButton}" Content="Skip for now" IsCancel="True" />
         </StackPanel>
     </StackPanel>
 </Window>

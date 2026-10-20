@@ -167,7 +167,7 @@ public sealed class VaultConflictException : PdmException
 public sealed class GitNotFoundException : PdmException
 {
     public GitNotFoundException()
-        : base("Git isn't installed on this PC (or can't be found). Run Setup.cmd, then restart Jarvis.")
+        : base("Git isn't installed on this PC (or can't be found). Install it from git-scm.com (keep the default options), then restart Jarvis.")
     {
     }
 

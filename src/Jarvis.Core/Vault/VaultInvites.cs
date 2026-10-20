@@ -53,21 +53,21 @@ public static class VaultInvites
         return results;
     }
 
-    /// <summary>The download page for the app, from the code repo this build updates from.</summary>
+    /// <summary>Direct download of Jarvis.exe from the latest release of the code repo this build updates from.</summary>
     public static string? InstallLink(string? updateRepo) =>
-        string.IsNullOrWhiteSpace(updateRepo) ? null : $"https://github.com/{updateRepo}/releases/latest";
+        string.IsNullOrWhiteSpace(updateRepo) ? null : $"https://github.com/{updateRepo}/releases/latest/download/Jarvis.exe";
 
     /// <summary>What an admin sends new teammates (Discord, email, ...).</summary>
     public static string Message(string vaultName, string repoFullName, string localPath, string? installLink)
     {
-        var install = installLink == null
-            ? "Install Jarvis: ask me for the setup zip, unzip it and double-click Setup.cmd."
-            : $"Install Jarvis: download Jarvis-Setup.zip from {installLink} , unzip it and double-click Setup.cmd. (Already have it? Skip this.)";
+        var download = installLink == null
+            ? "Get Jarvis.exe from me"
+            : $"Download Jarvis: {installLink}";
         return
             $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (Jarvis, for our SolidWorks files).\n\n" +
-            $"1. Accept the GitHub invite: https://github.com/{repoFullName}/invitations (it's also in your email). Sign in to GitHub first.\n" +
-            $"2. {install}\n" +
-            "3. Open Jarvis, click Vaults, then \"Find my vaults\", pick " + vaultName + " and click \"Download and open\".\n\n" +
+            $"1. {download} and open it. Windows may warn you: click More info, then Run anyway. Then click Install Jarvis. (Already have Jarvis? Skip this.)\n" +
+            "2. In Jarvis, sign in to GitHub (no account? make a free one at github.com and send me your username).\n" +
+            $"3. Next to {vaultName}, click \"Accept and download\". (Or accept the invite on https://github.com/{repoFullName}/invitations , then click \"Find my vaults\".)\n\n" +
             $"The vault goes to {localPath} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.";
     }
 

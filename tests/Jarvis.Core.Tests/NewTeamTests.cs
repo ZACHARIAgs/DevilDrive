@@ -149,22 +149,25 @@ public class NewTeamTests
     [Fact]
     public void Message_SaysWhatToDoNext()
     {
-        var link = VaultInvites.InstallLink("team/capstone-pdm");
+        var link = VaultInvites.InstallLink("team/jarvis");
         var message = VaultInvites.Message("Club Vault", "team/club-vault", @"C:\ClubVault", link);
 
-        Assert.Equal("https://github.com/team/capstone-pdm/releases/latest", link);
-        Assert.Contains("https://github.com/team/club-vault/invitations", message);
+        Assert.Equal("https://github.com/team/jarvis/releases/latest/download/Jarvis.exe", link);
         Assert.Contains(link!, message);
+        Assert.Contains("More info, then Run anyway", message);
+        Assert.Contains("Accept and download", message);
+        Assert.Contains("https://github.com/team/club-vault/invitations", message);
         Assert.Contains("Find my vaults", message);
         Assert.Contains(@"C:\ClubVault", message);
+        Assert.DoesNotContain("Setup.cmd", message);
         Assert.StartsWith("You're invited to our Club Vault (", message);
         Assert.StartsWith("You're invited to our Robotics vault (", VaultInvites.Message("Robotics", "t/v", @"C:\V", null));
-        Assert.Contains("setup zip", VaultInvites.Message("V", "t/v", @"C:\V", null));
+        Assert.Contains("Get Jarvis.exe from me", VaultInvites.Message("V", "t/v", @"C:\V", null));
     }
 
     // ------------------------------------------------------------ GitHub API (fake GitHub)
 
-    private sealed class FakeGitHub : HttpMessageHandler
+    internal sealed class FakeGitHub : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, string, HttpResponseMessage> _respond;
 
@@ -180,7 +183,7 @@ public class NewTeamTests
         }
     }
 
-    private static HttpResponseMessage Reply(HttpStatusCode code, string json = "") =>
+    internal static HttpResponseMessage Reply(HttpStatusCode code, string json = "") =>
         new HttpResponseMessage(code) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
     private const string RepoJson =

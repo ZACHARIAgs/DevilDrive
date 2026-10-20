@@ -42,7 +42,7 @@ public static class VaultCatalog
     public static async Task<IReadOnlyList<RemoteVault>> ListAsync(CancellationToken ct = default)
     {
         var token = await GitHubCredentials.GetTokenAsync(ct).ConfigureAwait(false)
-                    ?? throw new PdmException("You're not signed in to GitHub on this PC yet. Open any vault once (or run Setup) to sign in, then try again.");
+                    ?? throw new PdmException("You're not signed in to GitHub on this PC yet. Sign in to GitHub on the welcome screen, then try again.");
 
         var repos = new List<(string FullName, string CloneUrl, bool Admin)>();
         for (var page = 1; page <= 10; page++)
@@ -66,26 +66,7 @@ public static class VaultCatalog
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                var text = await GetRawAsync($"https://api.github.com/repos/{repo.FullName}/contents/{VaultConfig.FileName}", token, ct).ConfigureAwait(false);
-                if (text == null) return null;
-                VaultConfig config;
-                try
-                {
-                    config = JsonSerializer.Deserialize<VaultConfig>(text, Json.Options) ?? new VaultConfig();
-                }
-                catch (JsonException)
-                {
-                    config = new VaultConfig();
-                }
-                var repoName = repo.FullName.Substring(repo.FullName.IndexOf('/') + 1);
-                return new RemoteVault
-                {
-                    FullName = repo.FullName,
-                    CloneUrl = repo.CloneUrl,
-                    VaultName = string.IsNullOrWhiteSpace(config.VaultName) ? repoName : config.VaultName,
-                    LocalPath = string.IsNullOrWhiteSpace(config.LocalPath) ? Path.Combine(DefaultRoot, repoName) : config.LocalPath!,
-                    IsAdmin = repo.Admin,
-                };
+                return await ReadVaultAsync(repo.FullName, repo.CloneUrl, repo.Admin, token, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -94,6 +75,44 @@ public static class VaultCatalog
         });
         var vaults = (await Task.WhenAll(checks).ConfigureAwait(false)).Where(v => v != null).Select(v => v!).ToList();
         return vaults.OrderBy(v => v.VaultName, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>The vault in one repo, or null if the repo has no pdm.json (it isn't a vault) or can't be read.</summary>
+    public static async Task<RemoteVault?> FindAsync(string fullName, string cloneUrl, CancellationToken ct = default)
+    {
+        var token = await GitHubCredentials.GetTokenAsync(ct).ConfigureAwait(false)
+                    ?? throw new PdmException("You're not signed in to GitHub on this PC yet. Sign in to GitHub on the welcome screen, then try again.");
+        return await ReadVaultAsync(fullName, cloneUrl, false, token, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Accepts a GitHub invitation and returns the vault in that repo, or null if the repo isn't a
+    /// vault (no pdm.json). GitHub can take a few seconds to give access after accepting, so it retries.
+    /// </summary>
+    public static async Task<RemoteVault?> AcceptInvitationAsync(GitHubApi api, GitHubRepoInvitation invitation, IProgress<string>? progress = null,
+        CancellationToken ct = default, TimeSpan? retryDelay = null)
+    {
+        progress?.Report($"Accepting the invitation to {invitation.RepoFullName}\u2026");
+        await api.AcceptInvitationAsync(invitation, ct).ConfigureAwait(false);
+        var token = await GitHubCredentials.GetTokenAsync(ct).ConfigureAwait(false) ?? "";
+        for (var attempt = 1; ; attempt++)
+        {
+            var vault = await ReadVaultAsync(invitation.RepoFullName, invitation.CloneUrl, false, token, ct).ConfigureAwait(false);
+            if (vault != null || attempt == 4) return vault;
+            await Task.Delay(retryDelay ?? TimeSpan.FromSeconds(2 * attempt), ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Puts the vault in its folder (pdm.json "localPath") and returns that folder: downloads it, or
+    /// uses the folder as it is if it already holds this vault (e.g. downloaded by Setup).
+    /// </summary>
+    public static async Task<string> DownloadAsync(RemoteVault vault, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var folder = vault.LocalPath;
+        if (SameRepo(await RemoteUrlOfAsync(folder, ct).ConfigureAwait(false), vault.CloneUrl)) return folder;
+        await CloneAsync(vault, folder, progress, ct).ConfigureAwait(false);
+        return folder;
     }
 
     /// <summary>The origin URL of a vault folder on this PC, or null.</summary>
@@ -122,7 +141,7 @@ public static class VaultCatalog
     /// </summary>
     public static async Task CloneAsync(RemoteVault vault, string folder, IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        var gitExe = GitRunner.FindGit() ?? throw new PdmException("Git isn't installed on this PC. Run Setup first.");
+        var gitExe = GitRunner.FindGit() ?? throw new PdmException("Git isn't installed on this PC. Install it from git-scm.com (keep the default options), then try again.");
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
         {
             throw new PdmException($"{folder} already exists and isn't empty. Choose another folder, or add it as an existing vault.");
@@ -153,6 +172,30 @@ public static class VaultCatalog
                 return null; // offline: Setup's name is missing too; check-in explains
             }
         }, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<RemoteVault?> ReadVaultAsync(string fullName, string cloneUrl, bool admin, string token, CancellationToken ct)
+    {
+        var text = await GetRawAsync($"https://api.github.com/repos/{fullName}/contents/{VaultConfig.FileName}", token, ct).ConfigureAwait(false);
+        if (text == null) return null;
+        VaultConfig config;
+        try
+        {
+            config = JsonSerializer.Deserialize<VaultConfig>(text, Json.Options) ?? new VaultConfig();
+        }
+        catch (JsonException)
+        {
+            config = new VaultConfig();
+        }
+        var repoName = fullName.Substring(fullName.IndexOf('/') + 1);
+        return new RemoteVault
+        {
+            FullName = fullName,
+            CloneUrl = cloneUrl,
+            VaultName = string.IsNullOrWhiteSpace(config.VaultName) ? repoName : config.VaultName,
+            LocalPath = string.IsNullOrWhiteSpace(config.LocalPath) ? Path.Combine(DefaultRoot, repoName) : config.LocalPath!,
+            IsAdmin = admin,
+        };
     }
 
     private static async Task<JsonDocument?> GetJsonAsync(string url, string token, CancellationToken ct)

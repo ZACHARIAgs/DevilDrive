@@ -5,13 +5,14 @@ using Jarvis.Client.Services;
 using Jarvis.Client.Views;
 using Jarvis.Core.Config;
 using Jarvis.Core.Git;
+using Jarvis.Core.Install;
 
 namespace Jarvis.Client;
 
 public partial class App : Application
 {
     /// <summary>
-    /// Normal start opens the main window. "--explorer &lt;command&gt; &lt;path&gt;" comes from File Explorer's
+    /// Normal start opens the main window (or, run from outside the install folder, offers to install). "--explorer &lt;command&gt; &lt;path&gt;" comes from File Explorer's
     /// right-click menu; "--register-explorer" (run by Setup) adds that menu; "--vaults" opens the Vaults window.
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
@@ -44,9 +45,17 @@ public partial class App : Application
             return;
         }
 
+        // Run from Downloads (or anywhere but the install folder): offer to install, like Setup.cmd.
+        if (args.Length == 0 && OfferInstall())
+        {
+            Shutdown();
+            return;
+        }
+
         // First run (no vault on this PC yet): Git, GitHub sign-in, then find or create a vault.
         var settings = UserSettings.Load();
-        if (GitHubSignIn.NeedsWelcome(settings))
+        // "--welcome" shows it anyway (developer check of the first-run screen).
+        if (GitHubSignIn.NeedsWelcome(settings) || (args.Length >= 1 && args[0] == "--welcome"))
         {
             var shutdownMode = ShutdownMode;
             ShutdownMode = ShutdownMode.OnExplicitShutdown; // closing the welcome screen isn't quitting
@@ -70,13 +79,27 @@ public partial class App : Application
         await AppUpdater.CheckAsync(window);
     }
 
+    /// <summary>Shows the Install window when this exe isn't the installed copy. True if the installed copy was started instead.</summary>
+    private bool OfferInstall()
+    {
+        var exe = Environment.ProcessPath;
+        var layout = InstallLayout.ForThisUser();
+        if (exe == null || !ExplorerIntegration.IsInstalledCopy(exe) || AppInstaller.IsInstalled(exe, layout)) return false;
+        var shutdownMode = ShutdownMode;
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var install = new InstallWindow(layout, exe);
+        install.ShowDialog();
+        ShutdownMode = shutdownMode;
+        return install.StartedInstalledCopy;
+    }
+
     /// <summary>Keeps the right-click menu pointing at this copy and the current vault folder (or removes it).</summary>
     public static void UpdateExplorerMenu(UserSettings settings, bool force = false)
     {
         try
         {
             var exe = Environment.ProcessPath;
-            if (exe == null) return;
+            if (exe == null || InstallLayout.ForThisUser().IsTest) return; // a trial install leaves File Explorer alone
             ExplorerPreview.WriteVaultList(settings.Vaults);
             UpdatePreviewPane(settings, force);
             if (!settings.ExplorerMenu)

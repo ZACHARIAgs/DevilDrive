@@ -229,8 +229,9 @@ public static class VaultCreator
         if (!needName && !needEmail) return;
         var user = await getUser().ConfigureAwait(false);
         if (user == null) return;
-        if (needName) await git.RunAsync(new[] { "config", "user.name", string.IsNullOrWhiteSpace(user.Name) ? user.Login : user.Name! }, null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
-        if (needEmail) await git.RunAsync(new[] { "config", "user.email", user.NoReplyEmail }, null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        var suggested = GitIdentity.Suggest(user);
+        if (needName) await git.RunAsync(new[] { "config", "user.name", suggested.Name! }, null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        if (needEmail) await git.RunAsync(new[] { "config", "user.email", suggested.Email! }, null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
     }
 
     /// <summary>The repo has no branches yet (nothing was ever pushed).</summary>

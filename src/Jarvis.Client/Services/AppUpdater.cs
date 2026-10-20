@@ -1,11 +1,11 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using Jarvis.Core.Errors;
+using Jarvis.Core.Install;
 using Jarvis.Core.Updates;
 
 namespace Jarvis.Client.Services;
@@ -13,13 +13,10 @@ namespace Jarvis.Client.Services;
 /// <summary>
 /// Checks GitHub Releases at startup. When there's a newer version it asks, downloads the exe (and the
 /// SolidWorks add-in if it's installed), checks both against the release's SHA256SUMS, swaps the exe
-/// and restarts. Only the installed copy updates itself, not a development build.
+/// and restarts. Only the copy in the install folder updates itself, not a development build or a download.
 /// </summary>
 public static class AppUpdater
 {
-    private static readonly string AddinDll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "Jarvis", "SolidWorksAddin", "Jarvis.SwAddin.dll");
-
     /// <summary>Removes the previous exe left behind by the last update.</summary>
     public static void CleanUpAfterUpdate()
     {
@@ -39,7 +36,7 @@ public static class AppUpdater
         var exe = Environment.ProcessPath;
         var assembly = Assembly.GetExecutingAssembly();
         var repo = Updater.BuiltInRepo(assembly);
-        if (exe == null || repo == null || !ExplorerIntegration.IsInstalledCopy(exe)) return;
+        if (exe == null || repo == null || !ExplorerIntegration.IsInstalledCopy(exe) || !AppInstaller.IsInstalled(exe, InstallLayout.ForThisUser())) return;
 
         var updater = new Updater(repo);
         ReleaseInfo? release;
@@ -98,11 +95,12 @@ public static class AppUpdater
     /// <summary>Updates the SolidWorks add-in too, if it's installed and older (Windows asks for permission).</summary>
     private static async Task UpdateAddinAsync(Window owner, Updater updater, ReleaseInfo release, string folder)
     {
-        if (!File.Exists(AddinDll) || release.Find(Updater.AddinAsset) == null) return;
-        var installed = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(AddinDll).ProductVersion) ?? new Version(0, 0, 0, 0);
+        var addinDll = SolidWorksAddinSetup.AddinDll;
+        if (!File.Exists(addinDll) || release.Find(Updater.AddinAsset) == null) return;
+        var installed = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(addinDll).ProductVersion) ?? new Version(0, 0, 0, 0);
         if (installed >= release.Version) return;
 
-        while (Process.GetProcessesByName("SLDWORKS").Length > 0)
+        while (SolidWorksAddinSetup.IsSolidWorksRunning)
         {
             var close = MessageBox.Show(owner,
                 "The SolidWorks add-in will be updated too. Close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in for now.",
@@ -110,18 +108,6 @@ public static class AppUpdater
             if (close != MessageBoxResult.OK) return;
         }
 
-        var zip = await updater.DownloadVerifiedAsync(release, Updater.AddinAsset, folder);
-        var extracted = Path.Combine(folder, "addin");
-        if (Directory.Exists(extracted)) Directory.Delete(extracted, recursive: true);
-        ZipFile.ExtractToDirectory(zip, extracted);
-
-        var script = Path.Combine(extracted, "Install-SolidWorksAddin.ps1");
-        if (!File.Exists(script)) throw new PdmException($"{Updater.AddinAsset} is missing its installer.");
-        var install = Process.Start(new ProcessStartInfo("powershell.exe",
-            $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Source \"{Path.Combine(extracted, "SolidWorksAddin")}\"")
-        {
-            UseShellExecute = true,
-        });
-        if (install != null) await install.WaitForExitAsync();
+        await SolidWorksAddinSetup.InstallAsync(updater, release, folder, showConsole: true);
     }
 }

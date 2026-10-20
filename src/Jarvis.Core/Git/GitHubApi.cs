@@ -79,6 +79,38 @@ public sealed class GitHubInvitation
     public bool Expired { get; }
 }
 
+/// <summary>An invitation the signed-in user received to someone else's repo.</summary>
+public sealed class GitHubRepoInvitation
+{
+    public GitHubRepoInvitation(long id, string repoFullName, string cloneUrl, string? description, string inviter, bool expired)
+    {
+        Id = id;
+        RepoFullName = repoFullName;
+        CloneUrl = cloneUrl;
+        Description = description;
+        Inviter = inviter;
+        Expired = expired;
+    }
+
+    public long Id { get; }
+    /// <summary>owner/name</summary>
+    public string RepoFullName { get; }
+    public string CloneUrl { get; }
+    public string? Description { get; }
+    /// <summary>GitHub username of whoever sent it.</summary>
+    public string Inviter { get; }
+    public bool Expired { get; }
+
+    /// <summary>
+    /// Made by "New team vault" (its description says so) or named like one. A repo's pdm.json can't
+    /// be read before the invitation is accepted, so this is the best guess until then.
+    /// </summary>
+    public bool LooksLikeVault =>
+        (Description ?? "").IndexOf("Jarvis vault", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        RepoFullName.IndexOf("vault", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        (Description ?? "").IndexOf("vault", StringComparison.OrdinalIgnoreCase) >= 0;
+}
+
 public enum InviteOutcome
 {
     /// <summary>GitHub sent them an invitation to accept.</summary>
@@ -273,6 +305,51 @@ public sealed class GitHubApi
                 i.TryGetProperty("expired", out var expired) && expired.ValueKind == JsonValueKind.True))
             .ToList();
     }
+
+    /// <summary>Invitations the signed-in user has received and not accepted yet (expired ones left out).</summary>
+    public async Task<IReadOnlyList<GitHubRepoInvitation>> GetMyInvitationsAsync(CancellationToken ct = default)
+    {
+        const string action = "list your invitations";
+        using var response = await SendAsync(HttpMethod.Get, "/user/repository_invitations?per_page=100", null, action, ct).ConfigureAwait(false);
+        using var json = await ReadJsonAsync(response, action).ConfigureAwait(false);
+        return json.RootElement.EnumerateArray()
+            .Where(i => i.TryGetProperty("repository", out var repo) && repo.ValueKind == JsonValueKind.Object)
+            .Select(i =>
+            {
+                var repo = i.GetProperty("repository");
+                var fullName = repo.GetProperty("full_name").GetString() ?? "";
+                var cloneUrl = repo.TryGetProperty("clone_url", out var c) && c.GetString() is { Length: > 0 } url ? url : $"https://github.com/{fullName}.git";
+                return new GitHubRepoInvitation(
+                    i.GetProperty("id").GetInt64(),
+                    fullName,
+                    cloneUrl,
+                    repo.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null,
+                    i.TryGetProperty("inviter", out var who) && who.ValueKind == JsonValueKind.Object ? who.GetProperty("login").GetString() ?? "" : "",
+                    i.TryGetProperty("expired", out var expired) && expired.ValueKind == JsonValueKind.True);
+            })
+            .Where(i => i.RepoFullName.IndexOf('/') > 0 && !i.Expired)
+            .ToList();
+    }
+
+    /// <summary>Accepts an invitation the signed-in user received; the repo is theirs to use right after.</summary>
+    public async Task AcceptInvitationAsync(GitHubRepoInvitation invitation, CancellationToken ct = default)
+    {
+        const string action = "accept the invitation";
+        using var response = await SendAsync(new HttpMethod("PATCH"), $"/user/repository_invitations/{invitation.Id}", null, action, ct).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode) return;
+        var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        throw (int)response.StatusCode switch
+        {
+            404 => new PdmException($"The invitation to {invitation.RepoFullName} isn't there any more (it was withdrawn, already accepted, or expired). If you can't find the vault, ask {NameOrTeamLead(invitation)} to invite you again.", text),
+            409 => new PdmException($"GitHub couldn't accept the invitation to {invitation.RepoFullName} right now. Try again in a minute.", text),
+            401 => new PdmException("Your saved GitHub sign-in has expired. Sign in to GitHub again, then try again.", text),
+            403 => new PdmException($"GitHub didn't let Jarvis accept the invitation. Accept it on https://github.com/{invitation.RepoFullName}/invitations instead. {ErrorMessageOf(text)}", text),
+            var code => new PdmException($"GitHub couldn't accept the invitation ({code}: {ErrorMessageOf(text)}).", text),
+        };
+    }
+
+    private static string NameOrTeamLead(GitHubRepoInvitation invitation) =>
+        invitation.Inviter.Length > 0 ? invitation.Inviter : "your team lead";
 
     /// <summary>Takes away someone's access to the repo.</summary>
     public Task RemoveCollaboratorAsync(string owner, string repo, string user, CancellationToken ct = default) =>

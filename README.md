@@ -8,17 +8,17 @@ Under the hood the vault is a private GitHub repo using Git LFS file locking. Yo
 
 ## For teammates
 
-### One-time setup (about 10 minutes)
+### One-time setup (about 5 minutes)
 
-1. **Accept the GitHub invite** for your team's vault (it's in your email, or at `https://github.com/<owner>/<vault repo>/invitations`). No GitHub account? Make a free one at github.com and send your username to the team lead.
-2. Get **Jarvis-Setup.zip** (the link is in the invite message from your team lead, or GitHub Releases) and unzip it anywhere.
-3. Double-click **Setup.cmd**. It will:
-   - install Git and Git LFS (a Windows permission prompt may appear),
-   - ask for your **name** and **email** (the one on your GitHub account),
-   - put a **Jarvis** shortcut on your Desktop and open the app.
-4. The app's **welcome screen** checks Git, signs you in to GitHub (a browser window opens) and then **Find my vaults**: pick your team's vault and click **Download and open**. It goes into the same folder on every PC (e.g. `C:\CapstoneVault`).
+1. **Download Jarvis.exe** from the link in your team lead's message (`https://github.com/aturne59-stack/jarvis/releases/latest/download/Jarvis.exe`) and open it.
+   - **Windows may warn you** ("Windows protected your PC"): click **More info**, then **Run anyway**. Jarvis isn't signed with a paid certificate; the release page lists each file's SHA-256 in `SHA256SUMS` if you want to check it.
+2. Click **Install Jarvis**. It copies itself to `%LocalAppData%\Programs\Jarvis`, installs **Git and Git LFS** if they're missing (with a progress bar; Windows may ask for permission), adds **Desktop and Start menu shortcuts** and the File Explorer menu, then opens the installed Jarvis. You can delete the download.
+3. On the **welcome screen**, click **Sign in to GitHub** (a browser window opens). No GitHub account? Make a free one at github.com and send your username to the team lead.
+4. Check your **name and email**: Jarvis fills them in from your GitHub profile (the email is GitHub's private `...@users.noreply.github.com` address, so your real email stays out of the vault's history). Change them if you like; they're only set if Git doesn't have them already.
+5. Your team's invitation is listed: click **Accept and download**. The vault goes into the same folder on every PC (e.g. `C:\CapstoneVault`) and opens. (Accepted the invite on github.com already? Click **Find my vaults** instead.)
+6. If SolidWorks is installed, click **Install the SolidWorks add-in** (close SolidWorks first; Windows asks for permission once).
 
-The same setup zip works for every team: which vault you get depends only on which GitHub invites you accepted.
+The same Jarvis.exe works for every team: which vault you get depends only on which GitHub invites you accepted. The older **Jarvis-Setup.zip** (unzip, double-click **Setup.cmd**) still works too.
 
 ### Daily workflow
 
@@ -134,7 +134,7 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 
 All in the app, no scripts or GitHub settings pages:
 
-1. Install Jarvis (Setup.cmd) and open it. The welcome screen signs you in to GitHub.
+1. Install Jarvis (download `Jarvis.exe` from the latest release, open it, click **Install Jarvis**). The welcome screen signs you in to GitHub.
 2. Click **New team vault…** (on the welcome screen, or **Vaults** → **New team vault…**). Enter:
    - the **vault name** (e.g. "Formula SAE Vault"),
    - the **GitHub owner**: your account, or an organization you can create repos in (with an organization, several people can be admins),
@@ -142,7 +142,7 @@ All in the app, no scripts or GitHub settings pages:
    - the **vault folder**, the same on every PC (e.g. `C:\ClubVault`; keep it outside OneDrive).
    
    The app creates a **private** GitHub repo, puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
-3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. Then click **Copy welcome message** and send it on Discord or by email: accept the invite, install Jarvis from the release link, then **Vaults → Find my vaults**.
+3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. Then click **Copy welcome message** and send it on Discord or by email: one link to `Jarvis.exe` (with "Windows may warn you: More info → Run anyway"), then sign in and **Accept and download** on the welcome screen.
 
    The Team window also shows everyone who has access, invitations not accepted yet (**Cancel invite**; GitHub invitations expire after 7 days, so add them again if needed), and **Remove** for people who leave. Anyone on the team can see the list; only the repo's **Admin** role can add or remove people.
 4. Optionally edit `pdm.json` in the vault and check it in:
@@ -245,11 +245,11 @@ The PDM itself works with any version, and the add-in supports SolidWorks 2020 a
 
 ### Using it for another project (e.g. a club)
 
-The tool isn't tied to the capstone, and nothing in the setup zip names a team. For a new team (a club, another class):
+The tool isn't tied to the capstone, and nothing in Jarvis.exe names a team. For a new team (a club, another class):
 
 1. The team lead clicks **Vaults** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
 2. Click **Team**, add your teammates' GitHub usernames, and send them the welcome message.
-3. Members who already have Jarvis: **Vaults** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `Jarvis-Setup.zip` and the welcome screen takes them there.
+3. Members who already have Jarvis: **Vaults** → **Find my vaults** → pick the vault → **Download and open**. New members download the same `Jarvis.exe`, install it, and accept the invitation on the welcome screen.
 
 The vault guard is included from the start. `Setup-Jarvis.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
 
@@ -310,6 +310,8 @@ The integration tests use a local bare repo in place of GitHub. A local remote h
 ```
 
 This produces `dist/Jarvis-Setup.zip`, containing a self-contained single-file `Jarvis.exe` (teammates don't need .NET), `Setup.cmd` and `Setup-Jarvis.ps1`, plus the update files `Jarvis.exe`, `Jarvis-SolidWorksAddin.zip` and `SHA256SUMS`. Setup prints the installed exe's SHA-256 so it can be compared with the release.
+
+`Jarvis.exe` installs itself: run from anywhere but `%LocalAppData%\Programs\Jarvis`, it shows **Install Jarvis** (`Views/InstallWindow`, logic in `Core/Install/AppInstaller.cs`): copy itself there (removing the download mark), Git for Windows with `winget --silent --scope user` (falling back to a machine-wide install, or git-scm.com without winget), shortcuts, `--register-explorer`, then start the installed copy. Development builds (under `bin\`) never offer it. To try it without touching your real install, set `JARVIS_INSTALL_ROOT` to an empty folder and run a published `Jarvis.exe`: everything goes inside that folder and File Explorer is left alone. `Jarvis.exe --welcome` shows the welcome screen even on a PC that already has vaults.
 
 ### Automatic updates
 

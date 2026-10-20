@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-    One-time Jarvis setup for a teammate's PC.
+    One-time Jarvis setup for a teammate's PC. Optional: Jarvis.exe installs itself when you open it
+    (Install Jarvis); this script does the same from a console, for the setup zip.
 
 .DESCRIPTION
     1. Installs Git for Windows (includes Git LFS) with winget if it's missing.
@@ -196,6 +197,6 @@ if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidW
 
 Write-Host ''
 Write-Host 'All done! Jarvis is opening (it''s also on your Desktop).' -ForegroundColor Green
-Write-Host 'In the app: sign in to GitHub, then Find my vaults (accept your team''s GitHub invite first),'
-Write-Host 'or New team vault if you''re setting up a team. Always check out before editing.'
+Write-Host 'In the app: sign in to GitHub, then click Accept and download next to your team''s vault'
+Write-Host '(or Find my vaults), or New team vault if you''re setting up a team. Always check out before editing.'
 if (Test-Path $ExePath) { Start-Process -FilePath $ExePath }

@@ -1,0 +1,33 @@
+<Window x:Class="Jarvis.Client.Views.InstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Install Jarvis" Width="540" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <Window.Resources>
+        <Style x:Key="StepText" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,3" />
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="18">
+        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Install Jarvis" />
+        <TextBlock x:Name="IntroText" Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,12"
+                   Text="Jarvis checks your team's SolidWorks files out and in. Installing takes a minute or two, and only for your Windows account:" />
+
+        <StackPanel x:Name="StepsPanel" Margin="4,0,0,0">
+            <TextBlock x:Name="CopyStep" Style="{StaticResource StepText}" />
+            <TextBlock x:Name="GitStep" Style="{StaticResource StepText}" />
+            <TextBlock x:Name="ShortcutStep" Style="{StaticResource StepText}" />
+            <TextBlock x:Name="ExplorerStep" Style="{StaticResource StepText}" />
+        </StackPanel>
+
+        <ProgressBar x:Name="Progress" Height="8" Margin="0,12,0,0" Visibility="Collapsed" />
+        <TextBlock x:Name="StatusText" Foreground="#555" TextWrapping="Wrap" Margin="0,6,0,0" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="SkipButton" Style="{StaticResource DialogButton}" Content="Run without installing" Click="OnSkip" />
+            <Button x:Name="InstallButton" Style="{StaticResource AccentButton}" Content="Install Jarvis" Padding="16,5" Margin="8,0,0,0"
+                    IsDefault="True" Click="OnInstall" />
+        </StackPanel>
+    </StackPanel>
+</Window>
