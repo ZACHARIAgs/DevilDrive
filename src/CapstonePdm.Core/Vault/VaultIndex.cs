@@ -44,7 +44,7 @@ public sealed class IndexEntry
     public static readonly string[] RevisionNames = { "Revision", "Rev" };
 }
 
-/// <summary>Where Capstone PDM keeps per-file extras in the vault.</summary>
+/// <summary>Where Jarvis keeps per-file extras in the vault.</summary>
 public static class VaultPaths
 {
     /// <summary>3D preview mesh (STL) the add-in saves for a part or assembly, e.g. .pdm/preview/Parts/bracket.SLDPRT.stl.</summary>

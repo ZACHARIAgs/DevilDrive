@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    One-time Capstone PDM setup for a teammate's PC.
+    One-time Jarvis setup for a teammate's PC.
 
 .DESCRIPTION
     1. Installs Git for Windows (includes Git LFS) with winget if it's missing.
@@ -28,7 +28,7 @@ param(
 )
 
 # Optional: where to download CapstonePDM.exe when it isn't next to this script.
-$DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/capstone-pdm/releases/latest/download/CapstonePDM.exe
+$DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/jarvis/releases/latest/download/CapstonePDM.exe
 $DefaultVaultPath = 'C:\CapstoneVault'   # only used with -RepoUrl
 
 $ErrorActionPreference = 'Stop'
@@ -70,7 +70,7 @@ function Invoke-Git {
     if ($LASTEXITCODE -ne 0) { Stop-Setup "git $($args -join ' ') failed (exit code $LASTEXITCODE)." }
 }
 
-Write-Host 'Capstone PDM setup' -ForegroundColor White
+Write-Host 'Jarvis setup' -ForegroundColor White
 Write-Host '------------------'
 
 # 1. Git ------------------------------------------------------------------
@@ -136,8 +136,8 @@ if ($RepoUrl) {
     Write-Ok 'Vault ready.'
 }
 
-# 5. The Capstone PDM app ---------------------------------------------------
-Write-Step 'Installing the Capstone PDM app'
+# 5. The Jarvis app ---------------------------------------------------
+Write-Step 'Installing the Jarvis app'
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if (-not $ClientUrl) { $ClientUrl = $DefaultClientUrl }
 $besideScript = Join-Path $PSScriptRoot 'CapstonePDM.exe'
@@ -168,7 +168,9 @@ if (Test-Path $ExePath) {
     Write-Ok ('CapstonePDM.exe SHA-256: ' + (Get-FileHash $ExePath -Algorithm SHA256).Hash.ToLowerInvariant())
     $shell = New-Object -ComObject WScript.Shell
     foreach ($folder in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
-        $shortcut = $shell.CreateShortcut((Join-Path $folder 'Capstone PDM.lnk'))
+        # The app used to be called Capstone PDM.
+        Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $folder 'Capstone PDM.lnk')
+        $shortcut = $shell.CreateShortcut((Join-Path $folder 'Jarvis.lnk'))
         $shortcut.TargetPath = $ExePath
         $shortcut.IconLocation = "$ExePath,0"
         $shortcut.WorkingDirectory = $InstallDir
@@ -177,14 +179,14 @@ if (Test-Path $ExePath) {
     }
     Write-Ok 'Shortcuts added to the Desktop and Start menu.'
     Start-Process -FilePath $ExePath -ArgumentList '--register-explorer' -Wait
-    Write-Ok 'Added Capstone PDM to File Explorer''s right-click menu (Windows 11: under "Show more options").'
+    Write-Ok 'Added Jarvis to File Explorer''s right-click menu (Windows 11: under "Show more options").'
 }
 
 # 6. SolidWorks add-in (optional) ----------------------------------------------
 $addinInstaller = Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1'
 if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidWorksAddin'))) {
     Write-Step 'SolidWorks add-in'
-    $answer = Read-Default 'Install the Capstone PDM add-in for SolidWorks? (needs admin permission) [Y/n]' 'Y'
+    $answer = Read-Default 'Install the Jarvis add-in for SolidWorks? (needs admin permission) [Y/n]' 'Y'
     if ($answer -match '^[Yy]') {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $addinInstaller
         if ($LASTEXITCODE -ne 0) { Write-Warn 'The add-in was not installed. Run "Install SolidWorks Add-in.cmd" later to try again.' }
@@ -195,7 +197,7 @@ if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidW
 }
 
 Write-Host ''
-Write-Host 'All done! Capstone PDM is opening (it''s also on your Desktop).' -ForegroundColor Green
+Write-Host 'All done! Jarvis is opening (it''s also on your Desktop).' -ForegroundColor Green
 Write-Host 'In the app: sign in to GitHub, then Find my vaults (accept your team''s GitHub invite first),'
 Write-Host 'or New team vault if you''re setting up a team. Always check out before editing.'
 if (Test-Path $ExePath) { Start-Process -FilePath $ExePath }

@@ -431,7 +431,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool IsAdmin => _vault?.IsAdmin == true;
 
-    public string WindowTitle => _vault == null ? "Capstone PDM" : $"Capstone PDM — {_vault.Config.VaultName} ({_vault.VaultRoot})";
+    public string WindowTitle => _vault == null ? "Jarvis" : $"Jarvis — {_vault.Config.VaultName} ({_vault.VaultRoot})";
 
     public string SearchText
     {

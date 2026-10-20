@@ -12,7 +12,7 @@
       1. Create a PRIVATE, EMPTY repo on GitHub (no README, no .gitignore).
       2. Add each teammate as a collaborator with Write access.
       3. Edit vault-template\pdm.json: admins, team names and the Discord webhook URL.
-         (You can also edit it later and check it in from Capstone PDM.)
+         (You can also edit it later and check it in from Jarvis.)
 
 .EXAMPLE
     .\Initialize-Vault.ps1 -RepoUrl https://github.com/your-team/capstone-vault.git
@@ -86,4 +86,4 @@ finally {
 
 Write-Host ''
 Write-Host "Vault initialized at $VaultPath and pushed to $RepoUrl." -ForegroundColor Green
-Write-Host 'Next: in Capstone PDM, Vaults > Invite teammates, and send them the message it gives you (see README).'
+Write-Host 'Next: in Jarvis, Vaults > Invite teammates, and send them the message it gives you (see README).'

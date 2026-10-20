@@ -74,7 +74,7 @@ public sealed class InviteResult
 }
 
 /// <summary>
-/// The few GitHub REST calls Capstone PDM makes as the user: who am I, create a private vault repo,
+/// The few GitHub REST calls Jarvis makes as the user: who am I, create a private vault repo,
 /// invite collaborators. Uses the token Git Credential Manager saved, kept in memory only.
 /// </summary>
 public sealed class GitHubApi
@@ -169,7 +169,7 @@ public sealed class GitHubApi
             case 403:
             case 404:
                 throw new PdmException(ownerIsUser
-                        ? "GitHub didn't let Capstone PDM create a repo on your account. Sign in to GitHub again (the sign-in needs the \"repo\" permission), then try again."
+                        ? "GitHub didn't let Jarvis create a repo on your account. Sign in to GitHub again (the sign-in needs the \"repo\" permission), then try again."
                         : $"You can't create repos in the {owner} organization. Ask one of its owners to make you an owner, or to allow members to create private repos (organization Settings, Member privileges), or create the vault on your own account.",
                     text);
             default:

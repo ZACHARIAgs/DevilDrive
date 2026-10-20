@@ -324,7 +324,7 @@ public sealed class NewVaultIntegrationTests : IDisposable
         Assert.Equal("Club Vault", config.VaultName);
         Assert.Equal(folder, config.LocalPath);
         Assert.Equal(2024, config.SolidWorksVersion);
-        Assert.Equal("Create the vault (Capstone PDM rules, vault guard, team settings)", Git(teammate, "log", "-1", "--format=%s"));
+        Assert.Equal("Create the vault (Jarvis rules, vault guard, team settings)", Git(teammate, "log", "-1", "--format=%s"));
     }
 
     public void Dispose()

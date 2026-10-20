@@ -61,20 +61,20 @@ public static class VaultInvites
     public static string Message(string vaultName, string repoFullName, string localPath, string? installLink)
     {
         var install = installLink == null
-            ? "Install Capstone PDM: ask me for the setup zip, unzip it and double-click Setup.cmd."
-            : $"Install Capstone PDM: download CapstonePDM-Setup.zip from {installLink} , unzip it and double-click Setup.cmd. (Already have it? Skip this.)";
+            ? "Install Jarvis: ask me for the setup zip, unzip it and double-click Setup.cmd."
+            : $"Install Jarvis: download CapstonePDM-Setup.zip from {installLink} , unzip it and double-click Setup.cmd. (Already have it? Skip this.)";
         return
-            $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (Capstone PDM, for our SolidWorks files).\n\n" +
+            $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (Jarvis, for our SolidWorks files).\n\n" +
             $"1. Accept the GitHub invite: https://github.com/{repoFullName}/invitations (it's also in your email). Sign in to GitHub first.\n" +
             $"2. {install}\n" +
-            "3. Open Capstone PDM, click Vaults\u2026 then \"Find my vaults\", pick " + vaultName + " and click \"Download and open\".\n\n" +
+            "3. Open Jarvis, click Vaults\u2026 then \"Find my vaults\", pick " + vaultName + " and click \"Download and open\".\n\n" +
             $"The vault goes to {localPath} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.";
     }
 
     /// <summary>Checks the signed-in user may invite people to the vault at <paramref name="remoteUrl"/>.</summary>
     public static async Task<(GitHubApi Api, GitHubRepo Repo)> ConnectAsAdminAsync(string? remoteUrl, CancellationToken ct = default)
     {
-        var parsed = ParseRepoUrl(remoteUrl) ?? throw new PdmException("This vault isn't on github.com, so Capstone PDM can't invite people to it. Add them on the repo's page instead.");
+        var parsed = ParseRepoUrl(remoteUrl) ?? throw new PdmException("This vault isn't on github.com, so Jarvis can't invite people to it. Add them on the repo's page instead.");
         var api = await GitHubApi.SignedInAsync(ct).ConfigureAwait(false);
         var repo = await api.GetRepoAsync(parsed.Owner, parsed.Name, ct).ConfigureAwait(false)
                    ?? throw new PdmException($"GitHub didn't find {parsed.Owner}/{parsed.Name} for your account. Make sure you're signed in to GitHub with the account that's an admin of this vault.");

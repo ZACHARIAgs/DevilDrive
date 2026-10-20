@@ -3,7 +3,7 @@ using System.IO;
 namespace CapstonePdm.Core.Vault;
 
 /// <summary>
-/// Files Capstone PDM keeps in every vault besides the user's own: the GitHub vault guard and the
+/// Files Jarvis keeps in every vault besides the user's own: the GitHub vault guard and the
 /// .gitattributes rule that stores 3D previews with Git LFS. Admins install/repair them with
 /// Update Vault Setup; the app checks they're intact on every refresh.
 /// </summary>

@@ -1349,7 +1349,7 @@ public sealed class VaultService : IVaultService
             var result = new OperationResult();
             await SyncCoreAsync(progress, ct).ConfigureAwait(false);
             await VerifyIdentityAsync(ct).ConfigureAwait(false);
-            if (GitHubLogin == null) throw new PdmException("Capstone PDM couldn't confirm your GitHub account (are you online?), so it can't submit for review yet.");
+            if (GitHubLogin == null) throw new PdmException("Jarvis couldn't confirm your GitHub account (are you online?), so it can't submit for review yet.");
 
             var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
             var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
@@ -1500,7 +1500,7 @@ public sealed class VaultService : IVaultService
 
     /// <summary>
     /// Admin: asks whoever has the file checked out to check in their last saved version. Their own
-    /// Capstone PDM does it (the file only exists on their PC) the next time it contacts the vault.
+    /// Jarvis does it (the file only exists on their PC) the next time it contacts the vault.
     /// </summary>
     public async Task<OperationResult> RequestCheckInAsync(string path, string note, IProgress<string>? progress = null, CancellationToken ct = default)
     {
@@ -1540,7 +1540,7 @@ public sealed class VaultService : IVaultService
             await CommitAndPushAsync(new[] { CheckInRequestList.RelativePath }, $"Requested check-in of {PathList.Name(rel)} from {owner}", progress, ct).ConfigureAwait(false);
 
             result.Succeeded.Add(rel);
-            result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time Capstone PDM " +
+            result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time Jarvis " +
                              "or SolidWorks is running there (within about five minutes if it's on). Unsaved changes in their SolidWorks aren't included.\n\n" +
                              "If their PC is off and you can't wait, use Break Lock instead (their saved work then stays on their PC only).");
             await NotifyAsync(new VaultEvent(VaultEventKind.CheckInRequested, UserDisplayName, new[] { rel }) { PreviousOwner = owner, Comment = note }, result).ConfigureAwait(false);
@@ -1751,7 +1751,7 @@ public sealed class VaultService : IVaultService
 
     // ---------------------------------------------------------------- Vault setup (guard, storage rules)
 
-    /// <summary>What's missing or tampered with in the vault's Capstone PDM setup, as the vault (GitHub) has it.</summary>
+    /// <summary>What's missing or tampered with in the vault's Jarvis setup, as the vault (GitHub) has it.</summary>
     private async Task<List<string>> GetSetupProblemsAsync(CancellationToken ct)
     {
         var problems = new List<string>();

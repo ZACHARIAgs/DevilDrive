@@ -1,9 +1,14 @@
-# Capstone PDM
+# Jarvis
 
 A free, lightweight PDM for SolidWorks: a private GitHub repo with Git LFS file locking is the vault,
 cloned to `C:\CapstoneVault` on every PC. Users never type Git commands; the desktop app and the
 SolidWorks add-in do. No paid services, no AI at runtime. See `README.md` (users, admins, developers)
 and `Capstone PDM Spec.md` (original spec).
+
+Formerly "Capstone PDM". Users see **Jarvis**; internal names stay `CapstonePdm`/`CapstonePDM` on purpose
+(projects, namespaces, `CapstonePDM.exe` and release asset names, `%AppData%\CapstonePDM`, install folders,
+registry keys, add-in COM ids) so existing installs and auto-updates keep working. Don't change
+`vault-template/.github` text just for naming: every vault compares it and would ask for Update Vault Setup.
 
 ## Layout
 

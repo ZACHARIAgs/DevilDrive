@@ -19,7 +19,7 @@ public partial class MainWindow : Window, IDialogs
         DataContext = _vm;
     }
 
-    /// <summary>A file to select once the vault is loaded ("Show in Capstone PDM" from File Explorer).</summary>
+    /// <summary>A file to select once the vault is loaded ("Show in Jarvis" from File Explorer).</summary>
     public string? PendingSelection { get; set; }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

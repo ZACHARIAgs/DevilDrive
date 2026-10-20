@@ -1,7 +1,7 @@
 <Window x:Class="CapstonePdm.Client.Views.ErrorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Capstone PDM" Width="560" SizeToContent="Height" MaxHeight="640"
+        Title="Jarvis" Width="560" SizeToContent="Height" MaxHeight="640"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
     <StackPanel Margin="16">
         <DockPanel>

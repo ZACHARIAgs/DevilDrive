@@ -364,7 +364,7 @@ internal sealed class CaptionLabel : PaneControl, IFitWidth
 }
 
 /// <summary>
-/// Shows that Capstone PDM is working: a sliding accent bar with a line of text ("Checking the
+/// Shows that Jarvis is working: a sliding accent bar with a line of text ("Checking the
 /// vault..."), so a slow vault or a big assembly never looks frozen. Hidden when idle.
 /// </summary>
 internal sealed class ActivityBar : PaneControl, IFitWidth

@@ -32,6 +32,34 @@ public static class AppUpdater
         {
             // Still in use for a moment after restarting; it's removed next time.
         }
+        RenameOldShortcuts();
+    }
+
+    /// <summary>The app used to be called Capstone PDM: rename Setup's shortcuts to Jarvis after an update.</summary>
+    private static void RenameOldShortcuts()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe == null || !ExplorerIntegration.IsInstalledCopy(exe)) return;
+        var folders = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Start Menu", "Programs"),
+        };
+        foreach (var folder in folders)
+        {
+            try
+            {
+                var old = Path.Combine(folder, "Capstone PDM.lnk");
+                var renamed = Path.Combine(folder, "Jarvis.lnk");
+                if (!File.Exists(old)) continue;
+                if (File.Exists(renamed)) File.Delete(old);
+                else File.Move(old, renamed);
+            }
+            catch (Exception)
+            {
+                // A convenience; the old shortcut still works.
+            }
+        }
     }
 
     public static async Task CheckAsync(Window owner)
@@ -57,7 +85,7 @@ public static class AppUpdater
         var notes = release.Notes.Trim();
         if (notes.Length > 600) notes = notes.Substring(0, 600) + "\u2026";
         var answer = MessageBox.Show(owner,
-            $"Capstone PDM {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
+            $"Jarvis {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
             (notes.Length > 0 ? notes + "\n\n" : "") + "Update now? It takes about a minute and the app restarts.",
             "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (answer != MessageBoxResult.Yes) return;
@@ -81,7 +109,7 @@ public static class AppUpdater
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(owner, "The update couldn't be installed: " + ex.Message + "\n\nCapstone PDM keeps working on the current version.",
+            MessageBox.Show(owner, "The update couldn't be installed: " + ex.Message + "\n\nJarvis keeps working on the current version.",
                 "Update failed", MessageBoxButton.OK, MessageBoxImage.Warning);
             if (!File.Exists(exe) && File.Exists(exe + ".old")) File.Move(exe + ".old", exe);
             return;

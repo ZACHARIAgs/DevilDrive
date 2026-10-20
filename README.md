@@ -1,8 +1,10 @@
-# Capstone PDM
+# Jarvis
 
 A small PDM (product data management) tool for our SolidWorks files. It stops two people from editing the same file at once, keeps every version you check in, and posts check-outs and check-ins to Discord.
 
 Under the hood the vault is a private GitHub repo using Git LFS file locking. You never need to type a Git command.
+
+Jarvis used to be called Capstone PDM. Some file names keep the old name so existing installs keep updating: `CapstonePDM-Setup.zip`, `CapstonePDM.exe` and the settings folder `%AppData%\CapstonePDM`.
 
 ---
 
@@ -15,7 +17,7 @@ Under the hood the vault is a private GitHub repo using Git LFS file locking. Yo
 3. Double-click **Setup.cmd**. It will:
    - install Git and Git LFS (a Windows permission prompt may appear),
    - ask for your **name** and **email** (the one on your GitHub account),
-   - put a **Capstone PDM** shortcut on your Desktop and open the app.
+   - put a **Jarvis** shortcut on your Desktop and open the app.
 4. The app's **welcome screen** checks Git, signs you in to GitHub (a browser window opens) and then **Find my vaults**: pick your team's vault and click **Download and open**. It goes into the same folder on every PC (e.g. `C:\CapstoneVault`).
 
 The same setup zip works for every team: which vault you get depends only on which GitHub invites you accepted.
@@ -53,13 +55,13 @@ Other ways to save space: turn off *Save tessellation data* (Tools → Options �
 
 ### From File Explorer
 
-Right-click a file inside the vault and choose **Capstone PDM**. On Windows 11 it's under **Show more options** (or Shift+right-click), unless you tick **Settings → File Explorer → Show it directly**, which switches your PC to Windows' classic full right-click menu (untick it to go back). From there you can **Check Out**, **Check In…**, **Undo Check Out**, **Download**, or **Show in Capstone PDM**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
+Right-click a file inside the vault and choose **Jarvis**. On Windows 11 it's under **Show more options** (or Shift+right-click), unless you tick **Settings → File Explorer → Show it directly**, which switches your PC to Windows' classic full right-click menu (untick it to go back). From there you can **Check Out**, **Check In…**, **Undo Check Out**, **Download**, or **Show in Jarvis**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
 
 **3D preview pane:** turn on File Explorer's preview pane (**Alt+P**, or View → Details pane/Preview pane) and click a part or assembly in a vault: it shows the 3D model, and you can drag to rotate and scroll to zoom. Files without a 3D preview yet, and SolidWorks files outside your vaults, show the usual SolidWorks picture. Turn it off with **Settings → File Explorer → Rotatable 3D model in the preview pane**.
 
 ### Inside SolidWorks (add-in)
 
-Setup offers to install the **Capstone PDM add-in** (SolidWorks 2020 or newer, tested on 2024 and 2026; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
+Setup offers to install the **Jarvis add-in** (SolidWorks 2020 or newer, tested on 2024 and 2026; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
 
 In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the document you're looking at and, below it, **Files in use**: everything that document uses, without opening any of the parts.
 
@@ -83,7 +85,7 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
 * **Export BOM (Excel)**: for an assembly, saves a parts list as a CSV file that opens in Excel: every part at every level with its quantity, part number, description, material and released revision. Suppressed and "excluded from BOM" parts are left out.
 * **Notify me when it's free**: for a file someone else has checked out.
 * The card at the top shows the active document's state, its version (`7/10`), part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
-* **Open Capstone PDM**: opens the full app (vault view, history, restore).
+* **Open Jarvis**: opens the full app (vault view, history, restore).
 
 When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\CapstonePDM\addin.log` to an admin.
 
@@ -134,7 +136,7 @@ Every error window has a **Copy** button. Paste the text into Discord when askin
 
 All in the app, no scripts or GitHub settings pages:
 
-1. Install Capstone PDM (Setup.cmd) and open it. The welcome screen signs you in to GitHub.
+1. Install Jarvis (Setup.cmd) and open it. The welcome screen signs you in to GitHub.
 2. Click **New team vault…** (on the welcome screen, or **Vaults…** → **New team vault…**). Enter:
    - the **vault name** (e.g. "Formula SAE Vault"),
    - the **GitHub owner**: your account, or an organization you can create repos in (with an organization, several people can be admins),
@@ -153,7 +155,7 @@ Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do
 
 ### Who's an admin (and why typing a name doesn't work)
 
-**Admins are the people GitHub lists as Admin or Maintain on the vault repo. Nothing else counts:** there's no admin list in `pdm.json` anyone could edit. Capstone PDM asks GitHub which account each PC is signed in as, using the sign-in Git already saved, so nobody can claim to be someone else by typing a name, and the vault guard checks the same GitHub roles. Settings shows the verified account. If a PC is offline, admin buttons stay hidden until it can check with GitHub.
+**Admins are the people GitHub lists as Admin or Maintain on the vault repo. Nothing else counts:** there's no admin list in `pdm.json` anyone could edit. Jarvis asks GitHub which account each PC is signed in as, using the sign-in Git already saved, so nobody can claim to be someone else by typing a name, and the vault guard checks the same GitHub roles. Settings shows the verified account. If a PC is offline, admin buttons stay hidden until it can check with GitHub.
 
 On a **personal** GitHub repo only the owner can be Admin; collaborators can only get Write. To have more admins later, move the vault to a free GitHub **organization** (repo **Settings → Transfer**), then give those people the Admin or Maintain role. Local folders keep working: GitHub redirects the old URL.
 
@@ -185,9 +187,9 @@ GitHub decides whether a forced unlock is allowed. If it's refused, your GitHub 
 
 Someone has a file checked out and isn't around, but a teammate needs it? Select the file and click **Request Check-In** (in the app or the SolidWorks pane), and add a short note.
 
-* That person's own Capstone PDM, either the app or the SolidWorks add-in, checks in **their last saved version** and releases the file automatically. It waits about **3 minutes** after first seeing the request, so they get a chance to save their work, and the file shows "check-in requested" in the meantime. If their PC is on it usually happens within about 5 minutes. They get a message explaining what happened, and the team sees it in Discord.
+* That person's own Jarvis, either the app or the SolidWorks add-in, checks in **their last saved version** and releases the file automatically. It waits about **3 minutes** after first seeing the request, so they get a chance to save their work, and the file shows "check-in requested" in the meantime. If their PC is on it usually happens within about 5 minutes. They get a message explaining what happened, and the team sees it in Discord.
 * Changes they hadn't **saved** in SolidWorks aren't included, because those aren't on disk.
-* If their PC is off, the request waits until they next open Capstone PDM or SolidWorks. If you can't wait, **Break Lock** releases the file right away, but their saved work then stays on their PC only.
+* If their PC is off, the request waits until they next open Jarvis or SolidWorks. If you can't wait, **Break Lock** releases the file right away, but their saved work then stays on their PC only.
 * The file shows "check-in requested by *name*" until it's done.
 
 ### Freezing files (released for production)
@@ -247,13 +249,13 @@ The tool isn't tied to the capstone, and nothing in the setup zip names a team. 
 
 1. The team lead clicks **Vaults…** → **New team vault…** (see *First-time vault setup*), e.g. "Club Vault" in `C:\ClubVault`. The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
 2. **Invite teammates…** and send them the message the app gives you.
-3. Members who already have Capstone PDM: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `CapstonePDM-Setup.zip` and the welcome screen takes them there.
+3. Members who already have Jarvis: **Vaults…** → **Find my vaults** → pick the vault → **Download and open**. New members install with the same `CapstonePDM-Setup.zip` and the welcome screen takes them there.
 
 The vault guard is included from the start. `Setup-CapstonePdm.ps1 -RepoUrl <url> -VaultPath <folder>` still downloads a vault during setup if you want that.
 
 ### Several groups on one PC
 
-One install of Capstone PDM works with every group you're in; each group has its own vault (repo and folder).
+One install of Jarvis works with every group you're in; each group has its own vault (repo and folder).
 
 * **Add a group's vault:** click **Vaults…** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
 * **Switch** with the **Vault** dropdown in the app.

@@ -1,5 +1,5 @@
 {
-  // Shared Capstone PDM settings. Admins edit this file and check it in like any other file.
+  // Shared Jarvis settings. Admins edit this file and check it in like any other file.
   "vaultName": "Capstone Vault",
   "branch": "main",
 

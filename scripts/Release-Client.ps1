@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Publishes a new Capstone PDM version as a GitHub release. Teammates' apps find it the next time
+    Publishes a new Jarvis version as a GitHub release. Teammates' apps find it the next time
     they start and offer to update (checking every file against SHA256SUMS first).
 
 .DESCRIPTION
@@ -71,7 +71,7 @@ $sums = Get-Content (Join-Path $dist 'SHA256SUMS') -Raw
 $body = @{
     tag_name         = $tag
     target_commitish = $head
-    name             = "Capstone PDM $version"
+    name             = "Jarvis $version"
     body             = ($Notes.Trim() + "`n`n**SHA-256 checksums**`n``````n$sums``````").Trim()
 } | ConvertTo-Json
 $release = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Body $body `

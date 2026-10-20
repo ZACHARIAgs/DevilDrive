@@ -102,7 +102,7 @@ public partial class WelcomeWindow : Window
         await CheckAsync();
         if (!_tools.Ready && StatusText.Text.Length == 0)
         {
-            StatusText.Text = "Git still isn't ready. If it just finished installing, restart your PC and open Capstone PDM again.";
+            StatusText.Text = "Git still isn't ready. If it just finished installing, restart your PC and open Jarvis again.";
         }
     }
 

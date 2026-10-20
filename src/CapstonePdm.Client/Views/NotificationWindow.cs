@@ -25,7 +25,7 @@ public sealed class NotificationWindow : Window
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xE1, 0xE4, 0xE9));
         BorderThickness = new Thickness(1);
 
-        var title = new TextBlock { Text = "Capstone PDM", FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)), Margin = new Thickness(0, 0, 0, 4) };
+        var title = new TextBlock { Text = "Jarvis", FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)), Margin = new Thickness(0, 0, 0, 4) };
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 12) };
         panel.Children.Add(title);
         panel.Children.Add(_text);

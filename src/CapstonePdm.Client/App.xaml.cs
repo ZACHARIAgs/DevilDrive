@@ -38,7 +38,7 @@ public partial class App : Application
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             await ExplorerCommandHost.RunAsync(args[1], args[2]);
-            // "Open"/"Show in Capstone PDM" leave the main window open; everything else is done.
+            // "Open"/"Show in Jarvis" leave the main window open; everything else is done.
             if (MainWindow == null || !MainWindow.IsVisible) Shutdown();
             return;
         }
@@ -111,8 +111,8 @@ public partial class App : Application
     {
         MessageBox.Show(
             "Something unexpected went wrong:\n\n" + e.Exception.Message +
-            "\n\nYour files are safe. If this keeps happening, send a screenshot of this message to whoever maintains Capstone PDM.",
-            "Capstone PDM", MessageBoxButton.OK, MessageBoxImage.Error);
+            "\n\nYour files are safe. If this keeps happening, send a screenshot of this message to whoever maintains Jarvis.",
+            "Jarvis", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 }

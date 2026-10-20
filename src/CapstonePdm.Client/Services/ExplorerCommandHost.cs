@@ -111,7 +111,7 @@ internal static class ExplorerCommandHost
                     note.Hide();
                     var exportWarning = await vault.GetExportWarningAsync(paths);
                     if (exportWarning != null &&
-                        MessageBox.Show(exportWarning, "Capstone PDM \u2014 Check in exports?", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+                        MessageBox.Show(exportWarning, "Jarvis \u2014 Check in exports?", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
                     {
                         return;
                     }
@@ -126,7 +126,7 @@ internal static class ExplorerCommandHost
                 case "undo":
                     var answer = MessageBox.Show($"Undo check-out of {names}?\n\nAny changes will be thrown away and replaced with the vault version. " +
                                                  $"A backup copy is kept in {FileUtil.BackupRoot}.",
-                        "Capstone PDM — Undo Check Out", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
+                        "Jarvis — Undo Check Out", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
                     if (answer != MessageBoxResult.OK) return;
                     note.Say($"Undoing check-out of {names}…");
                     await FinishAsync(note, await vault.UndoCheckOutAsync(paths, new Progress<string>(s => note.Say(s))), "Undid check-out of");
@@ -179,7 +179,7 @@ internal static class ExplorerCommandHost
         lines.AddRange(result.Failures.Select(f => "• " + f.Error.Message));
         lines.AddRange(result.Warnings.Select(w => "• " + w));
         lines.AddRange(result.Notes);
-        MessageBox.Show(string.Join("\n\n", lines), "Capstone PDM", MessageBoxButton.OK,
+        MessageBox.Show(string.Join("\n\n", lines), "Jarvis", MessageBoxButton.OK,
             result.Failures.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }
 

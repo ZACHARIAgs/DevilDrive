@@ -129,7 +129,7 @@ public static class VaultCreator
         GitHubRepo repo;
         try
         {
-            repo = await api.CreatePrivateRepoAsync(owner, ownerIsUser, name, $"Capstone PDM vault: {request.VaultName.Trim()}", ct).ConfigureAwait(false);
+            repo = await api.CreatePrivateRepoAsync(owner, ownerIsUser, name, $"Jarvis vault: {request.VaultName.Trim()}", ct).ConfigureAwait(false);
         }
         catch (RepoNameTakenException)
         {
@@ -151,7 +151,7 @@ public static class VaultCreator
             TryDelete(folder, createdFolder);
             var detail = ex is PdmException pdm ? pdm.Detail : ex.ToString();
             throw new PdmException($"The repo {repo.FullName} was created on GitHub, but the vault files couldn't be uploaded: {ex.Message}\n\n" +
-                                   "Fix that and click Create again: Capstone PDM reuses the empty repo.", detail, ex);
+                                   "Fix that and click Create again: Jarvis reuses the empty repo.", detail, ex);
         }
 
         progress?.Report("Vault ready.");
@@ -196,7 +196,7 @@ public static class VaultCreator
         var message = Path.Combine(Path.GetTempPath(), "capstone-pdm-commit-" + Guid.NewGuid().ToString("N") + ".txt");
         try
         {
-            File.WriteAllText(message, "Create the vault (Capstone PDM rules, vault guard, team settings)\n", new UTF8Encoding(false));
+            File.WriteAllText(message, "Create the vault (Jarvis rules, vault guard, team settings)\n", new UTF8Encoding(false));
             await Run("add the vault files", "commit", "-F", message).ConfigureAwait(false);
         }
         finally

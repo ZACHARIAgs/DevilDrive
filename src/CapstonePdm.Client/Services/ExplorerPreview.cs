@@ -19,7 +19,7 @@ internal static class ExplorerPreview
     private const string Clsid = "{6E3F2B9A-1C4D-4E8B-9F27-5A0C3D81B7E4}";
     private const string PreviewHandlerShellEx = "{8895b1c6-b41f-4c1c-a562-0d564250836f}";
     private const string PrevhostAppId = "{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}";
-    private const string Name = "Capstone PDM 3D preview";
+    private const string Name = "Jarvis 3D preview";
     private static readonly string[] Extensions = { ".sldprt", ".sldasm" };
     private static readonly string[] HandlerFiles = { "CapstonePdm.PreviewHandler.dll", "HelixToolkit.Wpf.dll" };
 

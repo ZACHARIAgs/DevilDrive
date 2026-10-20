@@ -11,7 +11,7 @@ public partial class ErrorWindow : Window
     {
         InitializeComponent();
         _error = error;
-        Title = "Capstone PDM — " + error.Title;
+        Title = "Jarvis — " + error.Title;
         TitleText.Text = error.Title;
         MessageText.Text = error.Message;
         DetailsBox.Text = error.Detail ?? "";

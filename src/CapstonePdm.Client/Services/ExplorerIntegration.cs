@@ -7,7 +7,7 @@ using Microsoft.Win32;
 namespace CapstonePdm.Client.Services;
 
 /// <summary>
-/// Adds a "Capstone PDM" submenu to File Explorer's right-click menu for files inside the vault, and
+/// Adds a "Jarvis" submenu to File Explorer's right-click menu for files inside the vault, and
 /// "Get Latest" for the background of vault folders. Per-user registry keys (no admin rights needed);
 /// AppliesTo limits them to the vault folder. On Windows 11 they appear under "Show more options".
 /// </summary>
@@ -33,7 +33,7 @@ internal static class ExplorerIntegration
 
         using (var menu = Registry.CurrentUser.CreateSubKey(FileMenuKey))
         {
-            menu.SetValue("MUIVerb", "Capstone PDM");
+            menu.SetValue("MUIVerb", "Jarvis");
             menu.SetValue("Icon", icon);
             menu.SetValue("SubCommands", "");
             menu.SetValue("AppliesTo", insideFiles);
@@ -42,17 +42,17 @@ internal static class ExplorerIntegration
         AddCommand(FileMenuKey, "2checkin", "Check In…", exePath, "checkin", "\"%1\"");
         AddCommand(FileMenuKey, "3undo", "Undo Check Out", exePath, "undo", "\"%1\"");
         AddCommand(FileMenuKey, "4download", "Download", exePath, "download", "\"%1\"");
-        AddCommand(FileMenuKey, "5show", "Show in Capstone PDM", exePath, "show", "\"%1\"");
+        AddCommand(FileMenuKey, "5show", "Show in Jarvis", exePath, "show", "\"%1\"");
 
         using (var menu = Registry.CurrentUser.CreateSubKey(FolderMenuKey))
         {
-            menu.SetValue("MUIVerb", "Capstone PDM");
+            menu.SetValue("MUIVerb", "Jarvis");
             menu.SetValue("Icon", icon);
             menu.SetValue("SubCommands", "");
             menu.SetValue("AppliesTo", insideFolders);
         }
         AddCommand(FolderMenuKey, "1getlatest", "Get Latest", exePath, "getlatest", "\"%V\"");
-        AddCommand(FolderMenuKey, "2open", "Open Capstone PDM", exePath, "open", "\"%V\"");
+        AddCommand(FolderMenuKey, "2open", "Open Jarvis", exePath, "open", "\"%V\"");
     }
 
     public static void Unregister()

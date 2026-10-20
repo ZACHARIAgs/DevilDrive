@@ -141,7 +141,7 @@ public sealed class DiscordWebhookNotifier : INotifier
                 break;
             case VaultEventKind.GuardTampered:
                 message = $"\U0001F6A8 **Vault guard alert:** the vault guard was {e.Comment ?? "changed"} (last change by {Escape(e.PreviousOwner ?? "someone")}). " +
-                          "Pushes made with Git commands may not be checked. An admin should open Capstone PDM and click **Update Vault Setup**.";
+                          "Pushes made with Git commands may not be checked. An admin should open Jarvis and click **Update Vault Setup**.";
                 break;
             default:
                 message = $"**{user}**: {files}";

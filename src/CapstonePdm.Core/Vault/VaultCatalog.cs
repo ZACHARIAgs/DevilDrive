@@ -31,7 +31,7 @@ public sealed class RemoteVault
 
 /// <summary>
 /// Finds the vaults (GitHub repos with a pdm.json) the user can access and downloads them, so one
-/// install of Capstone PDM can work with several groups' vaults.
+/// install of Jarvis can work with several groups' vaults.
 /// </summary>
 public static class VaultCatalog
 {

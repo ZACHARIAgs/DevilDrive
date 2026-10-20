@@ -14,7 +14,7 @@ using CapstonePdm.Core.Vault;
 namespace CapstonePdm.SwAddin;
 
 /// <summary>
-/// The "Capstone PDM" task pane: status of the active document, the tree of files it uses, and PDM
+/// The "Jarvis" task pane: status of the active document, the tree of files it uses, and PDM
 /// commands. Watches the active document with a timer (no SolidWorks event wiring, which keeps it
 /// version-proof): switching, opening, closing or saving a document rebuilds the tree.
 /// All vault work goes through the same Core VaultService as the desktop app.
@@ -107,7 +107,7 @@ internal sealed class VaultPane : UserControl
             Padding = new Padding(Theme.Px(14), Theme.Px(12), Theme.Px(14), Theme.Px(12)),
             BackColor = Theme.Background,
         };
-        _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Capstone PDM");
+        _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Jarvis");
         _banner = new NoticeBox();
         _card = new FileCard();
         _treeLabel = new CaptionLabel("Files in use");
@@ -134,7 +134,7 @@ internal sealed class VaultPane : UserControl
         _watch = new ModernButton("Notify me when it's free", "\uEA8F");
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
-        _openApp = new ModernButton("Open Capstone PDM", "");
+        _openApp = new ModernButton("Open Jarvis", "");
         _rebuildIndex = new ModernButton("Rebuild Index", "\uE895");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
@@ -327,7 +327,7 @@ internal sealed class VaultPane : UserControl
                 if (nowFree.Count > 0)
                 {
                     MessageBox.Show(_sw.MainWindow, $"{PathList.Format(nowFree.Select(f => f.RelativePath))} {(nowFree.Count == 1 ? "is" : "are")} free now. You can check {(nowFree.Count == 1 ? "it" : "them")} out.",
-                        "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             _missingRefs = _snapshot.DownloadFolders != null && _currentPath != null && SolidWorksSession.HasReferences(_currentPath)
@@ -392,7 +392,7 @@ internal sealed class VaultPane : UserControl
             message = $"{file.Name} is checked out by {file.CheckedOutBy}{since}.\n\n" +
                       "It's open read-only: you can look at it, but you can't check in changes until they check it in.";
         }
-        MessageBox.Show(_sw.MainWindow, message, "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show(_sw.MainWindow, message, "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     // ------------------------------------------------------------ view
@@ -617,7 +617,7 @@ internal sealed class VaultPane : UserControl
         if (_snapshot?.ViewingMilestone != null)
         {
             lines.Insert(0, $"Viewing the milestone \u201C{_snapshot.ViewingMilestone.Name}\u201D: files show how they were then (read-only). " +
-                            "Use Return to Latest in Capstone PDM to keep working.");
+                            "Use Return to Latest in Jarvis to keep working.");
             if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
         }
         if (NewerThanTeam)
@@ -782,7 +782,7 @@ internal sealed class VaultPane : UserControl
         return MessageBox.Show(_sw.MainWindow,
             $"{PathList.Format(unsaved.Select(Path.GetFileName))} {(unsaved.Count == 1 ? "is" : "are")} marked as changed, but {(unsaved.Count == 1 ? "isn't" : "aren't")} checked out, " +
             "so the changes can't be saved anyway (often it's just a rebuild).\n\nClose without saving and reopen with the other version?",
-            "Capstone PDM", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+            "Jarvis", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
     }
 
     private async Task ReturnToLatestAsync(string path)
@@ -1017,14 +1017,14 @@ internal sealed class VaultPane : UserControl
                     $"{PathList.Format(tooNew)} {(tooNew.Count == 1 ? "was" : "were")} last saved in a newer SolidWorks than the team's {TeamYear}, " +
                     $"so teammates on {TeamYear} couldn't open {(tooNew.Count == 1 ? "it" : "them")}. Nothing was checked in.\n\n" +
                     $"Fix: Undo Check Out to get the vault version back, then redo the change in SolidWorks {TeamYear}.",
-                    "Capstone PDM — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Jarvis — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
         }
 
         var exportWarning = await _vault.GetExportWarningAsync(targets);
         if (exportWarning != null &&
-            MessageBox.Show(_sw.MainWindow, exportWarning, "Capstone PDM \u2014 Check in exports?", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            MessageBox.Show(_sw.MainWindow, exportWarning, "Jarvis \u2014 Check in exports?", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
         {
             return;
         }
@@ -1260,7 +1260,7 @@ internal sealed class VaultPane : UserControl
         var quantity = lines.Sum(l => l.Quantity);
         SetStatus($"Saved the BOM: {lines.Count} different part(s), {quantity} in total.");
         if (MessageBox.Show(_sw.MainWindow, $"Saved {Path.GetFileName(dialog.FileName)} ({lines.Count} different parts, {quantity} in total). Open it now?",
-                "Capstone PDM", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                "Jarvis", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
         {
             try
             {
@@ -1314,7 +1314,7 @@ internal sealed class VaultPane : UserControl
     {
         var top = _currentPath;
         if (top == null || _vault == null) return;
-        if (MessageBox.Show(_sw.MainWindow, $"Take {Path.GetFileName(top)} out of review? It can then be edited again.", "Capstone PDM",
+        if (MessageBox.Show(_sw.MainWindow, $"Take {Path.GetFileName(top)} out of review? It can then be edited again.", "Jarvis",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         await RunAsync("Withdrawing\u2026", async progress => Report(await _vault.WithdrawReviewAsync(new[] { top }, progress), "Withdrew"));
     }
@@ -1413,7 +1413,7 @@ internal sealed class VaultPane : UserControl
         if (top == null || _vault == null || file == null) return;
 
         using var picker = new FilePickerForm("Request Check-In (admin)",
-            $"{file.CheckedOutBy}'s PC will check in their last saved version of this file and release it, the next time Capstone PDM or SolidWorks " +
+            $"{file.CheckedOutBy}'s PC will check in their last saved version of this file and release it, the next time Jarvis or SolidWorks " +
             "is running there. Unsaved changes in their SolidWorks aren't included.",
             new[] { new PickItem(top, Path.GetFileName(top), true, isLocked: false) }, "Request",
             askComment: true, askKeep: false, commentLabel: $"Note to {file.CheckedOutBy} (required): why do you need it?",
@@ -1574,7 +1574,7 @@ internal sealed class VaultPane : UserControl
             catch (PdmException ex)
             {
                 throw new PdmException(ex.Message + "\n\nThe rename is done on this PC but isn't in the vault yet. Select the renamed file and the files " +
-                                       "that use it in Capstone PDM and click Check In to finish.", ex.Detail, ex);
+                                       "that use it in Jarvis and click Check In to finish.", ex.Detail, ex);
             }
             finally
             {
@@ -1704,7 +1704,7 @@ internal sealed class VaultPane : UserControl
         var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "CapstonePDM", "CapstonePDM.exe");
         if (!File.Exists(exe))
         {
-            MessageBox.Show(_sw.MainWindow, $"Capstone PDM isn't installed at {exe}. Run Setup.cmd.", "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_sw.MainWindow, $"Jarvis isn't installed at {exe}. Run Setup.cmd.", "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
@@ -1729,7 +1729,7 @@ internal sealed class VaultPane : UserControl
         catch (PdmException ex)
         {
             status = ex.Title;
-            MessageBox.Show(_sw.MainWindow, ex.Message, "Capstone PDM — " + ex.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(_sw.MainWindow, ex.Message, "Jarvis — " + ex.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
@@ -1737,7 +1737,7 @@ internal sealed class VaultPane : UserControl
             AddinLog.Write("Command failed: " + ex);
             MessageBox.Show(_sw.MainWindow,
                 "Something unexpected went wrong: " + ex.Message + $"\n\nDetails were written to {AddinLog.FilePath}.",
-                "Capstone PDM", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -1762,7 +1762,7 @@ internal sealed class VaultPane : UserControl
         if (sections.Count > 0)
         {
             var header = result.Succeeded.Count > 0 ? status + "\n\n" : "";
-            MessageBox.Show(_sw.MainWindow, header + string.Join("\n\n", sections), "Capstone PDM", MessageBoxButtons.OK,
+            MessageBox.Show(_sw.MainWindow, header + string.Join("\n\n", sections), "Jarvis", MessageBoxButtons.OK,
                 result.Failures.Count > 0 || result.Warnings.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
         return status;

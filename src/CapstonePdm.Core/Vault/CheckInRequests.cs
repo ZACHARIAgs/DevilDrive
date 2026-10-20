@@ -20,7 +20,7 @@ public sealed class AdminCheckInRequest
 
 /// <summary>
 /// Pending check-in requests, stored in the vault as .pdm/checkin-requests.json. The file owner's
-/// own Capstone PDM (app or SolidWorks add-in) carries them out, because the saved file only
+/// own Jarvis (app or SolidWorks add-in) carries them out, because the saved file only
 /// exists on that PC.
 /// </summary>
 internal sealed class CheckInRequestList

@@ -10,15 +10,15 @@ namespace CapstonePdm.SwAddin;
 
 /// <summary>
 /// Entry point SolidWorks calls. Registered with RegAsm (see scripts\Install-SolidWorksAddin.ps1).
-/// Adds the "Capstone PDM" task pane; all PDM work happens in <see cref="VaultPane"/>.
+/// Adds the "Jarvis" task pane; all PDM work happens in <see cref="VaultPane"/>.
 /// </summary>
 [ComVisible(true)]
 [Guid("9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78")]
 [ProgId("CapstonePdm.SwAddin")]
 public sealed class CapstonePdmAddin : ISwAddin
 {
-    private const string Title = "Capstone PDM";
-    private const string Description = "Check SolidWorks files in and out of the Capstone vault";
+    private const string Title = "Jarvis";
+    private const string Description = "Check SolidWorks files in and out of your team's vault";
 
     private ISldWorks? _sw;
     private ITaskpaneView? _taskPane;
