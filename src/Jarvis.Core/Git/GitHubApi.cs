@@ -47,6 +47,38 @@ public sealed class GitHubRepo
     public bool CanInvite { get; set; }
 }
 
+/// <summary>Someone with access to a repo.</summary>
+public sealed class GitHubCollaborator
+{
+    public GitHubCollaborator(string login, string role)
+    {
+        Login = login;
+        Role = role;
+    }
+
+    public string Login { get; }
+    /// <summary>GitHub's role name: admin, maintain, write, triage or read.</summary>
+    public string Role { get; }
+}
+
+/// <summary>An invitation to a repo that hasn't been accepted yet.</summary>
+public sealed class GitHubInvitation
+{
+    public GitHubInvitation(long id, string login, DateTimeOffset? createdAt, bool expired)
+    {
+        Id = id;
+        Login = login;
+        CreatedAt = createdAt;
+        Expired = expired;
+    }
+
+    public long Id { get; }
+    public string Login { get; }
+    public DateTimeOffset? CreatedAt { get; }
+    /// <summary>GitHub invitations expire after 7 days; invite again to send a new one.</summary>
+    public bool Expired { get; }
+}
+
 public enum InviteOutcome
 {
     /// <summary>GitHub sent them an invitation to accept.</summary>
@@ -204,6 +236,60 @@ public sealed class GitHubApi
                 var code => new InviteResult(user, InviteOutcome.Failed, $"GitHub error {code}: {ErrorMessageOf(text)}"),
             };
         }
+    }
+
+    /// <summary>Everyone with access to the repo (including the owner and organization admins), with their role.</summary>
+    public async Task<IReadOnlyList<GitHubCollaborator>> GetCollaboratorsAsync(string owner, string repo, CancellationToken ct = default)
+    {
+        const string action = "list the vault's team";
+        var people = new List<GitHubCollaborator>();
+        for (var page = 1; page <= 10; page++)
+        {
+            using var response = await SendAsync(HttpMethod.Get, $"/repos/{owner}/{repo}/collaborators?affiliation=all&per_page=100&page={page}", null, action, ct).ConfigureAwait(false);
+            using var json = await ReadJsonAsync(response, action).ConfigureAwait(false);
+            var items = json.RootElement.EnumerateArray().ToList();
+            foreach (var item in items)
+            {
+                var role = item.TryGetProperty("role_name", out var r) ? r.GetString() ?? "" : "";
+                people.Add(new GitHubCollaborator(item.GetProperty("login").GetString() ?? "", role));
+            }
+            if (items.Count < 100) break;
+        }
+        return people;
+    }
+
+    /// <summary>Invitations to the repo that haven't been accepted yet.</summary>
+    public async Task<IReadOnlyList<GitHubInvitation>> GetInvitationsAsync(string owner, string repo, CancellationToken ct = default)
+    {
+        const string action = "list the vault's invitations";
+        using var response = await SendAsync(HttpMethod.Get, $"/repos/{owner}/{repo}/invitations?per_page=100", null, action, ct).ConfigureAwait(false);
+        using var json = await ReadJsonAsync(response, action).ConfigureAwait(false);
+        return json.RootElement.EnumerateArray()
+            .Where(i => i.TryGetProperty("invitee", out var who) && who.ValueKind == JsonValueKind.Object)
+            .Select(i => new GitHubInvitation(
+                i.GetProperty("id").GetInt64(),
+                i.GetProperty("invitee").GetProperty("login").GetString() ?? "",
+                i.TryGetProperty("created_at", out var at) && at.TryGetDateTimeOffset(out var created) ? created : (DateTimeOffset?)null,
+                i.TryGetProperty("expired", out var expired) && expired.ValueKind == JsonValueKind.True))
+            .ToList();
+    }
+
+    /// <summary>Takes away someone's access to the repo.</summary>
+    public Task RemoveCollaboratorAsync(string owner, string repo, string user, CancellationToken ct = default) =>
+        DeleteAsync($"/repos/{owner}/{repo}/collaborators/{Uri.EscapeDataString(user)}", $"remove {user} from the vault", ct);
+
+    /// <summary>Withdraws an invitation that hasn't been accepted.</summary>
+    public Task CancelInvitationAsync(string owner, string repo, long invitationId, CancellationToken ct = default) =>
+        DeleteAsync($"/repos/{owner}/{repo}/invitations/{invitationId}", "cancel the invitation", ct);
+
+    private async Task DeleteAsync(string path, string action, CancellationToken ct)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, path, null, action, ct).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound) return; // gone already is fine
+        var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        throw (int)response.StatusCode == 403
+            ? new PdmException($"GitHub didn't let you {action}: only people with the Admin role on the vault repo can. {ErrorMessageOf(text)}", text)
+            : new PdmException($"GitHub couldn't {action} ({(int)response.StatusCode}: {ErrorMessageOf(text)}).", text);
     }
 
     /// <summary>GitHub's error text, including the first validation detail ("message" plus "errors[0].message").</summary>

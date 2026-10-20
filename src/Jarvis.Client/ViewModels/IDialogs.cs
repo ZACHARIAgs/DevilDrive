@@ -63,6 +63,8 @@ public interface IDialogs
         bool previewPane, bool classicMenu);
     void ShowHistory(string relativePath);
     void ShowMilestones();
+    /// <summary>The vault's team: members, invitations, adding and removing people.</summary>
+    void ShowTeam(string vaultName, string? remoteUrl, string localPath, IReadOnlyDictionary<string, string> displayNames);
     /// <summary>A small message in the corner of the screen that goes away by itself.</summary>
     void Notify(string message);
     void Show3D(string title, System.Windows.Media.Media3D.Model3D model);

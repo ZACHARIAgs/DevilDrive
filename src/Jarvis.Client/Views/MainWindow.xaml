@@ -14,7 +14,7 @@
     <DockPanel>
         <ToolBarTray DockPanel.Dock="Top" IsLocked="True" Margin="6,4,6,2">
             <ToolBar>
-                <Button Command="{Binding GetLatestCommand}"
+                <Button AutomationProperties.Name="Get Latest" Command="{Binding GetLatestCommand}"
                         ToolTip="Download the newest version of every file. Files you've changed are never overwritten.">
                     <StackPanel MinWidth="70">
                         <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE896;" />
@@ -22,21 +22,21 @@
                     </StackPanel>
                 </Button>
                 <Separator />
-                <Button Command="{Binding CheckOutCommand}"
+                <Button AutomationProperties.Name="Check Out" Command="{Binding CheckOutCommand}"
                         ToolTip="Lock the selected files so only you can edit them, and make them writable.">
                     <StackPanel MinWidth="70">
                         <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE72E;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Check Out" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding CheckInCommand}"
+                <Button AutomationProperties.Name="Check In" Command="{Binding CheckInCommand}"
                         ToolTip="Save the selected files to the vault as a new version (with nothing selected: everything you can check in).">
                     <StackPanel MinWidth="70">
                         <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE898;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Check In&#x2026;" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding UndoCheckOutCommand}"
+                <Button AutomationProperties.Name="Undo Check Out" Command="{Binding UndoCheckOutCommand}"
                         ToolTip="Throw away your changes to the selected files and release the check-out.">
                     <StackPanel MinWidth="80">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7A7;" />
@@ -44,50 +44,50 @@
                     </StackPanel>
                 </Button>
                 <Separator />
-                <Button Command="{Binding SubmitReviewCommand}" ToolTip="Ask an admin to review and release the selected files.">
+                <Button AutomationProperties.Name="Review" Command="{Binding SubmitReviewCommand}" ToolTip="Ask an admin to review and release the selected files.">
                     <StackPanel MinWidth="70">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8FB;" Foreground="#0F766E" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Review&#x2026;" />
                     </StackPanel>
-                </Button>                <Button Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one.">
+                </Button>                <Button AutomationProperties.Name="History" Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one.">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE81C;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="History&#x2026;" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding MilestonesCommand}" ToolTip="Snapshots of the whole vault (e.g. design reviews): view the vault as it was.">
+                <Button AutomationProperties.Name="Milestones" Command="{Binding MilestonesCommand}" ToolTip="Snapshots of the whole vault (e.g. design reviews): view the vault as it was.">
                     <StackPanel MinWidth="70">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7C1;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Milestones&#x2026;" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding ReturnToLatestCommand}" Visibility="{Binding IsViewingMilestone, Converter={StaticResource BoolToVis}}"
+                <Button AutomationProperties.Name="Return to Latest" Command="{Binding ReturnToLatestCommand}" Visibility="{Binding IsViewingMilestone, Converter={StaticResource BoolToVis}}"
                         ToolTip="Leave the milestone and go back to the newest files.">
                     <StackPanel MinWidth="80">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72B;" Foreground="#B45309" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Return to Latest" />
                     </StackPanel>
-                </Button>                <Button Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
+                </Button>                <Button AutomationProperties.Name="Refresh" Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72C;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Refresh" />
                     </StackPanel>
                 </Button>
                 <Separator />
-                <Button Command="{Binding OpenCommand}" ToolTip="Open the selected file (SolidWorks opens it read-only unless it's checked out to you).">
+                <Button AutomationProperties.Name="Open" Command="{Binding OpenCommand}" ToolTip="Open the selected file (SolidWorks opens it read-only unless it's checked out to you).">
                     <StackPanel MinWidth="50">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8E5;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Open" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding ShowInExplorerCommand}" ToolTip="Show the selected file in Windows Explorer.">
+                <Button AutomationProperties.Name="Explorer" Command="{Binding ShowInExplorerCommand}" ToolTip="Show the selected file in Windows Explorer.">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE838;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Explorer" />
                     </StackPanel>
                 </Button>
                 <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                <Button Command="{Binding BreakLockCommand}"
+                <Button AutomationProperties.Name="Break Lock" Command="{Binding BreakLockCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: release someone else's stale check-out.">
                     <StackPanel MinWidth="70">
@@ -95,13 +95,13 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Break Lock" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding UpdateVaultSetupCommand}" Visibility="{Binding HasSetupProblems, Converter={StaticResource BoolToVis}}"
+                <Button AutomationProperties.Name="Update Vault Setup" Command="{Binding UpdateVaultSetupCommand}" Visibility="{Binding HasSetupProblems, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: install or repair the vault guard on GitHub and the vault's storage rules.">
                     <StackPanel MinWidth="90">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE83D;" Foreground="#B45309" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Update Vault Setup" />
                     </StackPanel>
-                </Button>                <Button Command="{Binding RequestCheckInCommand}"
+                </Button>                <Button AutomationProperties.Name="Request Check-In" Command="{Binding RequestCheckInCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: have the person who has this file checked out check in their last saved version automatically.">
                     <StackPanel MinWidth="80">
@@ -109,7 +109,7 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Request Check-In" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding FreezeCommand}"
+                <Button AutomationProperties.Name="Freeze" Command="{Binding FreezeCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: freeze the selected files (e.g. released for production) so nobody can change them.">
                     <StackPanel MinWidth="60">
@@ -117,7 +117,7 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Freeze&#x2026;" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding UnfreezeCommand}"
+                <Button AutomationProperties.Name="Unfreeze" Command="{Binding UnfreezeCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
                         ToolTip="Admin: make the selected frozen files editable again.">
                     <StackPanel MinWidth="60">
@@ -126,7 +126,13 @@
                     </StackPanel>
                 </Button>
                 <Separator />
-                <Button Command="{Binding SettingsCommand}" ToolTip="Vault folder and your GitHub username.">
+                <Button AutomationProperties.Name="Team" Command="{Binding TeamCommand}" ToolTip="Who has access to this vault. Admins add teammates (by GitHub username) or remove them here.">
+                    <StackPanel MinWidth="56">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE716;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Team" />
+                    </StackPanel>
+                </Button>
+                <Button AutomationProperties.Name="Settings" Command="{Binding SettingsCommand}" ToolTip="Vault folder and your GitHub username.">
                     <StackPanel MinWidth="60">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE713;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Settings" />

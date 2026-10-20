@@ -271,6 +271,57 @@ public class NewTeamTests
         Assert.Equal(InviteOutcome.Failed, result.Outcome);
     }
 
+    // ------------------------------------------------------------ team window
+
+    [Fact]
+    public async Task Team_ListsMembersAndPendingInvitations()
+    {
+        var fake = new FakeGitHub((request, _) => request.RequestUri!.AbsolutePath switch
+        {
+            "/repos/club/club-vault/collaborators" => Reply(HttpStatusCode.OK,
+                "[{\"login\":\"club\",\"role_name\":\"admin\"},{\"login\":\"zoe\",\"role_name\":\"write\"},{\"login\":\"amir\",\"role_name\":\"maintain\"},{\"login\":\"bea\",\"role_name\":\"write\"}]"),
+            "/repos/club/club-vault/invitations" => Reply(HttpStatusCode.OK,
+                "[{\"id\":7,\"invitee\":{\"login\":\"cal\"},\"created_at\":\"2026-10-18T12:00:00Z\",\"expired\":false}," +
+                "{\"id\":8,\"invitee\":{\"login\":\"dee\"},\"created_at\":\"2026-10-01T12:00:00Z\",\"expired\":true}]"),
+            _ => Reply(HttpStatusCode.NotFound),
+        });
+        var api = new GitHubApi("token", new HttpClient(fake));
+
+        var team = await VaultInvites.LoadTeamAsync(api, "club", "club-vault", new Dictionary<string, string> { ["zoe"] = "Zoe Park" });
+
+        // Admins first, then members by name, then invitations.
+        Assert.Equal(new[] { "amir", "club", "bea", "zoe", "cal", "dee" }, team.Select(m => m.Login));
+        Assert.Equal("Owner (admin)", team[1].RoleText);
+        Assert.True(team[1].IsOwner && team[1].IsAdmin);
+        Assert.Equal("Admin (Maintain)", team[0].RoleText);
+        Assert.Equal("Zoe Park", team[3].DisplayName);
+        Assert.Equal("Member", team[3].RoleText);
+        Assert.Equal(7, team[4].InvitationId);
+        Assert.StartsWith("Invited, hasn't accepted yet", team[4].RoleText);
+        Assert.True(team[5].InvitationExpired);
+        Assert.Contains("expired", team[5].RoleText);
+        Assert.Contains("affiliation=all", fake.Requests[0].Path);
+    }
+
+    [Fact]
+    public async Task Team_RemoveAndCancelInvitation()
+    {
+        var fake = new FakeGitHub((request, _) => request.RequestUri!.AbsolutePath.EndsWith("/zoe")
+            ? Reply(HttpStatusCode.NoContent)
+            : request.RequestUri.AbsolutePath.EndsWith("/invitations/7") ? Reply(HttpStatusCode.NoContent)
+            : Reply(HttpStatusCode.Forbidden, "{\"message\":\"Must have admin rights to Repository.\"}"));
+        var api = new GitHubApi("token", new HttpClient(fake));
+
+        await api.RemoveCollaboratorAsync("club", "club-vault", "zoe");
+        await api.CancelInvitationAsync("club", "club-vault", 7);
+        var refused = await Assert.ThrowsAsync<PdmException>(() => api.RemoveCollaboratorAsync("club", "club-vault", "amir"));
+
+        Assert.Contains("only people with the Admin role", refused.Message);
+        Assert.All(fake.Requests, r => Assert.Equal(HttpMethod.Delete, r.Method));
+        Assert.Equal("/repos/club/club-vault/collaborators/zoe", fake.Requests[0].Path);
+        Assert.Equal("/repos/club/club-vault/invitations/7", fake.Requests[1].Path);
+    }
+
     // ------------------------------------------------------------ first run
 
     [Fact]

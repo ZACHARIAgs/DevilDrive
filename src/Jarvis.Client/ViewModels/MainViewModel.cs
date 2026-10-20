@@ -59,6 +59,7 @@ public sealed class MainViewModel : ViewModelBase
         ShowInExplorerCommand = new RelayCommand(ShowInExplorer, () => _vault != null);
         SettingsCommand = new RelayCommand(async () => await OpenSettingsAsync(), () => !IsBusy);
         ManageVaultsCommand = new RelayCommand(async () => await ManageVaultsAsync(), () => !IsBusy);
+        TeamCommand = new RelayCommand(async () => await ShowTeamAsync(), () => _vault != null);
         MilestonesCommand = new RelayCommand(() => _dialogs.ShowMilestones(), () => CanRun);
         ReturnToLatestCommand = new RelayCommand(async () => await ReturnToLatestAsync(), () => CanRun && IsViewingMilestone);
         Open3DCommand = new RelayCommand(Open3D, () => Details?.Model != null);
@@ -89,6 +90,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ShowInExplorerCommand { get; }
     public ICommand SettingsCommand { get; }
     public ICommand ManageVaultsCommand { get; }
+    public ICommand TeamCommand { get; }
 
     /// <summary>The vaults (one per group) on this PC, for the dropdown next to the search box.</summary>
     public ObservableCollection<VaultChoice> Vaults { get; } = new();
@@ -887,6 +889,14 @@ public sealed class MainViewModel : ViewModelBase
             ? $"/select,\"{_vault.ToFullPath(SingleSelected.Path)}\""
             : $"\"{_vault.VaultRoot}\"";
         Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
+    }
+
+    private async Task ShowTeamAsync()
+    {
+        if (_vault == null) return;
+        var remoteUrl = await VaultCatalog.RemoteUrlOfAsync(_vault.VaultRoot);
+        var localPath = string.IsNullOrWhiteSpace(_vault.Config.LocalPath) ? _vault.VaultRoot : _vault.Config.LocalPath!;
+        _dialogs.ShowTeam(_vault.Config.VaultName, remoteUrl, localPath, _vault.Config.Team);
     }
 
     private async Task OpenSettingsAsync()

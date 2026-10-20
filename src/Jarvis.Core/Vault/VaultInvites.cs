@@ -71,6 +71,51 @@ public static class VaultInvites
             $"The vault goes to {localPath} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.";
     }
 
+    /// <summary>
+    /// Everyone on the vault's team: members (with their GitHub role) and invitations that haven't been
+    /// accepted yet. Admins first, then by name. <paramref name="displayNames"/> is pdm.json's "team".
+    /// </summary>
+    public static async Task<IReadOnlyList<TeamMember>> LoadTeamAsync(GitHubApi api, string owner, string repo,
+        IReadOnlyDictionary<string, string>? displayNames = null, CancellationToken ct = default)
+    {
+        var people = await api.GetCollaboratorsAsync(owner, repo, ct).ConfigureAwait(false);
+        var invitations = await api.GetInvitationsAsync(owner, repo, ct).ConfigureAwait(false);
+        return BuildTeam(owner, people, invitations, displayNames);
+    }
+
+    internal static IReadOnlyList<TeamMember> BuildTeam(string owner, IEnumerable<GitHubCollaborator> people, IEnumerable<GitHubInvitation> invitations,
+        IReadOnlyDictionary<string, string>? displayNames)
+    {
+        string? NameOf(string login) =>
+            displayNames != null && displayNames.TryGetValue(login, out var name) && !string.IsNullOrWhiteSpace(name) ? name : null;
+
+        var team = people.Select(p => new TeamMember(p.Login, NameOf(p.Login), RoleText(p.Role, string.Equals(p.Login, owner, StringComparison.OrdinalIgnoreCase)),
+                IsAdminRole(p.Role), string.Equals(p.Login, owner, StringComparison.OrdinalIgnoreCase), null, null))
+            .ToList();
+        foreach (var invitation in invitations.Where(i => !team.Any(m => string.Equals(m.Login, i.Login, StringComparison.OrdinalIgnoreCase))))
+        {
+            var sent = invitation.CreatedAt is { } at ? $" (sent {at.LocalDateTime:MMM d})" : "";
+            team.Add(new TeamMember(invitation.Login, NameOf(invitation.Login),
+                invitation.Expired ? "Invitation expired: invite again" : "Invited, hasn't accepted yet" + sent, false, false, invitation.Id, invitation.Expired));
+        }
+        return team
+            .OrderBy(m => m.IsPending ? 2 : m.IsAdmin ? 0 : 1)
+            .ThenBy(m => m.DisplayName ?? m.Login, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsAdminRole(string role) => role == "admin" || role == "maintain";
+
+    private static string RoleText(string role, bool owner) => owner ? "Owner (admin)" : role switch
+    {
+        "admin" => "Admin",
+        "maintain" => "Admin (Maintain)",
+        "write" => "Member",
+        "triage" => "Can only view (Triage)",
+        "read" => "Can only view (Read)",
+        _ => role,
+    };
+
     /// <summary>Checks the signed-in user may invite people to the vault at <paramref name="remoteUrl"/>.</summary>
     public static async Task<(GitHubApi Api, GitHubRepo Repo)> ConnectAsAdminAsync(string? remoteUrl, CancellationToken ct = default)
     {
@@ -84,4 +129,33 @@ public static class VaultInvites
         }
         return (api, repo);
     }
+}
+
+/// <summary>Someone on a vault's team, or invited to it.</summary>
+public sealed class TeamMember
+{
+    public TeamMember(string login, string? displayName, string roleText, bool isAdmin, bool isOwner, long? invitationId, bool? invitationExpired)
+    {
+        Login = login;
+        DisplayName = displayName;
+        RoleText = roleText;
+        IsAdmin = isAdmin;
+        IsOwner = isOwner;
+        InvitationId = invitationId;
+        InvitationExpired = invitationExpired == true;
+    }
+
+    /// <summary>GitHub username.</summary>
+    public string Login { get; }
+    /// <summary>Name from pdm.json's "team", if set.</summary>
+    public string? DisplayName { get; }
+    /// <summary>"Admin", "Member", "Invited, hasn't accepted yet", ...</summary>
+    public string RoleText { get; }
+    public bool IsAdmin { get; }
+    /// <summary>Owns the repo: can't be removed.</summary>
+    public bool IsOwner { get; }
+    /// <summary>Set for an invitation that hasn't been accepted.</summary>
+    public long? InvitationId { get; }
+    public bool InvitationExpired { get; }
+    public bool IsPending => InvitationId != null;
 }

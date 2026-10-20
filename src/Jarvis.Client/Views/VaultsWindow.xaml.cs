@@ -237,7 +237,7 @@ public partial class VaultsWindow : Window
             "New team vault", MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.Yes);
         if (invite == MessageBoxResult.Yes)
         {
-            new InviteWindow(created.VaultName, created.Repo.CloneUrl, created.Folder) { Owner = this }.ShowDialog();
+            new TeamWindow(created.VaultName, created.Repo.CloneUrl, created.Folder) { Owner = this }.ShowDialog();
         }
         OpenFolder = created.Folder;
         DialogResult = true;
@@ -248,15 +248,18 @@ public partial class VaultsWindow : Window
         if (_busy || !(LocalList.SelectedItem is Item item)) return;
         var url = await VaultCatalog.RemoteUrlOfAsync(item.Folder);
         string localPath;
+        IReadOnlyDictionary<string, string>? names = null;
         try
         {
-            localPath = VaultConfig.Load(item.Folder).LocalPath is { Length: > 0 } configured ? configured : item.Folder;
+            var config = VaultConfig.Load(item.Folder);
+            localPath = config.LocalPath is { Length: > 0 } configured ? configured : item.Folder;
+            names = config.Team;
         }
         catch (PdmException)
         {
             localPath = item.Folder;
         }
-        new InviteWindow(NameOf(item.Folder), url, localPath) { Owner = this }.ShowDialog();
+        new TeamWindow(NameOf(item.Folder), url, localPath, names) { Owner = this }.ShowDialog();
     }
 
     private void Save()

@@ -91,6 +91,9 @@ public partial class MainWindow : Window, IDialogs
 
     public void Notify(string message) => new NotificationWindow().Say(message, System.TimeSpan.FromSeconds(8));
 
+    public void ShowTeam(string vaultName, string? remoteUrl, string localPath, IReadOnlyDictionary<string, string> displayNames) =>
+        new TeamWindow(vaultName, remoteUrl, localPath, displayNames) { Owner = this }.ShowDialog();
+
     public void ShowMilestones() => new MilestonesWindow(_vm, this) { Owner = this }.ShowDialog();
 
     public void Show3D(string title, System.Windows.Media.Media3D.Model3D model) => new Viewer3DWindow(title, model) { Owner = this }.Show();
