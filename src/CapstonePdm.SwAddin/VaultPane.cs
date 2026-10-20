@@ -43,6 +43,7 @@ internal sealed class VaultPane : UserControl
     private readonly FileCard _card;
     private readonly CaptionLabel _treeLabel;
     private readonly FileTreeView _tree;
+    private readonly AssemblySaveGuard _saveGuard;
     /// <summary>Active document and when it was last saved, as of the last tree rebuild.</summary>
     private string? _treeStamp;
     private readonly ModernButton _checkOut;
@@ -111,6 +112,8 @@ internal sealed class VaultPane : UserControl
             StatusOf = node => node.RelativePath != null && _vault != null ? FileAt(_vault.ToFullPath(node.RelativePath)) : null,
         };
         _tree.TickedChanged += (_, _) => UpdateView();
+        _saveGuard = new AssemblySaveGuard(sw);
+        _saveGuard.Saved += message => { SetStatus(message); _treeStamp = null; };
         _checkOut = new ModernButton("Check Out", "");
         _checkIn = new ModernButton("Check In", "");
         _undo = new ModernButton("Undo Check Out", "");
@@ -233,6 +236,7 @@ internal sealed class VaultPane : UserControl
         FileTreeNode? root = null;
         if (doc != null && _vault != null)
         {
+            if (SolidWorksSession.ComponentCount(doc) > 0) _saveGuard.Watch(doc);
             try
             {
                 root = FileTree.Build(path!, _sw.GetFilesInUse(doc), _vault.VaultRoot);
@@ -675,7 +679,28 @@ internal sealed class VaultPane : UserControl
         }
 
         List<string> targets;
-        if (items.Count == 1)
+        var tickedPaths = _tree.TickedFiles;
+        if (tickedPaths.Count > 0)
+        {
+            targets = Ticked(CanCheckOutFile);
+            var skipped = tickedPaths.Except(targets, StringComparer.OrdinalIgnoreCase).Select(p => (Path: p, File: FileAt(p))).Where(x => x.File != null).ToList();
+            if (skipped.Count > 0)
+            {
+                var lines = string.Join("\n", skipped.Select(x => "\u2022 " + Path.GetFileName(x.Path) + x.File!.State switch
+                {
+                    FileState.CheckedOutByOther => $": checked out by {x.File.CheckedOutBy}",
+                    FileState.CheckedOutByMe => ": already checked out to you",
+                    FileState.Frozen => ": frozen",
+                    FileState.InReview => ": in review",
+                    _ => ": can't be checked out",
+                }));
+                var question = targets.Count > 0 ? $"\n\nCheck out the other {targets.Count} file(s)?" : "";
+                var answer = MessageBox.Show(_sw.MainWindow, $"These ticked files can't be checked out:\n{lines}{question}", "Check Out",
+                    targets.Count > 0 ? MessageBoxButtons.OKCancel : MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (targets.Count == 0 || answer != DialogResult.OK) return;
+            }
+        }
+        else if (items.Count == 1)
         {
             targets = new List<string> { items[0].Path };
         }
@@ -738,22 +763,33 @@ internal sealed class VaultPane : UserControl
         var note = newReferences > 0
             ? $"{newReferences} referenced file(s) are new. Check them in too, or teammates will get missing-reference errors."
             : null;
+        var tickedForCheckIn = Ticked(CanCheckInFile);
+        if (tickedForCheckIn.Count > 0)
+        {
+            items = tickedForCheckIn.Select(p => new PickItem(p, Path.GetFileName(p), true)).ToList();
+            note = null;
+        }
         using var picker = new FilePickerForm("Check In",
-            "SolidWorks saves and closes these files, checks them in, then reopens them.", items, "Check In",
-            askComment: true, askKeep: true, note: note);
+            tickedForCheckIn.Count > 0
+                ? $"Check in {PathList.Format(tickedForCheckIn.Select(Path.GetFileName))}. Unsaved changes are saved first."
+                : "Unsaved changes in these files are saved first, then they're checked in.",
+            items, "Check In", askComment: true, askKeep: true, note: note, showList: tickedForCheckIn.Count == 0);
         if (picker.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
 
         var targets = picker.SelectedPaths;
         var comment = picker.Comment;
         var keep = picker.KeepCheckedOut;
 
-        var unsaved = targets.Where(p => _sw.FindOpen(p)?.GetSaveFlag() == true).ToList();
-        if (unsaved.Count > 0 &&
-            MessageBox.Show(_sw.MainWindow, $"{PathList.Format(unsaved)} {(unsaved.Count == 1 ? "has" : "have")} unsaved changes in SolidWorks.\n\nSave and check in?",
-                "Capstone PDM \u2014 Unsaved changes", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+        // First check-in of a SolidWorks file: ask what it is.
+        var newDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var newSolidWorks = targets.Where(p => FileAt(p)?.State == FileState.NotInVault && IsSolidWorksFile(p)).ToList();
+        if (newSolidWorks.Count > 0)
         {
-            return;
+            using var describe = new DescriptionForm(newSolidWorks.Select(p => (p, CurrentDescription(p))).ToList());
+            if (describe.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+            newDescriptions = describe.Descriptions;
         }
+
 
         // Version guard: a file last saved in a newer SolidWorks than the team's can't be opened by the others.
         if (TeamYear != null)
@@ -779,11 +815,16 @@ internal sealed class VaultPane : UserControl
 
         await RunAsync("Checking in…", async progress =>
         {
+            foreach (var pair in newDescriptions.Where(d => d.Value.Length > 0 && d.Value != CurrentDescription(d.Key)))
+            {
+                progress.Report($"Saving the description of {Path.GetFileName(pair.Key)}\u2026");
+                _sw.SetDescription(pair.Key, pair.Value);
+            }
             progress.Report("Saving and closing files…");
             // Properties can only be read while documents are open; references and saved-in version come from disk after saving.
             var properties = targets.Where(IsSolidWorksFile).ToDictionary(
                 p => p,
-                p => { var doc = _sw.FindOpen(p); return doc != null ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties; },
+                p => WithDescription(p, _sw.FindOpen(p) is { } doc ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties, newDescriptions),
                 StringComparer.OrdinalIgnoreCase);
             // 3D previews for the app's viewer, from the open models (unopened ones get theirs from Rebuild Index).
             progress.Report("Saving 3D previews…");
@@ -794,19 +835,32 @@ internal sealed class VaultPane : UserControl
                 var preview = VaultPaths.PreviewFor(_vault.ToRelativePath(path));
                 if (doc != null && _sw.ExportPreview(doc, _vault.ToFullPath(preview))) previews.Add(preview);
             }
-            var closed = _sw.CloseDocumentsUsing(targets, CloseMode.Save);
-            try
-            {
-                var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
-                var checkedIn = await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews);
-                if (checkedIn.Failures.Count == 0) _tree.ClearTicks();
-                return Report(checkedIn, "Checked in");
-            }
-            finally
-            {
-                _sw.Reopen(closed);
-            }
+            _sw.SaveTargets(targets);
+            var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
+            var checkedIn = await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews);
+            // Released files are read-only on disk again; show them read-only in SolidWorks too.
+            if (!keep) _sw.MakeReadOnly(checkedIn.Succeeded.Select(_vault.ToFullPath));
+            if (checkedIn.Failures.Count == 0) _tree.ClearTicks();
+            return Report(checkedIn, "Checked in");
         });
+    }
+
+    /// <summary>The Description property of a SolidWorks file (from the open document, or the vault index).</summary>
+    private string CurrentDescription(string path)
+    {
+        var properties = _sw.FindOpen(path) is { } doc ? _sw.ReadProperties(doc) : FileAt(path)?.Index?.Properties;
+        return properties?.Where(p => IndexEntry.DescriptionNames.Contains(p.Key, StringComparer.OrdinalIgnoreCase))
+            .Select(p => p.Value).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
+    }
+
+    /// <summary>Puts a description typed at check-in into the index even when the file wasn't open (its properties came from the old index).</summary>
+    private static Dictionary<string, string>? WithDescription(string path, Dictionary<string, string>? properties, Dictionary<string, string> descriptions)
+    {
+        if (!descriptions.TryGetValue(path, out var description) || description.Length == 0) return properties;
+        return new Dictionary<string, string>(properties ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+        {
+            [IndexEntry.DescriptionProperty] = description,
+        };
     }
 
     private async Task UndoCheckOutAsync()
@@ -817,7 +871,17 @@ internal sealed class VaultPane : UserControl
         var mine = TreeFiles().Where(CanUndoFile).Select(f => _vault.ToFullPath(f.RelativePath)).ToList();
         if (mine.Count == 0) return;
         var targets = new List<string> { mine[0] };
-        if (mine.Count > 1)
+        var tickedForUndo = Ticked(CanUndoFile);
+        if (tickedForUndo.Count > 0)
+        {
+            targets = tickedForUndo;
+            var answer = MessageBox.Show(_sw.MainWindow,
+                $"Undo check-out of {PathList.Format(targets.Select(Path.GetFileName))}?\n\nAny changes will be thrown away and the files reloaded from the vault. " +
+                $"A backup copy is kept in {FileUtil.BackupRoot}.",
+                "Undo Check Out", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            if (answer != DialogResult.OK) return;
+        }
+        else if (mine.Count > 1)
         {
             var items = TreePickItems(mine, CanUndoFile, f => f.HasLocalChanges ? "  (edited)" : "");
             using var picker = new FilePickerForm("Undo Check Out",

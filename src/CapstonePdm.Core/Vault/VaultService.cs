@@ -641,8 +641,10 @@ public sealed class VaultService : IVaultService
         }
         if (notCheckedOut.Count > 0) throw new NotCheckedOutException(notCheckedOut);
 
-        var inUse = relatives.Where(r => FileUtil.IsInUse(ToFullPath(r))).ToList();
-        if (inUse.Count > 0) throw new FileInUseException(inUse, "Save and close them in SolidWorks, then check in again.");
+        // Checking in only reads the files, so a file that's loaded in SolidWorks (e.g. a part inside an open
+        // assembly) is fine once it's saved. Only a file nobody can read stops the check-in.
+        var inUse = relatives.Where(r => FileUtil.IsUnreadable(ToFullPath(r))).ToList();
+        if (inUse.Count > 0) throw new FileInUseException(inUse, "Another program has them open exclusively. Close it, then check in again.");
 
         var changed = relatives.Where(changes.ContainsKey).ToList();
 

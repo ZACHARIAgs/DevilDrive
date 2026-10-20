@@ -32,6 +32,31 @@ public static class FileUtil
         }
     }
 
+    /// <summary>
+    /// True if the file can't be read at all (another program has it open exclusively, or mid-write).
+    /// Unlike <see cref="IsInUse"/>, a file SolidWorks merely has loaded is still readable: SolidWorks
+    /// shares its handle, so Git can check the saved file in while an assembly using it stays open.
+    /// </summary>
+    public static bool IsUnreadable(string fullPath)
+    {
+        if (!File.Exists(fullPath)) return false;
+        try
+        {
+            using (new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                return false;
+            }
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public static void SetReadOnly(string fullPath, bool readOnly)
     {
         if (!File.Exists(fullPath)) return;

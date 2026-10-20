@@ -34,10 +34,13 @@ internal sealed class FilePickerForm : Form
     private readonly Button _ok = new Button { DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(90, 28) };
     private readonly TableLayoutPanel _layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1 };
     private readonly bool _askComment;
+    private readonly bool _showList;
 
+    /// <param name="showList">False when the files were already chosen (ticked in the pane): only the comment is asked for.</param>
     public FilePickerForm(string title, string intro, IReadOnlyList<PickItem> items, string okText, bool askComment, bool askKeep, string? note = null,
-        string commentLabel = "Comment (required): what changed and why", string defaultComment = "")
+        string commentLabel = "Comment (required): what changed and why", string defaultComment = "", bool showList = true)
     {
+        _showList = showList;
         _comment.Text = defaultComment;
         _askComment = askComment;
         Text = title;
@@ -56,6 +59,7 @@ internal sealed class FilePickerForm : Form
         var layout = _layout;
         layout.Controls.Add(new Label { Text = intro, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
         layout.Controls.Add(_list);
+        _list.Visible = showList;
 
         foreach (var item in items) _list.Items.Add(item, item.IsChecked && !item.IsLocked);
         _list.ItemCheck += (_, e) =>
@@ -73,7 +77,7 @@ internal sealed class FilePickerForm : Form
                 if (!((PickItem)_list.Items[i]).IsLocked) _list.SetItemChecked(i, true);
             }
         };
-        layout.Controls.Add(selectAll);
+        if (showList) layout.Controls.Add(selectAll);
 
         if (note != null)
         {
@@ -110,7 +114,8 @@ internal sealed class FilePickerForm : Form
         int Scaled(int value) => (int)Math.Round(value * scale);
 
         MinimumSize = new Size(Scaled(420), Scaled(320));
-        Size = new Size(Scaled(560), Scaled(_askComment ? 520 : 420));
+        Size = new Size(Scaled(560), Scaled(!_showList ? 300 : _askComment ? 520 : 420));
+        if (!_showList) MinimumSize = new Size(Scaled(420), Scaled(260));
         _comment.Height = Scaled(70);
         _ok.MinimumSize = new Size(Scaled(90), Scaled(28));
         FitLabels();

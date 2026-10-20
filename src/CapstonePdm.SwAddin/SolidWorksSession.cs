@@ -358,6 +358,56 @@ internal sealed class SolidWorksSession
     }
 
     /// <summary>
+    /// Writes the Description custom property (file level, so every configuration shares it). An open
+    /// document is only marked as changed (check-in saves it); a closed one is opened invisibly, saved
+    /// and closed.
+    /// </summary>
+    public void SetDescription(string path, string description)
+    {
+        var doc = FindOpen(path);
+        var openedHere = false;
+        if (doc == null)
+        {
+            var type = DocumentType(path);
+            if (type == swDocumentTypes_e.swDocNONE || !File.Exists(path)) throw new PdmException($"{Path.GetFileName(path)} isn't a SolidWorks file on this PC.");
+            var options = (int)swOpenDocOptions_e.swOpenDocOptions_Silent;
+            _sw.DocumentVisible(false, (int)type);
+            try
+            {
+                int errors = 0, warnings = 0;
+                doc = _sw.OpenDoc6(path, (int)type, options, "", ref errors, ref warnings);
+                openedHere = doc != null;
+            }
+            finally
+            {
+                _sw.DocumentVisible(true, (int)type);
+            }
+            if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(path)} to save its description.");
+        }
+
+        try
+        {
+            var manager = doc.Extension.get_CustomPropertyManager("");
+            manager.Add3(IndexEntry.DescriptionProperty, (int)swCustomInfoType_e.swCustomInfoText, description,
+                (int)swCustomPropertyAddOption_e.swCustomPropertyReplaceValue);
+            if (!openedHere)
+            {
+                doc.SetSaveFlag();
+                return;
+            }
+            int saveErrors = 0, saveWarnings = 0;
+            if (!doc.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref saveErrors, ref saveWarnings))
+            {
+                throw new PdmException($"SolidWorks couldn't save the description into {Path.GetFileName(path)} (error {saveErrors}).");
+            }
+        }
+        finally
+        {
+            if (openedHere) _sw.CloseDoc(path);
+        }
+    }
+
+    /// <summary>
     /// Points a closed assembly/drawing/derived part at a renamed or moved file. Writes the referencing
     /// file on disk, so it must be closed and checked out.
     /// </summary>
@@ -388,12 +438,22 @@ internal sealed class SolidWorksSession
         };
         var savedToggles = toggles.Select(t => (t.Item1, _sw.GetUserPreferenceToggle((int)t.Item1))).ToList();
         var savedQuality = _sw.GetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality);
+        Action? cleanup = null;
         try
         {
             foreach (var (toggle, value) in toggles) _sw.SetUserPreferenceToggle((int)toggle, value);
             _sw.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, (int)swSTLQuality_e.swSTLQuality_Coarse);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(stlPath)!);
+            var folder = Path.GetDirectoryName(stlPath)!;
+            Directory.CreateDirectory(folder);
+            var before = new HashSet<string>(Directory.EnumerateFiles(folder), StringComparer.OrdinalIgnoreCase);
+            cleanup = () =>
+            {
+                foreach (var extra in Directory.EnumerateFiles(folder).Where(f => !before.Contains(f) && !string.Equals(f, stlPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    try { File.Delete(extra); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                }
+            };
             int errors = 0, warnings = 0;
             var saved = doc.Extension.SaveAs(stlPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
                 (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, ref errors, ref warnings);
@@ -410,6 +470,7 @@ internal sealed class SolidWorksSession
         {
             foreach (var (toggle, value) in savedToggles) _sw.SetUserPreferenceToggle((int)toggle, value);
             _sw.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, savedQuality);
+            cleanup?.Invoke();
         }
     }
 
@@ -628,6 +689,26 @@ internal sealed class SolidWorksSession
         int errors = 0, warnings = 0;
         _sw.OpenDoc6(path, (int)type, (int)swOpenDocOptions_e.swOpenDocOptions_Silent, "", ref errors, ref warnings);
         if (errors != 0) AddinLog.Write($"Reopening {path} reported error {errors}, warnings {warnings}");
+    }
+
+    /// <summary>
+    /// Saves the target files that have unsaved changes, wherever they're loaded (their own window or
+    /// inside an assembly). Nothing is closed: SolidWorks doesn't lock files, so Git can read them, and
+    /// assemblies that merely use a target (even with unsaved changes of their own) stay as they are.
+    /// </summary>
+    public void SaveTargets(IEnumerable<string> targets)
+    {
+        foreach (var path in targets)
+        {
+            var doc = FindOpen(path);
+            if (doc == null || !doc.GetSaveFlag()) continue;
+            if (doc.IsOpenedReadOnly()) throw new PdmException($"{Path.GetFileName(path)} has unsaved changes but is open read-only, so they can't be saved.");
+            int errors = 0, warnings = 0;
+            if (!doc.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref errors, ref warnings))
+            {
+                throw new PdmException($"SolidWorks couldn't save {Path.GetFileName(path)} (error {errors}). Save it yourself, then try again.");
+            }
+        }
     }
 
     private static void Save(IModelDoc2 doc)

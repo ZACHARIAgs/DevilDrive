@@ -79,6 +79,19 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckIn_WorksWhileAnotherProgramHasTheFileLoaded_LikeSolidWorks()
+    {
+        Write(_bob, "notes.txt", "bob's notes");
+        var vault = await Open(_bob);
+        // SolidWorks keeps a shared handle on every loaded file (e.g. a part inside an open assembly).
+        using (new FileStream(Path.Combine(_bob, "notes.txt"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            var result = await vault.CheckInAsync(new[] { "notes.txt" }, "checked in with the file loaded");
+            Assert.Empty(result.Failures);
+        }
+    }
+
+    [Fact]
     public async Task GetLatest_WhenVaultChangedMyEditedFile_StopsWithoutOverwriting()
     {
         Write(_bob, "shared.txt", "bob's version");
