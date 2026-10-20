@@ -177,9 +177,6 @@ public sealed class VaultSnapshot
     /// <summary>For admins: vault guard missing or changed, storage rules missing. Fixed by Update Vault Setup.</summary>
     public IReadOnlyList<string> SetupProblems { get; set; } = Array.Empty<string>();
 
-    /// <summary>For admins: how much of the free storage the vault uses (measured at most every 30 minutes).</summary>
-    public StorageUsage? Storage { get; set; }
-
     /// <summary>Folders this PC downloads; null means everything.</summary>
     public IReadOnlyList<string>? DownloadFolders { get; set; }
 }

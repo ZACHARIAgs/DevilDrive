@@ -11,10 +11,6 @@
   // opened in an older one, so the add-in blocks check-ins of newer files. Use null for no check.
   "solidWorksVersion": 2024,
 
-  // Storage meter (admins): GitHub's free Git LFS storage, and when to warn.
-  "storageLimitGB": 10,
-  "storageWarningPercent": 70,
-
   // Ask before checking in files that look like exports (STEP, PDF, DXF...), since every check-in is kept forever.
   "warnOnExports": true,
 

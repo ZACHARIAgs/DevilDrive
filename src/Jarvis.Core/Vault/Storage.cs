@@ -5,29 +5,6 @@ using System.Text.Json;
 
 namespace Jarvis.Core.Vault;
 
-/// <summary>How much Git LFS storage the vault uses: every version of every CAD file ever checked in.</summary>
-public sealed class StorageUsage
-{
-    /// <summary>Total size of all stored versions (what GitHub counts against the free storage).</summary>
-    public long AllVersionsBytes { get; set; }
-    public int VersionCount { get; set; }
-    /// <summary>Size of just the latest version of each file.</summary>
-    public long LatestBytes { get; set; }
-    public int FileCount { get; set; }
-    public double LimitGB { get; set; }
-    public double WarningPercent { get; set; }
-    public DateTimeOffset MeasuredAt { get; set; }
-
-    public double UsedGB => AllVersionsBytes / (1024.0 * 1024 * 1024);
-    public double UsedPercent => LimitGB > 0 ? UsedGB / LimitGB * 100 : 0;
-    public bool OverWarning => UsedPercent >= WarningPercent;
-
-    public static string FormatBytes(long bytes) =>
-        bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.00} GB"
-        : bytes >= 1L << 20 ? $"{bytes / (double)(1L << 20):0.0} MB"
-        : $"{Math.Max(1, bytes / 1024)} KB";
-}
-
 internal sealed class LfsFile
 {
     public LfsFile(string name, long size, string oid, bool checkedOut)
@@ -79,4 +56,9 @@ public static class ExportFiles
     };
 
     public static bool IsExport(string path) => Extensions.Contains(System.IO.Path.GetExtension(path));
+
+    public static string FormatSize(long bytes) =>
+        bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.00} GB"
+        : bytes >= 1L << 20 ? $"{bytes / (double)(1L << 20):0.0} MB"
+        : $"{Math.Max(1, bytes / 1024)} KB";
 }

@@ -208,9 +208,6 @@ public sealed class VaultService : IVaultService
         if (IsAdmin)
         {
             snapshot.SetupProblems = await GetSetupProblemsAsync(ct).ConfigureAwait(false);
-            snapshot.Storage = _storage != null && DateTimeOffset.Now - _storage.MeasuredAt < StorageRecheck
-                ? _storage
-                : await MeasureStorageAsync(ct).ConfigureAwait(false);
         }
         snapshot.DownloadFolders = ParseDownloadFolders(await GetConfigValueAsync("lfs.fetchinclude", ct).ConfigureAwait(false));
         var placeholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1834,48 +1831,6 @@ public sealed class VaultService : IVaultService
         }
     }
 
-    // ---------------------------------------------------------------- Storage meter
-
-    private static readonly TimeSpan StorageRecheck = TimeSpan.FromMinutes(30);
-    private StorageUsage? _storage;
-
-    /// <summary>
-    /// Measures Git LFS storage: every distinct version of every CAD file in the vault's history,
-    /// which is what GitHub counts against the free storage (it never deletes old versions).
-    /// </summary>
-    public async Task<StorageUsage> GetStorageUsageAsync(CancellationToken ct = default)
-    {
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            return await MeasureStorageAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    private async Task<StorageUsage> MeasureStorageAsync(CancellationToken ct)
-    {
-        // --all walks every commit; the upstream ref makes sure versions this PC hasn't merged yet count too.
-        var all = await RunAsync(new[] { "lfs", "ls-files", "--all", "--json" }, ct, TransferTimeout).ConfigureAwait(false);
-        var latest = await RunAsync(new[] { "lfs", "ls-files", "--json" }, ct).ConfigureAwait(false);
-        var versions = LfsFile.Parse(all.StdOut).GroupBy(f => f.Oid).Select(g => g.First()).ToList();
-        var current = LfsFile.Parse(latest.StdOut);
-        _storage = new StorageUsage
-        {
-            AllVersionsBytes = versions.Sum(f => f.Size),
-            VersionCount = versions.Count,
-            LatestBytes = current.Sum(f => f.Size),
-            FileCount = current.Count,
-            LimitGB = Config.StorageLimitGB,
-            WarningPercent = Config.StorageWarningPercent,
-            MeasuredAt = DateTimeOffset.Now,
-        };
-        return _storage;
-    }
-
     // ---------------------------------------------------------------- Export warning
 
     /// <summary>
@@ -1900,10 +1855,10 @@ public sealed class VaultService : IVaultService
                 var info = new FileInfo(ToFullPath(rel));
                 return info.Exists ? info.Length : 0;
             }
-            var list = string.Join("\n", exports.Select(r => $"• {r} ({StorageUsage.FormatBytes(SizeOf(r))})"));
+            var list = string.Join("\n", exports.Select(r => $"• {r} ({ExportFiles.FormatSize(SizeOf(r))})"));
             return $"{(exports.Count == 1 ? "This file looks" : "These files look")} like an export (STEP, PDF, DXF, ...):\n{list}\n\n" +
                    "Exports can be made again from the model whenever they're needed, and every check-in keeps a full copy forever " +
-                   $"in the vault's free {Config.StorageLimitGB:0.#} GB.\n\n" +
+                   "in the vault's storage on GitHub, which is limited.\n\n" +
                    "Check in anyway? (Do check in files you actually send out, like a DXF for cutting or a PDF for a review.)";
         }
         finally

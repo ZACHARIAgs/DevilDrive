@@ -44,7 +44,7 @@ The same setup zip works for every team: which vault you get depends only on whi
 
 ### Saving the vault's storage
 
-The vault lives on GitHub's free plan: **10 GB of storage** (every version of every file ever checked in counts) and **10 GB of downloads a month**, shared by the whole team. Two features help:
+The vault lives on GitHub's free plan: **10 GB of storage** (every version of every file ever checked in counts) and **10 GB of downloads a month**, shared by every repo of the GitHub account or organization that owns the vault. Check usage on GitHub under **Settings → Billing and licensing**. Two features help:
 
 * **Export warning:** checking in a new or changed STEP, PDF, DXF (or similar) asks first, because exports can be made again from the model and each check-in keeps a full copy. Check them in when you actually send them out, like a DXF for cutting. Admins can turn it off with `"warnOnExports": false` in `pdm.json`.
 * **Only download my folders:** in **Settings → What to download**, pick the folders you work on. Get Latest then only downloads files in those folders. Everything else shows as **not downloaded**: you can still see its 3D preview, and you can right-click it and choose **Download** to get it. In SolidWorks, if an assembly uses parts you haven't downloaded, the pane offers **Download missing parts**. Check Out always downloads the real file first.
@@ -262,10 +262,6 @@ One install of Jarvis works with every group you're in; each group has its own v
 * Each vault has its own admins (from that repo's GitHub roles), frozen files, reviews, milestones and Discord channel. Removing a vault from the list doesn't delete its files.
 
 If the club should get app updates from a different code repo (for example your own fork), change `<UpdateRepo>` in `Directory.Build.props` before building.
-
-### Storage meter
-
-Admins see the vault's storage in the status bar ("storage 1.2 GB of 10 GB"), counting every stored version. A banner warns at 70% of the limit. Change the limit and warning point with `storageLimitGB` and `storageWarningPercent` in `pdm.json`. Monthly downloads can't be measured from your PC; check them on GitHub under **Settings → Billing and licensing**.
 
 ### GitHub LFS storage
 

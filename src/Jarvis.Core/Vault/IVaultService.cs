@@ -71,9 +71,6 @@ public interface IVaultService
     /// <summary>Admin: install or repair the GitHub vault guard and storage rules.</summary>
     Task<OperationResult> UpdateVaultSetupAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
-    /// <summary>Git LFS storage used by every stored version (what counts against GitHub's free storage).</summary>
-    Task<StorageUsage> GetStorageUsageAsync(CancellationToken ct = default);
-
     /// <summary>Message asking to confirm checking in new/changed export files (STEP, PDF, DXF...), or null.</summary>
     Task<string?> GetExportWarningAsync(IEnumerable<string> paths, CancellationToken ct = default);
 

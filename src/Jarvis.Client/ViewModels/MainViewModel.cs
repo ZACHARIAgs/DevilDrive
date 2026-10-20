@@ -674,13 +674,6 @@ public sealed class MainViewModel : ViewModelBase
             if (brush != ErrorBrush) brush = WarningBrush;
         }
         _snapshot = snapshot;
-        if (snapshot.Storage != null && snapshot.Storage.OverWarning)
-        {
-            var s = snapshot.Storage;
-            lines.Add($"Admin: the vault uses {s.UsedGB:0.0} GB of the free {s.LimitGB:0.#} GB of storage ({s.UsedPercent:0}%), counting every version ever checked in. " +
-                      "Download use is on GitHub under Settings, Billing. The README lists ways to save space.");
-            if (brush != ErrorBrush) brush = WarningBrush;
-        }
         if (snapshot.PendingCheckIns > 0)
         {
             lines.Add($"You have {snapshot.PendingCheckIns} check-in(s) saved on this PC that haven't reached the vault. Select the files and click Check In to send them.");
@@ -699,10 +692,9 @@ public sealed class MainViewModel : ViewModelBase
         SetBanner(string.Join("\n", lines), brush);
 
         var mine = snapshot.Files.Count(f => f.State == FileState.CheckedOutByMe);
-        var storage = snapshot.Storage != null ? $"  •  storage {StorageUsage.FormatBytes(snapshot.Storage.AllVersionsBytes)} of {snapshot.Storage.LimitGB:0.#} GB" : "";
         var notDownloaded = snapshot.Files.Count(f => f.NotDownloaded);
         var partial = snapshot.DownloadFolders != null ? $"  •  {notDownloaded} not downloaded" : "";
-        InfoText = $"{_vault!.UserDisplayName}{(IsAdmin ? " (admin)" : "")}  •  {mine} checked out to you  •  {snapshot.Files.Count} files{partial}{storage}  •  refreshed {snapshot.RetrievedAt:h:mm tt}";
+        InfoText = $"{_vault!.UserDisplayName}{(IsAdmin ? " (admin)" : "")}  •  {mine} checked out to you  •  {snapshot.Files.Count} files{partial}  •  refreshed {snapshot.RetrievedAt:h:mm tt}";
         OnPropertyChanged(nameof(IsAdmin));
         OnPropertyChanged(nameof(WindowTitle));
     }

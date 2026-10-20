@@ -36,12 +36,6 @@ public sealed class VaultConfig
     /// </summary>
     public int? SolidWorksVersion { get; set; }
 
-    /// <summary>Free Git LFS storage on GitHub (GB); the admin storage meter measures against it.</summary>
-    public double StorageLimitGB { get; set; } = 10;
-
-    /// <summary>Warn admins when the vault uses this much of the storage limit.</summary>
-    public double StorageWarningPercent { get; set; } = 70;
-
     /// <summary>Ask before checking in files that look like exports (STEP, PDF, DXF, ...).</summary>
     public bool WarnOnExports { get; set; } = true;
 
