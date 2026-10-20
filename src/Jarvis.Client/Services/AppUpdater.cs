@@ -20,10 +20,6 @@ public static class AppUpdater
     private static readonly string AddinDll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "Jarvis", "SolidWorksAddin", "Jarvis.SwAddin.dll");
 
-    /// <summary>The add-in as installed before the rename; its update moves it to <see cref="AddinDll"/>.</summary>
-    private static readonly string LegacyAddinDll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "CapstonePDM", "SolidWorksAddin", "CapstonePdm.SwAddin.dll");
-
     /// <summary>Removes the previous exe left behind by the last update.</summary>
     public static void CleanUpAfterUpdate()
     {
@@ -36,9 +32,6 @@ public static class AppUpdater
         {
             // Still in use for a moment after restarting; it's removed next time.
         }
-        // Leftovers of the install from before the rename (see LegacyInstall).
-        var current = Environment.ProcessPath;
-        if (current != null && ExplorerIntegration.IsInstalledCopy(current) && !LegacyInstall.IsLegacyPath(current)) LegacyInstall.RemoveLegacyFolder();
     }
 
     public static async Task CheckAsync(Window owner)
@@ -105,9 +98,8 @@ public static class AppUpdater
     /// <summary>Updates the SolidWorks add-in too, if it's installed and older (Windows asks for permission).</summary>
     private static async Task UpdateAddinAsync(Window owner, Updater updater, ReleaseInfo release, string folder)
     {
-        var dll = File.Exists(AddinDll) ? AddinDll : File.Exists(LegacyAddinDll) ? LegacyAddinDll : null;
-        if (dll == null || release.Find(Updater.AddinAsset) == null) return;
-        var installed = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(dll).ProductVersion) ?? new Version(0, 0, 0, 0);
+        if (!File.Exists(AddinDll) || release.Find(Updater.AddinAsset) == null) return;
+        var installed = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(AddinDll).ProductVersion) ?? new Version(0, 0, 0, 0);
         if (installed >= release.Version) return;
 
         while (Process.GetProcessesByName("SLDWORKS").Length > 0)

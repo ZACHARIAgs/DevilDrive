@@ -19,18 +19,6 @@ public partial class App : Application
         base.OnStartup(e);
         var args = e.Args;
 
-        // Jarvis used to be Capstone PDM: an updated old install moves itself to the new folder first.
-        if (args.Length >= 2 && args[0] == LegacyInstall.FinishArgument)
-        {
-            await LegacyInstall.FinishAsync(args[1]);
-            args = Array.Empty<string>();
-        }
-        else if (args.Length == 0 && LegacyInstall.MoveIfNeeded())
-        {
-            Shutdown();
-            return;
-        }
-
         if (args.Length >= 1 && args[0] == "--register-explorer")
         {
             UpdateExplorerMenu(UserSettings.Load(), force: true);

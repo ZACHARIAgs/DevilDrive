@@ -35,7 +35,6 @@ $ErrorActionPreference = 'Stop'
 if (-not $VaultPath) { $VaultPath = $DefaultVaultPath }
 $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\Jarvis'
 $ExePath    = Join-Path $InstallDir 'Jarvis.exe'
-$LegacyInstallDir = Join-Path $env:LOCALAPPDATA 'Programs\CapstonePDM'   # before the rename (Capstone PDM)
 
 function Write-Step([string]$text) { Write-Host ''; Write-Host "==> $text" -ForegroundColor Cyan }
 function Write-Ok([string]$text)   { Write-Host "    $text" -ForegroundColor Green }
@@ -139,12 +138,6 @@ if ($RepoUrl) {
 
 # 5. The Jarvis app ---------------------------------------------------
 Write-Step 'Installing the Jarvis app'
-if (Test-Path $LegacyInstallDir) {
-    # Jarvis used to be called Capstone PDM. Its settings move over when Jarvis first starts.
-    Get-Process CapstonePDM -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Remove-Item $LegacyInstallDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Ok 'Removed the old Capstone PDM app.'
-}
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if (-not $ClientUrl) { $ClientUrl = $DefaultClientUrl }
 $besideScript = Join-Path $PSScriptRoot 'Jarvis.exe'
@@ -175,8 +168,6 @@ if (Test-Path $ExePath) {
     Write-Ok ('Jarvis.exe SHA-256: ' + (Get-FileHash $ExePath -Algorithm SHA256).Hash.ToLowerInvariant())
     $shell = New-Object -ComObject WScript.Shell
     foreach ($folder in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
-        # The app used to be called Capstone PDM.
-        Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $folder 'Capstone PDM.lnk')
         $shortcut = $shell.CreateShortcut((Join-Path $folder 'Jarvis.lnk'))
         $shortcut.TargetPath = $ExePath
         $shortcut.IconLocation = "$ExePath,0"

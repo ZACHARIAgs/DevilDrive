@@ -64,15 +64,8 @@ Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 
 Copy-Item (Join-Path $dist 'publish\Jarvis.exe') $dist -Force
 
-# Installs from before the rename (Capstone PDM 0.4.0 and older) look for these names to update.
-# They get the new files and move themselves to the Jarvis folders on first start.
-Copy-Item (Join-Path $dist 'Jarvis.exe') (Join-Path $dist 'CapstonePDM.exe') -Force
-if (Test-Path (Join-Path $dist 'Jarvis-SolidWorksAddin.zip')) {
-    Copy-Item (Join-Path $dist 'Jarvis-SolidWorksAddin.zip') (Join-Path $dist 'CapstonePDM-SolidWorksAddin.zip') -Force
-}
-
 # Checksums for the release: the app only installs an update whose SHA-256 matches.
-$released = @('Jarvis.exe', 'Jarvis-Setup.zip', 'Jarvis-SolidWorksAddin.zip', 'CapstonePDM.exe', 'CapstonePDM-SolidWorksAddin.zip') |
+$released = @('Jarvis.exe', 'Jarvis-Setup.zip', 'Jarvis-SolidWorksAddin.zip') |
     Where-Object { Test-Path (Join-Path $dist $_) }
 $sums = foreach ($name in $released) { '{0}  {1}' -f (Get-FileHash (Join-Path $dist $name) -Algorithm SHA256).Hash.ToLowerInvariant(), $name }
 [IO.File]::WriteAllText((Join-Path $dist 'SHA256SUMS'), (($sums -join "`n") + "`n"))

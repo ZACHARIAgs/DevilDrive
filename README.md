@@ -4,8 +4,6 @@ A small PDM (product data management) tool for our SolidWorks files. It stops tw
 
 Under the hood the vault is a private GitHub repo using Git LFS file locking. You never need to type a Git command.
 
-Jarvis used to be called Capstone PDM. If you had Capstone PDM, just accept the update: Jarvis moves itself, your settings, shortcuts, right-click menu and SolidWorks add-in to the new name the first time it starts.
-
 ---
 
 ## For teammates
@@ -323,8 +321,6 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 2. Run `.\scripts\Release-Client.ps1 -Notes "What changed"`. It builds everything and creates release `v<Version>` with the files attached, using your saved GitHub sign-in.
 
 **The code repo is public**, so anyone can download the app from its Releases page (the install link in invite messages) and every copy can update itself without GitHub access to it. The code contains no passwords or keys, and each team's vault stays private. (A fork kept private works too, but then teammates need **Read** access to it for installs and updates.) The repo the app updates from is set by `<UpdateRepo>` in `Directory.Build.props` and baked into the build, so nobody can point the team at a different exe by editing a vault file.
-
-**Old Capstone PDM installs (0.4.0 and older)** look for `CapstonePDM.exe` and `CapstonePDM-SolidWorksAddin.zip` in the latest release, so `Publish-Client.ps1` also writes copies of the new files under those names (listed in `SHA256SUMS`). The updated app then moves itself to `%LocalAppData%\Programs\Jarvis\Jarvis.exe`, moves the settings from `%AppData%\CapstonePDM` to `%AppData%\Jarvis`, fixes the shortcuts and right-click menu, and the add-in installer replaces the old add-in. Drop the copies once nobody runs Capstone PDM anymore.
 
 ### How the commands map to Git
 

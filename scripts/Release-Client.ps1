@@ -41,7 +41,7 @@ if (& git -C $root status --porcelain --untracked-files=no) { throw 'There are u
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Publish-Client.ps1')
 }
-$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'Jarvis-Setup.zip', 'CapstonePDM.exe', 'CapstonePDM-SolidWorksAddin.zip', 'SHA256SUMS') |
+$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'Jarvis-Setup.zip', 'SHA256SUMS') |
     ForEach-Object { Join-Path $dist $_ } | Where-Object { Test-Path $_ }
 if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 

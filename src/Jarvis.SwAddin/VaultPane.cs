@@ -1702,7 +1702,6 @@ internal sealed class VaultPane : UserControl
     private void OpenDesktopApp()
     {
         var exe = Path.Combine(Jarvis.Core.Config.AppFolders.InstallFolder, "Jarvis.exe");
-        if (!File.Exists(exe)) exe = Path.Combine(Jarvis.Core.Config.AppFolders.LegacyInstallFolder, Jarvis.Core.Config.AppFolders.LegacyName + ".exe"); // not moved yet
         if (!File.Exists(exe))
         {
             MessageBox.Show(_sw.MainWindow, $"Jarvis isn't installed at {exe}. Run Setup.cmd.", "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);

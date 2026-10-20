@@ -69,36 +69,3 @@ public class MultiVaultTests
     public void SameRepo_IgnoresDotGitCaseAndSlash(string a, string b, bool same) =>
         Assert.Equal(same, VaultCatalog.SameRepo(a, b));
 }
-
-public class AppFoldersTests
-{
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void MoveLegacy_CopiesOldFilesWithoutOverwriting(bool keepLegacy)
-    {
-        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "jarvis-tests", System.Guid.NewGuid().ToString("N"));
-        var legacy = System.IO.Path.Combine(root, "CapstonePDM");
-        var folder = System.IO.Path.Combine(root, "Jarvis");
-        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(legacy, "Backups"));
-        System.IO.Directory.CreateDirectory(folder);
-        System.IO.File.WriteAllText(System.IO.Path.Combine(legacy, "settings.json"), "old");
-        System.IO.File.WriteAllText(System.IO.Path.Combine(legacy, "Backups", "part.sldprt"), "backup");
-        System.IO.File.WriteAllText(System.IO.Path.Combine(legacy, "watching.json"), "old");
-        System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "watching.json"), "new");
-        try
-        {
-            AppFolders.MoveLegacy(legacy, folder, keepLegacy);
-
-            Assert.Equal("old", System.IO.File.ReadAllText(System.IO.Path.Combine(folder, "settings.json")));
-            Assert.Equal("backup", System.IO.File.ReadAllText(System.IO.Path.Combine(folder, "Backups", "part.sldprt")));
-            Assert.Equal("new", System.IO.File.ReadAllText(System.IO.Path.Combine(folder, "watching.json")));
-            Assert.Equal(keepLegacy, System.IO.Directory.Exists(legacy));
-            AppFolders.MoveLegacy(System.IO.Path.Combine(root, "missing"), folder); // nothing to move
-        }
-        finally
-        {
-            System.IO.Directory.Delete(root, true);
-        }
-    }
-}

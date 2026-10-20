@@ -5,12 +5,9 @@ cloned to the same folder on every PC (the capstone team's is `C:\CapstoneVault`
 commands; the desktop app and the SolidWorks add-in do. No paid services, no AI at runtime. See `README.md`
 (users, admins, developers) and `Capstone PDM Spec.md` (original spec).
 
-Jarvis was called "Capstone PDM" up to 0.4.0 (exe `CapstonePDM.exe`, folders `CapstonePDM`). Migration code
-moves old installs over: `Config/AppFolders` (settings, backups, logs), `Client/Services/LegacyInstall`
-(exe, shortcuts), `ExplorerIntegration` (old menu keys), `Install-SolidWorksAddin.ps1` (old add-in; same
-add-in GUID). Releases also carry `CapstonePDM.exe` and `CapstonePDM-SolidWorksAddin.zip` so 0.4.0 can update.
-Keep these until nobody runs 0.4.0. The vault guard (`vault-template/.github`) still says Capstone PDM on
-purpose: every vault compares it byte for byte and would ask for Update Vault Setup.
+Jarvis was called "Capstone PDM" up to 0.4.0; only the developer had it installed, so there is no migration code.
+The vault guard (`vault-template/.github`) still says Capstone PDM on purpose: every vault compares it byte
+for byte and would ask for Update Vault Setup.
 
 ## Layout
 

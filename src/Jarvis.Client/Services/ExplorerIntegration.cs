@@ -16,10 +16,6 @@ internal static class ExplorerIntegration
     private const string FileMenuKey = @"Software\Classes\*\shell\Jarvis";
     private const string FolderMenuKey = @"Software\Classes\Directory\Background\shell\Jarvis";
 
-    // The menus from before the rename (Capstone PDM).
-    private const string LegacyFileMenuKey = @"Software\Classes\*\shell\CapstonePDM";
-    private const string LegacyFolderMenuKey = @"Software\Classes\Directory\Background\shell\CapstonePDM";
-
     /// <summary>Adds the menus for files and folders inside any of the vaults (one per group).</summary>
     public static void Register(string exePath, IReadOnlyCollection<string> vaultPaths)
     {
@@ -63,8 +59,6 @@ internal static class ExplorerIntegration
     {
         Registry.CurrentUser.DeleteSubKeyTree(FileMenuKey, false);
         Registry.CurrentUser.DeleteSubKeyTree(FolderMenuKey, false);
-        Registry.CurrentUser.DeleteSubKeyTree(LegacyFileMenuKey, false);
-        Registry.CurrentUser.DeleteSubKeyTree(LegacyFolderMenuKey, false);
     }
 
     /// <summary>Only an installed copy registers itself, not a development build.</summary>
