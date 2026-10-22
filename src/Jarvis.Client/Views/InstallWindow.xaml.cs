@@ -26,6 +26,7 @@ public partial class InstallWindow : Window
     private readonly InstallLayout _layout;
     private readonly string _sourceExe;
     private readonly bool _alreadyInstalled;
+    private bool _finished;
     private bool _busy;
 
     public InstallWindow(InstallLayout layout, string sourceExe)
@@ -54,8 +55,19 @@ public partial class InstallWindow : Window
         SetStep(GitStep, Step.Pending, "Install Git and Git LFS, if they're missing (Windows may ask for permission)");
         SetStep(ShortcutStep, Step.Pending, "Add Jarvis to the Desktop and the Start menu");
         SetStep(ExplorerStep, Step.Pending, "Add Jarvis to File Explorer's right-click menu and 3D preview");
+        SetStep(AddinStep, Step.Pending, "Install the SolidWorks add-in (Windows asks for permission)");
+        if (!_alreadyInstalled && !layout.IsTest && !SolidWorksAddinSetup.IsAddinInstalled && SolidWorksAddinSetup.IsSolidWorksInstalled())
+        {
+            AddinChoice.Visibility = Visibility.Visible;
+            OnAddinChoice(this, new RoutedEventArgs());
+        }
         Closing += (_, e) => e.Cancel = _busy;
     }
+
+    private bool WantsAddin => AddinChoice.Visibility == Visibility.Visible && AddinBox.IsChecked == true;
+
+    private void OnAddinChoice(object sender, RoutedEventArgs e) =>
+        AddinStep.Visibility = WantsAddin ? Visibility.Visible : Visibility.Collapsed;
 
     private enum Step { Pending, Working, Done, Problem }
 
@@ -81,13 +93,14 @@ public partial class InstallWindow : Window
     private async void OnInstall(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
-        if (_alreadyInstalled)
+        if (_alreadyInstalled || _finished)
         {
             StartInstalled();
             return;
         }
 
         SetBusy(true);
+        AddinBox.IsEnabled = false;
         StatusText.Text = "";
         try
         {
@@ -129,8 +142,47 @@ public partial class InstallWindow : Window
                 : "File Explorer's menu wasn't added; Jarvis adds it the next time it starts");
         }
 
+        var addinOk = !WantsAddin || await InstallAddinAsync();
+
         SetBusy(false);
-        StartInstalled();
+        if (addinOk)
+        {
+            StartInstalled();
+            return;
+        }
+        // Leave the problem on screen; Jarvis is installed either way.
+        _finished = true;
+        InstallButton.Content = "Open Jarvis";
+        StatusText.Text = "Jarvis is installed. Add the SolidWorks add-in later in Jarvis's Settings.";
+    }
+
+    /// <summary>The add-in from the latest release (SolidWorks has to be closed). False if it wasn't installed.</summary>
+    private async Task<bool> InstallAddinAsync()
+    {
+        while (SolidWorksAddinSetup.IsSolidWorksRunning)
+        {
+            SetStep(AddinStep, Step.Working, "Waiting for SolidWorks to close\u2026");
+            var answer = MessageBox.Show(this,
+                "To install the add-in, close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in; you can add it later in Jarvis's Settings.",
+                "Install the SolidWorks add-in", MessageBoxButton.OKCancel, MessageBoxImage.Information);
+            if (answer != MessageBoxResult.OK)
+            {
+                SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in Jarvis's Settings)");
+                return true;
+            }
+        }
+        SetStep(AddinStep, Step.Working, "Installing the SolidWorks add-in. Click Yes when Windows asks for permission\u2026");
+        try
+        {
+            await SolidWorksAddinSetup.InstallLatestAsync();
+            SetStep(AddinStep, Step.Done, "SolidWorks add-in installed (Jarvis is in SolidWorks' Task Pane)");
+            return true;
+        }
+        catch (Jarvis.Core.Errors.PdmException ex)
+        {
+            SetStep(AddinStep, Step.Problem, "The SolidWorks add-in wasn't installed: " + ex.Message);
+            return false;
+        }
     }
 
     private async Task InstallGitAsync()

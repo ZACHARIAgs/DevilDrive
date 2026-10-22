@@ -19,7 +19,19 @@
             <TextBlock x:Name="GitStep" Style="{StaticResource StepText}" />
             <TextBlock x:Name="ShortcutStep" Style="{StaticResource StepText}" />
             <TextBlock x:Name="ExplorerStep" Style="{StaticResource StepText}" />
+            <TextBlock x:Name="AddinStep" Style="{StaticResource StepText}" Visibility="Collapsed" />
         </StackPanel>
+
+        <!-- Only when SolidWorks is on this PC and the add-in isn't installed yet. -->
+        <Border x:Name="AddinChoice" Visibility="Collapsed" Margin="0,12,0,0" Padding="10,8" Background="#F8FAFC"
+                BorderBrush="#E2E5EA" BorderThickness="1" CornerRadius="4">
+            <StackPanel>
+                <CheckBox x:Name="AddinBox" IsChecked="True" FontWeight="SemiBold" Content="Also install the SolidWorks add-in"
+                          Checked="OnAddinChoice" Unchecked="OnAddinChoice" />
+                <TextBlock Foreground="#555" TextWrapping="Wrap" Margin="20,3,0,0"
+                           Text="Check files out and in from SolidWorks' task pane. SolidWorks must be closed, and Windows asks for permission once. You can add it later in Jarvis's Settings." />
+            </StackPanel>
+        </Border>
 
         <ProgressBar x:Name="Progress" Height="8" Margin="0,12,0,0" Visibility="Collapsed" />
         <TextBlock x:Name="StatusText" Foreground="#555" TextWrapping="Wrap" Margin="0,6,0,0" />

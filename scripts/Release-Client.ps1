@@ -70,8 +70,8 @@ catch [System.Net.WebException] {
 $sums = Get-Content (Join-Path $dist 'SHA256SUMS') -Raw
 # Every release starts by saying which file to download.
 $install = "## To install: download **Jarvis.exe** below and open it`n`n" +
-    "Windows may warn you: click **More info**, then **Run anyway**. Click **Install Jarvis**, then follow the welcome screen.`n`n" +
-    "You don't need the other files: Jarvis uses them for updates and to install the SolidWorks add-in (welcome screen or Settings)."
+    "Windows may warn you: click **More info**, then **Run anyway**. Choose whether you also want the SolidWorks add-in, click **Install Jarvis**, then follow the welcome screen.`n`n" +
+    "You don't need the other files: Jarvis uses them for updates and to install the SolidWorks add-in (during setup, or later in Settings)."
 $body = @{
     tag_name         = $tag
     target_commitish = $head
