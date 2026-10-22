@@ -333,7 +333,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Rename / Move | add-in: check out file + referencing files, move the file, `ReplaceReferencedDocument` on each, check in old path + new path + referencing files |
 | Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
 | Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
-| 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; app renders with HelixToolkit |
+| 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
 | File Explorer | per-user `HKCU\Software\Classes\*\shell\Jarvis` cascade with `AppliesTo` = vault path; `Jarvis.exe --explorer <command> <path>`; multi-select merged over a named pipe |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |

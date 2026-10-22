@@ -424,7 +424,8 @@ internal sealed class SolidWorksSession
 
     /// <summary>
     /// Saves an open part/assembly as a small binary STL mesh for the app's 3D viewer. Uses coarse
-    /// quality and one file for assemblies, then puts the user's own STL export settings back.
+    /// quality and one file for assemblies, then puts the user's own STL export settings back. A mesh
+    /// that's still large (usually an assembly) is simplified to <see cref="Jarvis.Core.Preview.PreviewSimplifier.MaxTriangles"/>.
     /// </summary>
     public bool ExportPreview(IModelDoc2 doc, string stlPath)
     {
@@ -461,6 +462,16 @@ internal sealed class SolidWorksSession
                 (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, ref errors, ref warnings);
             if (!saved || !File.Exists(stlPath)) return false;
             FixNameCase(stlPath);
+            // Assemblies with detailed hardware (threads, knurling) come out huge; keep previews small for the vault's storage.
+            try
+            {
+                var (fullSize, simplified) = Jarvis.Core.Preview.PreviewSimplifier.ShrinkIfLarge(stlPath);
+                if (simplified < fullSize) AddinLog.Write($"3D preview of {Path.GetFileName(doc.GetPathName())} simplified from {fullSize} to {simplified} triangles");
+            }
+            catch (Exception ex)
+            {
+                AddinLog.Write($"3D preview of {doc.GetPathName()} kept at full size (simplifying failed): {ex.Message}");
+            }
             return true;
         }
         catch (Exception ex)
