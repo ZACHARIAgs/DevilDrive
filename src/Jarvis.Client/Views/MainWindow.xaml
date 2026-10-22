@@ -195,19 +195,60 @@
 
         <Grid Margin="12,0,12,4">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" MinWidth="140" />
+                <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="*" MinWidth="400" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="320" MinWidth="220" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0,2,0,0">
+            <!-- Folders: click one to see its files (and its subfolders' files); drag files onto one to move them there. -->
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0,6,0,4">
+                <TreeView x:Name="FolderTree" ItemsSource="{Binding Folders}" BorderThickness="0" Background="Transparent"
+                          SelectedItemChanged="OnFolderSelected" AllowDrop="True" DragOver="OnFolderDragOver" Drop="OnFolderDrop"
+                          PreviewMouseRightButtonDown="OnFolderRightClick">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                            <Setter Property="Padding" Value="2,3" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
+                                <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="#D4A017"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding CountText}" Foreground="{StaticResource FaintTextBrush}" FontSize="11"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                    <TreeView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="New Folder&#x2026;" Command="{Binding NewFolderCommand}" />
+                            <MenuItem Header="Show in Explorer" Command="{Binding ShowFolderInExplorerCommand}" />
+                            <Separator />
+                            <MenuItem Header="Delete Folder (empty only)" Command="{Binding DeleteFolderCommand}" />
+                        </ContextMenu>
+                    </TreeView.ContextMenu>
+                </TreeView>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0,2,0,0">
             <DataGrid x:Name="FilesGrid"
                       ItemsSource="{Binding FilesView}"
                       AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                       SelectionMode="Extended" SelectionUnit="FullRow"
                       Margin="4,0,4,4"
                       SelectionChanged="OnSelectionChanged"
-                      MouseDoubleClick="OnGridDoubleClick">
+                      MouseDoubleClick="OnGridDoubleClick"
+                      PreviewMouseLeftButtonDown="OnGridMouseDown"
+                      PreviewMouseLeftButtonUp="OnGridMouseUp"
+                      PreviewMouseMove="OnGridMouseMove">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Check Out" Command="{Binding CheckOutCommand}" />
@@ -215,6 +256,8 @@
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
                         <MenuItem Header="Delete Local File&#x2026;" Command="{Binding DeleteLocalCommand}"
                                   ToolTip="Delete files that were made on this PC and never checked in" />
+                        <MenuItem Header="Move to Folder&#x2026;" Command="{Binding MoveToFolderCommand}"
+                                  ToolTip="Move the selected files to another folder (or drag them onto a folder on the left)" />
                         <Separator />
                         <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
                     <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />
@@ -290,10 +333,10 @@
             </DataGrid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
+            <GridSplitter Grid.Column="3" Width="10" HorizontalAlignment="Stretch" />
 
             <!-- Details panel: preview, state, properties, references -->
-            <Border Grid.Column="2" Style="{StaticResource Card}">
+            <Border Grid.Column="4" Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid>
                         <TextBlock Margin="18" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}"

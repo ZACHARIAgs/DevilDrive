@@ -13,6 +13,7 @@ for byte and would ask for Update Vault Setup.
 
 - `src/Jarvis.Core` (netstandard2.0): **all vault logic**, no UI. Shared by both front ends; never duplicate logic in them.
   - `Vault/VaultService.cs`: every PDM command (check out/in, undo, Get Latest, freeze, reviews, milestones, index, snapshot).
+  - `Vault/VaultService.Move.cs`: folders and moving/renaming files (shared by the app's Move to Folder and the add-in's Rename / Move; SolidWorks reference updates go through `IReferenceEditor`).
   - `Vault/VaultCatalog.cs` (find/download vaults), `VaultCreator.cs` (New team vault: private repo + template), `VaultInvites.cs`; `Git/GitHubApi.cs` (REST calls with the saved GCM token), `Git/GitHubSignIn.cs` (first-run checks).
   - `Vault/FileTree.cs`: files-in-use tree rows from SolidWorks components (pure, unit-tested).
   - `Git/GitRunner.cs` runs git.exe; `GitErrorClassifier` maps stderr to typed `PdmException`s with user-facing messages.

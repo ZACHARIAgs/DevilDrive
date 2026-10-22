@@ -23,7 +23,7 @@ namespace Jarvis.Core.Vault;
 /// Commands are serialized (one Git operation at a time). All awaits use ConfigureAwait(false)
 /// so the library is safe to call from SolidWorks' UI thread in Phase 2.
 /// </summary>
-public sealed class VaultService : IVaultService
+public sealed partial class VaultService : IVaultService
 {
     private static readonly TimeSpan NetworkTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TransferTimeout = TimeSpan.FromMinutes(60);

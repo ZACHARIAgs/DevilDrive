@@ -26,6 +26,7 @@ Go to the **[latest release](https://github.com/aturne59-stack/jarvis/releases/l
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\Jarvis\Backups`.
 * **Delete Local File** (right-click) removes a file you made in the vault folder but never checked in (it shows as *Not in vault*). Files that are in the vault can't be deleted this way. A copy is kept in the same backups folder.
+* **Folders**: the tree on the left shows the vault's folders; click one to see its files (and its subfolders' files). Right-click a folder for **New Folder…** (it reaches teammates once files are in it) or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: Jarvis starts SolidWorks (your team's version) in the background for that, so the first move takes a little longer. Files that are open in SolidWorks have to be closed first.
 * The version you're on is shown at the bottom right of Jarvis and at the bottom of the SolidWorks pane. The add-in updates along with the app: if its update was skipped (SolidWorks was open), Jarvis offers it again at the next start.
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material, ...), what it **contains**, and **where it's used**. Check where-used before changing a part, so you know which assemblies it affects.
@@ -101,7 +102,7 @@ A **read-only file means you haven't checked it out.** Don't clear the read-only
 
 1. Always work inside `C:\CapstoneVault`. Never open copies from Downloads, Discord or email.
 2. Check out before editing.
-3. **Never rename or move files in Windows Explorer.** Use **Rename / Move** in the SolidWorks pane, which updates every assembly and drawing that uses the file.
+3. **Never rename or move files in Windows Explorer.** Use **Move to Folder** in Jarvis or **Rename / Move** in the SolidWorks pane: both update every assembly and drawing that uses the file.
 4. Check in at least daily, with a real comment.
 5. Save the file in SolidWorks before checking in from the app (only saved changes are checked in). The add-in saves it for you.
 6. Follow the team's file naming scheme.
@@ -330,7 +331,7 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Version guard | add-in reads `ISldWorks.VersionHistory` (file version 17000 = 2024, 19000 = 2026) and compares with `pdm.json` `solidWorksVersion` |
 | Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in; Rebuild Index commits them all |
 | Milestones | annotated tag `milestone/<name>` on the vault's latest commit; viewing = `checkout --detach <tag>`, Return to Latest = `checkout main` + Get Latest |
-| Rename / Move | add-in: check out file + referencing files, move the file, `ReplaceReferencedDocument` on each, check in old path + new path + referencing files |
+| Rename / Move, Move to Folder | `VaultService.PlanMoveAsync` / `MoveAsync` (Core): find referencing files with an `IReferenceEditor` (the add-in's SolidWorks, or the app's `SolidWorksAutomation`, which drives the team's SolidWorks over COM, started hidden if needed), check out, move, `ReplaceReferencedDocument` on each, move index entries and previews, check in old paths + new paths + referencing files; everything is put back if a reference can't be updated |
 | Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
 | Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
 | 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
@@ -352,4 +353,4 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 * **SolidWorks doesn't lock files.** It keeps a *shared* handle on every loaded file, so Git can read a saved file while it's open. Check-in therefore saves the targets in place (`SaveTargets`) instead of closing documents, and Core only refuses files nobody can read (`FileUtil.IsUnreadable`). Get Latest and Undo still close and reopen, because they replace files on disk.
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.
 * **Log:** `%LocalAppData%\Jarvis\addin.log`.
-* **Rename / Move** (`VaultPane.RenameAsync`) finds referencing files by reading them with `GetDocumentDependencies2` rather than trusting the index, and rolls back if any reference update fails.
+* **Rename / Move** (`VaultPane.RenameAsync`) and the app's **Move to Folder** share `VaultService.MoveAsync`. Referencing files are found by reading them with `GetDocumentDependencies2` rather than trusting the index (the index is only used for files that aren't downloaded). The app calls SolidWorks by name through `IDispatch` (`Type.InvokeMember`): `dynamic` fails when two SolidWorks versions are installed, because their type information isn't available.

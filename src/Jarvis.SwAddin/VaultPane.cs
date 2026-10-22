@@ -1456,141 +1456,31 @@ internal sealed class VaultPane : UserControl
     private async Task RenameAsync()
     {
         var oldPath = _currentPath;
-        var file = CurrentFile;
-        if (oldPath == null || _vault == null || _snapshot == null || file == null) return;
+        if (oldPath == null || _vault == null || _snapshot == null || CurrentFile == null) return;
 
         using var form = new RenameForm(oldPath, _vault.VaultRoot);
         if (form.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
-        var newPath = form.NewPath;
+        var move = new FileMove(_vault.ToRelativePath(oldPath), _vault.ToRelativePath(form.NewPath));
 
-        // Find everything that references this file. Read from the files themselves (not the index) so nothing is missed.
-        SetStatus("Finding files that use it…");
-        var candidates = _snapshot.Files
-            .Where(f => f.ExistsLocally && IsSolidWorksFile(f.RelativePath))
-            .Select(f => _vault.ToFullPath(f.RelativePath))
-            .Where(p => !string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var parents = new List<string>();
-        for (var i = 0; i < candidates.Count; i++)
+        // The same move as Jarvis's Move to Folder (Core), with this SolidWorks updating the files that use it.
+        var editor = new AddinReferenceEditor(_sw, this);
+        await RunAsync("Finding files that use it\u2026", async progress =>
         {
-            if (i % 10 == 0)
+            var plan = await _vault.PlanMoveAsync(new[] { move }, editor, progress);
+            if (!plan.CanMove)
             {
-                SetStatus($"Finding files that use it ({i + 1} of {candidates.Count})…");
-                await Task.Delay(1);
+                throw new PdmException("It can't be renamed right now:\n\n" + string.Join("\n", plan.Problems.Select(p => "\u2022 " + p)) + "\n\nNothing was renamed.");
             }
-            if (_sw.GetReferences(candidates[i], allLevels: false, includeParts: true).Any(r => string.Equals(r, oldPath, StringComparison.OrdinalIgnoreCase)))
+            var users = plan.Parents.Where(p => !string.Equals(p, move.From, StringComparison.OrdinalIgnoreCase)).ToList();
+            var confirm = $"Rename {move.From}\nto {move.To}?";
+            confirm += users.Count > 0
+                ? $"\n\nThese {users.Count} file(s) use it and will be updated and checked in with it:\n" + string.Join("\n", users.Select(p => "\u2022 " + p))
+                : "\n\nNo other vault files use it.";
+            if (MessageBox.Show(_sw.MainWindow, confirm, "Rename / Move", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
             {
-                parents.Add(candidates[i]);
+                return "Rename cancelled.";
             }
-        }
-        SetStatus("");
-
-        var blocked = parents.Select(p => (Path: p, File: FileAt(p)))
-            .Where(x => x.File != null && x.File.State is FileState.CheckedOutByOther or FileState.Frozen or FileState.ModifiedWithoutCheckOut)
-            .ToList();
-        if (blocked.Count > 0)
-        {
-            MessageBox.Show(_sw.MainWindow,
-                "These files use it but can't be updated right now:\n\n" +
-                string.Join("\n", blocked.Select(b => $"• {Path.GetFileName(b.Path)}: " + (b.File!.State switch
-                {
-                    FileState.CheckedOutByOther => $"checked out by {b.File.CheckedOutBy}",
-                    FileState.Frozen => "frozen (an admin must unfreeze it)",
-                    _ => "edited without check-out",
-                }))) +
-                "\n\nNothing was renamed.",
-                "Rename / Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var oldRel = _vault.ToRelativePath(oldPath);
-        var newRel = _vault.ToRelativePath(newPath);
-        var confirm = $"Rename {oldRel}\nto {newRel}?";
-        confirm += parents.Count > 0
-            ? $"\n\nThese {parents.Count} file(s) use it and will be updated and checked in with it:\n" + string.Join("\n", parents.Select(p => "• " + _vault.ToRelativePath(p)))
-            : "\n\nNo other vault files use it.";
-        if (MessageBox.Show(_sw.MainWindow, confirm, "Rename / Move", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-
-        await RunAsync("Renaming…", async progress =>
-        {
-            // 1. Check out the file and every tracked parent (new, never-checked-in parents don't need it).
-            var toCheckOut = new[] { oldPath }.Concat(parents)
-                .Where(p => FileAt(p)?.State is FileState.Available)
-                .ToList();
-            if (toCheckOut.Count > 0)
-            {
-                var checkOut = await _vault.CheckOutAsync(toCheckOut, progress);
-                if (checkOut.Failures.Count > 0) throw checkOut.Failures[0].Error;
-            }
-
-            // 2. Close everything involved so SolidWorks lets go of the files.
-            progress.Report("Closing files…");
-            var involved = new[] { oldPath }.Concat(parents).ToList();
-            var closed = _sw.CloseDocumentsUsing(involved, CloseMode.Save);
-            var replaced = new List<string>();
-            var moved = false;
-            try
-            {
-                // 3. Move the file, then repoint each parent at the new location.
-                progress.Report("Updating references…");
-                Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
-                File.Move(oldPath, newPath);
-                moved = true;
-                foreach (var parent in parents)
-                {
-                    if (!_sw.ReplaceReference(parent, oldPath, newPath))
-                    {
-                        throw new PdmException($"SolidWorks couldn't update the reference in {Path.GetFileName(parent)}.");
-                    }
-                    replaced.Add(parent);
-                }
-            }
-            catch
-            {
-                // Put everything back the way it was.
-                foreach (var parent in replaced) _sw.ReplaceReference(parent, newPath, oldPath);
-                if (moved && File.Exists(newPath) && !File.Exists(oldPath)) File.Move(newPath, oldPath);
-                _sw.Reopen(closed);
-                throw;
-            }
-
-            // 4. Check in the rename (old path removed, new path added) with every updated parent, plus their index entries.
-            var index = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase)
-            {
-                [oldPath] = null,
-                [newPath] = _sw.BuildIndexEntry(newPath, _vault.VaultRoot, file.Index?.Properties),
-            };
-            foreach (var parent in parents) index[parent] = _sw.BuildIndexEntry(parent, _vault.VaultRoot, FileAt(parent)?.Index?.Properties);
-
-            // The 3D preview moves with the file.
-            var oldPreview = VaultPaths.PreviewFor(oldRel);
-            var newPreview = VaultPaths.PreviewFor(newRel);
-            var previews = new List<string>();
-            if (File.Exists(_vault.ToFullPath(oldPreview)))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_vault.ToFullPath(newPreview))!);
-                File.Move(_vault.ToFullPath(oldPreview), _vault.ToFullPath(newPreview));
-                previews.Add(oldPreview);
-                previews.Add(newPreview);
-            }
-
-            var reopen = new ClosedDocuments(string.Equals(closed.ActivePath, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : closed.ActivePath);
-            reopen.Paths.AddRange(closed.Paths.Select(p => string.Equals(p, oldPath, StringComparison.OrdinalIgnoreCase) ? newPath : p));
-            try
-            {
-                var result = await _vault.CheckInAsync(new[] { oldPath, newPath }.Concat(parents).ToList(),
-                    $"Renamed {oldRel} to {newRel}", progress: progress, indexUpdates: index, previews: previews);
-                return Report(result, "Renamed");
-            }
-            catch (PdmException ex)
-            {
-                throw new PdmException(ex.Message + "\n\nThe rename is done on this PC but isn't in the vault yet. Select the renamed file and the files " +
-                                       "that use it in Jarvis and click Check In to finish.", ex.Detail, ex);
-            }
-            finally
-            {
-                _sw.Reopen(reopen);
-            }
+            return Report(await _vault.MoveAsync(plan, editor, VaultService.MoveComment(plan.Moves), progress), "Renamed");
         });
     }
 

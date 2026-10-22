@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -59,6 +60,82 @@ public partial class MainWindow : Window, IDialogs
         }
     }
 
+    // ------------------------------------------------------------ folder tree and dragging files onto it
+
+    private const string DragFormat = "JarvisVaultFiles";
+    private Point? _dragStart;
+    private FileRowViewModel? _pressedSelectedRow;
+
+    private void OnFolderSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is FolderNodeViewModel node) _vm.SelectedFolder = node.Path;
+    }
+
+    /// <summary>Right-clicking a folder selects it first, so its menu acts on that folder.</summary>
+    private void OnFolderRightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (ItemUnder(e.OriginalSource) is { } item)
+        {
+            item.IsSelected = true;
+            item.Focus();
+        }
+    }
+
+    private static TreeViewItem? ItemUnder(object source)
+    {
+        var element = source as DependencyObject;
+        while (element != null && element is not TreeViewItem) element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        return element as TreeViewItem;
+    }
+
+    private void OnGridMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStart = null;
+        _pressedSelectedRow = null;
+        if (e.OriginalSource is not FrameworkElement { DataContext: FileRowViewModel row }) return;
+        _dragStart = e.GetPosition(FilesGrid);
+        // Pressing on a row that's already part of a multi-selection: keep the selection so all of them can be dragged.
+        if (FilesGrid.SelectedItems.Contains(row) && FilesGrid.SelectedItems.Count > 1 && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            _pressedSelectedRow = row;
+            e.Handled = true;
+        }
+    }
+
+    private void OnGridMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        // A plain click (no drag) on a multi-selection selects just that row, as usual.
+        if (_pressedSelectedRow != null) FilesGrid.SelectedItem = _pressedSelectedRow;
+        _pressedSelectedRow = null;
+        _dragStart = null;
+    }
+
+    private void OnGridMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragStart is not { } start || e.LeftButton != MouseButtonState.Pressed || FilesGrid.SelectedItems.Count == 0) return;
+        var now = e.GetPosition(FilesGrid);
+        if (System.Math.Abs(now.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            System.Math.Abs(now.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        _dragStart = null;
+        _pressedSelectedRow = null;
+        var paths = FilesGrid.SelectedItems.Cast<FileRowViewModel>().Select(r => r.Path).ToArray();
+        DragDrop.DoDragDrop(FilesGrid, new DataObject(DragFormat, paths), DragDropEffects.Move);
+    }
+
+    private void OnFolderDragOver(object sender, DragEventArgs e)
+    {
+        var target = ItemUnder(e.OriginalSource);
+        e.Effects = e.Data.GetDataPresent(DragFormat) && target?.DataContext is FolderNodeViewModel ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnFolderDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DragFormat) is not string[] paths || ItemUnder(e.OriginalSource)?.DataContext is not FolderNodeViewModel folder) return;
+        e.Handled = true;
+        await _vm.MoveFilesAsync(paths, folder.Path);
+    }
+
     // ------------------------------------------------------------ IDialogs
 
     public void ShowError(PdmException error) => new ErrorWindow(error) { Owner = this }.ShowDialog();
@@ -68,6 +145,18 @@ public partial class MainWindow : Window, IDialogs
 
     public bool Confirm(string title, string message) =>
         MessageBox.Show(this, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK;
+
+    public string? AskText(string title, string prompt, string initial, Func<string, string?> problem)
+    {
+        var dialog = new TextPromptWindow(title, prompt, initial, problem) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Value : null;
+    }
+
+    public string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, Func<string, string, string> createFolder)
+    {
+        var dialog = new FolderPickerWindow(title, vaultName, folders, current, createFolder) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Folder : null;
+    }
 
     public CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null)
     {

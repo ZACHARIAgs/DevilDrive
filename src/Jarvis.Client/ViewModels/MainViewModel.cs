@@ -17,7 +17,7 @@ using Jarvis.Core.Vault;
 
 namespace Jarvis.Client.ViewModels;
 
-public sealed class MainViewModel : ViewModelBase
+public sealed partial class MainViewModel : ViewModelBase
 {
     private static readonly Brush InfoBrush = Frozen(0xE3, 0xF2, 0xFD);
     private static readonly Brush WarningBrush = Frozen(0xFF, 0xF3, 0xE0);
@@ -50,6 +50,7 @@ public sealed class MainViewModel : ViewModelBase
         CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanEdit && CheckInTargets().Count > 0);
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
         DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
+        InitializeFolderCommands();
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
@@ -476,6 +477,7 @@ public sealed class MainViewModel : ViewModelBase
             _vault = null;
             Files.Clear();
             _rows.Clear();
+            RebuildFolders();
             SetBanner("No vault on this PC yet. Click Vaults to find your team's vault on GitHub, or to create a new team vault.", InfoBrush);
             StatusText = "No vault open";
             OnPropertyChanged(nameof(WindowTitle));
@@ -491,6 +493,7 @@ public sealed class MainViewModel : ViewModelBase
             _vault = null;
             Files.Clear();
             _rows.Clear();
+            RebuildFolders();
             SetBanner(ex.Message + " Use Settings to choose the vault folder.", ErrorBrush);
             StatusText = "No vault open";
             OnPropertyChanged(nameof(WindowTitle));
@@ -498,6 +501,8 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
+        _selectedFolder = "";
+        OnPropertyChanged(nameof(SelectedFolder));
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(IsAdmin));
         LoadVaults();
@@ -640,6 +645,7 @@ public sealed class MainViewModel : ViewModelBase
             _dialogs.Notify($"{free.Name} is free now{by}. You can check it out.");
             if (_rows.TryGetValue(free.RelativePath, out var freeRow)) freeRow.IsWatched = false;
         }
+        RebuildFolders();
         FilesView.Refresh();
         UpdateDetails(reloadThumbnail: false);
 
@@ -720,6 +726,7 @@ public sealed class MainViewModel : ViewModelBase
 
     private bool MatchesFilter(FileRowViewModel row)
     {
+        if (!InSelectedFolder(row)) return false;
         if (SearchText.Length > 0 && !MatchesSearch(row)) return false;
         var f = row.File;
         return FilterIndex switch

@@ -68,4 +68,11 @@ public interface IDialogs
     /// <summary>A small message in the corner of the screen that goes away by itself.</summary>
     void Notify(string message);
     void Show3D(string title, System.Windows.Media.Media3D.Model3D model);
+    /// <summary>Asks for a short text (e.g. a folder name); <paramref name="problem"/> says what's wrong with a value, or null. Null if cancelled.</summary>
+    string? AskText(string title, string prompt, string initial, System.Func<string, string?> problem);
+    /// <summary>
+    /// Picks a folder (vault-relative, "" = top of the vault) from <paramref name="folders"/>; <paramref name="createFolder"/>
+    /// makes a new one (parent, name) and returns its path. Null if cancelled.
+    /// </summary>
+    string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, System.Func<string, string, string> createFolder);
 }

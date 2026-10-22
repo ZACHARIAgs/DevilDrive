@@ -214,6 +214,197 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.DoesNotContain(snapshot.Files, f => f.RelativePath == ".gitattributes");
     }
 
+    // ------------------------------------------------------------ moving files into folders
+
+    /// <summary>Stands in for SolidWorks: which file uses which, and the reference rewrites it was asked for.</summary>
+    private sealed class FakeSolidWorks : IReferenceEditor
+    {
+        public Dictionary<string, List<string>> Uses { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<string> Released { get; } = new();
+        public bool Restored { get; private set; }
+        public bool FailReplace { get; set; }
+
+        public IReadOnlyList<string> GetReferences(string fullPath) =>
+            Uses.TryGetValue(Path.GetFullPath(fullPath), out var list) ? list : new List<string>();
+
+        public bool ReplaceReference(string referencingFile, string oldReference, string newReference)
+        {
+            if (FailReplace) return false;
+            var list = Uses[Path.GetFullPath(referencingFile)];
+            list[list.FindIndex(r => string.Equals(r, oldReference, StringComparison.OrdinalIgnoreCase))] = newReference;
+            File.AppendAllText(referencingFile, " -> " + Path.GetFileName(Path.GetDirectoryName(newReference)));
+            return true;
+        }
+
+        public void Release(IReadOnlyList<string> fullPaths) => Released.AddRange(fullPaths);
+
+        public void Restore(IReadOnlyDictionary<string, string> movedFullPaths) => Restored = true;
+    }
+
+    private void AliceAddsAssemblyAndDrawing()
+    {
+        // .sldasm/.slddrw aren't lockable in this test vault (no lock server here), but they're SolidWorks files.
+        Write(_alice, "bracket.sldasm", "bracket");
+        Write(_alice, "frame.slddrw", "drawing");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "add assembly and drawing");
+        Git(_alice, "push");
+    }
+
+    [Fact]
+    public async Task Move_IntoANewFolder_ChecksInOneChange_ThatTeammatesGet()
+    {
+        var alice = await Open(_alice);
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "notes.txt", "mine.txt" }, "Docs/Old"), editor: null);
+
+        Assert.True(plan.CanMove, string.Join(" ", plan.Problems));
+        Assert.Empty(plan.Parents);
+        var result = await alice.MoveAsync(plan, null, VaultService.MoveComment(plan.Moves));
+
+        Assert.Empty(result.Failures);
+        Assert.False(File.Exists(Path.Combine(_alice, "notes.txt")));
+        Assert.Equal("v1", Read(_alice, "Docs/Old/notes.txt"));
+
+        var bob = await Open(_bob);
+        await bob.GetLatestAsync();
+        Assert.Equal("v1", Read(_bob, "Docs/Old/mine.txt"));
+        Assert.False(File.Exists(Path.Combine(_bob, "notes.txt")));
+        var latest = (await bob.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "Docs/Old/notes.txt");
+        Assert.Equal("Moved 2 files to Docs/Old", latest.LatestVersion!.Comment);
+    }
+
+    [Fact]
+    public async Task Move_APartAnAssemblyUses_RepointsTheAssembly_InTheSameCheckIn()
+    {
+        AliceAddsAssemblyAndDrawing();
+        var solidWorks = new FakeSolidWorks();
+        solidWorks.Uses[Path.Combine(_alice, "frame.slddrw")] = new List<string> { Path.Combine(_alice, "bracket.sldasm") };
+        var alice = await Open(_alice);
+
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "bracket.sldasm" }, "Frame"), solidWorks);
+        Assert.True(plan.CanMove, string.Join(" ", plan.Problems));
+        Assert.Equal(new[] { "frame.slddrw" }, plan.Parents);
+
+        await alice.MoveAsync(plan, solidWorks, VaultService.MoveComment(plan.Moves));
+
+        Assert.Equal("drawing -> Frame", Read(_alice, "frame.slddrw"));
+        Assert.Equal(Path.Combine(_alice, "Frame", "bracket.sldasm"), solidWorks.Uses[Path.Combine(_alice, "frame.slddrw")].Single());
+        Assert.Contains(Path.Combine(_alice, "frame.slddrw"), solidWorks.Released);
+        Assert.True(solidWorks.Restored);
+        var snapshot = await alice.GetSnapshotAsync(contactVault: false);
+        Assert.All(new[] { "Frame/bracket.sldasm", "frame.slddrw" }, p => Assert.Equal(FileState.Available, snapshot.Files.Single(f => f.RelativePath == p).State));
+        Assert.Equal("Moved bracket.sldasm to Frame", snapshot.Files.Single(f => f.RelativePath == "frame.slddrw").LatestVersion!.Comment);
+    }
+
+    [Fact]
+    public async Task Move_PutsEverythingBack_WhenSolidWorksCantUpdateAReference()
+    {
+        AliceAddsAssemblyAndDrawing();
+        var solidWorks = new FakeSolidWorks();
+        solidWorks.Uses[Path.Combine(_alice, "frame.slddrw")] = new List<string> { Path.Combine(_alice, "bracket.sldasm") };
+        var alice = await Open(_alice);
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "bracket.sldasm" }, "Frame"), solidWorks);
+
+        solidWorks.FailReplace = true;
+        var ex = await Assert.ThrowsAsync<PdmException>(() => alice.MoveAsync(plan, solidWorks, "move"));
+
+        Assert.Contains("Nothing was moved", ex.Message);
+        Assert.True(File.Exists(Path.Combine(_alice, "bracket.sldasm")));
+        Assert.False(File.Exists(Path.Combine(_alice, "Frame", "bracket.sldasm")));
+        Assert.True(solidWorks.Restored);
+    }
+
+    [Fact]
+    public async Task Move_ExplainsWhatsInTheWay()
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, "Docs"));
+        Write(_alice, "Docs/notes.txt", "other notes");
+        Write(_alice, "shared.txt", "edited");
+        var alice = await Open(_alice);
+
+        var sameName = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "notes.txt" }, "Docs"), null);
+        var edited = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "shared.txt" }, "Docs"), null);
+        var noSolidWorks = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "frame.sldprt" }, "Frame"), null);
+
+        Assert.Contains("already a file named notes.txt in Docs", Assert.Single(sameName.Problems));
+        Assert.Contains("changes that aren't checked in", Assert.Single(edited.Problems));
+        Assert.Contains("needs SolidWorks", Assert.Single(noSolidWorks.Problems));
+        Assert.False(sameName.CanMove);
+    }
+
+    [Fact]
+    public async Task Move_ANewFile_OnlyMovesItOnThisPc()
+    {
+        Write(_alice, "sketch.sldasm", "new");
+        var alice = await Open(_alice);
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "sketch.sldasm" }, "Ideas"), new FakeSolidWorks());
+
+        var result = await alice.MoveAsync(plan, new FakeSolidWorks(), "move");
+
+        Assert.Equal("new", Read(_alice, "Ideas/sketch.sldasm"));
+        Assert.Contains("only moved on this PC", Assert.Single(result.Notes));
+        var snapshot = await alice.GetSnapshotAsync(contactVault: false);
+        Assert.Equal(FileState.NotInVault, snapshot.Files.Single(f => f.RelativePath == "Ideas/sketch.sldasm").State);
+    }
+
+    [Fact]
+    public async Task Folders_FromFilesAndFromThisPc_WithoutHiddenOnes()
+    {
+        Directory.CreateDirectory(Path.Combine(_alice, "Frame", "Welded"));
+        Write(_alice, "Frame/Welded/tube.txt", "x");
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm", "index"));
+        Directory.CreateDirectory(Path.Combine(_alice, "Frame", "_versions"));
+        var alice = await Open(_alice);
+
+        var created = alice.CreateFolder("Frame", " Bolts ");
+        var folders = alice.ListFolders(new[] { "Drivetrain/Gears/spur.sldprt", "notes.txt" });
+
+        Assert.Equal("Frame/Bolts", created);
+        Assert.Equal(new[] { "Drivetrain", "Drivetrain/Gears", "Frame", "Frame/Bolts", "Frame/Welded" }, folders);
+        Assert.Throws<PdmException>(() => alice.CreateFolder("Frame", "bolts"));
+    }
+
+    [Theory]
+    [InlineData("Frame", null)]
+    [InlineData("  ", "Type a name")]
+    [InlineData("a/b", "can't contain")]
+    [InlineData("a:b", "can't contain")]
+    [InlineData(".hidden", "start or end with a dot")]
+    [InlineData("CON", "doesn't allow")]
+    public void FolderNameProblem_SaysWhatsWrong(string name, string? problem)
+    {
+        var result = VaultService.FolderNameProblem(name);
+        if (problem == null) Assert.Null(result);
+        else Assert.Contains(problem, result);
+    }
+
+    [Fact]
+    public async Task DeleteEmptyFolder_RefusesFoldersWithFiles()
+    {
+        var alice = await Open(_alice);
+        alice.CreateFolder("", "Empty");
+        alice.CreateFolder("Empty", "Inside");
+        alice.CreateFolder("", "Full");
+        Write(_alice, "Full/part.txt", "x");
+
+        alice.DeleteEmptyFolder("Empty");
+        var ex = Assert.Throws<PdmException>(() => alice.DeleteEmptyFolder("Full"));
+
+        Assert.False(Directory.Exists(Path.Combine(_alice, "Empty")));
+        Assert.Contains("isn't empty", ex.Message);
+        Assert.True(File.Exists(Path.Combine(_alice, "Full", "part.txt")));
+        Assert.Throws<PdmException>(() => alice.DeleteEmptyFolder(""));
+    }
+
+    [Fact]
+    public void MoveComment_SaysWhatHappened()
+    {
+        Assert.Equal("Moved a.sldprt to Frame/Parts", VaultService.MoveComment(new[] { new FileMove("a.sldprt", "Frame/Parts/a.sldprt") }));
+        Assert.Equal("Moved a.sldprt to the top of the vault", VaultService.MoveComment(new[] { new FileMove("Frame/a.sldprt", "a.sldprt") }));
+        Assert.Equal("Renamed Frame/a.sldprt to b.sldprt", VaultService.MoveComment(new[] { new FileMove("Frame/a.sldprt", "Frame/b.sldprt") }));
+        Assert.Equal("Moved 2 files to Docs", VaultService.MoveComment(VaultService.IntoFolder(new[] { "x.txt", "Old/y.txt" }, "Docs")));
+    }
+
     [Fact]
     public async Task DeleteLocalFiles_OnlyDeletesFilesNeverCheckedIn_AndKeepsACopy()
     {
