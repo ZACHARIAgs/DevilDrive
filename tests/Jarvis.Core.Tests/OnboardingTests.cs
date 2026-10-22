@@ -199,6 +199,21 @@ public class OnboardingTests : IDisposable
         Assert.Equal("Zoe Park", again.Name);
     }
 
+    [Fact]
+    public void UpdatePrompt_ShowsOnlyWhatsNew()
+    {
+        var nl = Environment.NewLine;
+        var notes = "## To install: download **Jarvis.exe** below and open it" + nl + nl +
+                    "Windows may warn you: click **More info**, then **Run anyway**." + nl + nl +
+                    "You don't need the other files: Jarvis uses them for updates." + nl + nl +
+                    "What's new: version numbers in the app." + nl + nl +
+                    "**SHA-256 checksums**" + nl + "```" + nl + "abc  Jarvis.exe" + nl + "```";
+
+        Assert.Equal("What's new: version numbers in the app.", Jarvis.Core.Updates.Updater.WhatsNew(notes));
+        Assert.Equal("Older notes", Jarvis.Core.Updates.Updater.WhatsNew("Older notes" + nl + nl + "**SHA-256 checksums**" + nl + "x"));
+        Assert.EndsWith("\u2026", Jarvis.Core.Updates.Updater.WhatsNew(new string('a', 700)));
+    }
+
     // ------------------------------------------------------------ vault folder
 
     [Theory]

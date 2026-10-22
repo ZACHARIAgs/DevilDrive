@@ -149,6 +149,8 @@ internal sealed class VaultPane : UserControl
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
             _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
+            // Which add-in this is, so it can be compared with the app (it updates along with it).
+            new CaptionLabel("Jarvis add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
         });
         Controls.Add(_layout);
         Resize += (_, _) => FitWidths();

@@ -49,10 +49,14 @@ public static class AppUpdater
             return; // Offline or GitHub hiccup: try again next start.
         }
         var current = Updater.CurrentVersion(assembly);
-        if (release == null || release.Version <= current || release.Find(Updater.AppAsset) == null) return;
+        if (release == null) return;
+        if (release.Version <= current || release.Find(Updater.AppAsset) == null)
+        {
+            await OfferAddinUpdateAsync(owner, updater, release, current);
+            return;
+        }
 
-        var notes = release.Notes.Trim();
-        if (notes.Length > 600) notes = notes.Substring(0, 600) + "\u2026";
+        var notes = Updater.WhatsNew(release.Notes);
         var answer = MessageBox.Show(owner,
             $"Jarvis {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
             (notes.Length > 0 ? notes + "\n\n" : "") + "Update now? It takes about a minute and the app restarts.",
@@ -92,18 +96,45 @@ public static class AppUpdater
         Application.Current.Shutdown();
     }
 
+    /// <summary>
+    /// The app is up to date but the add-in is older (its update was skipped, e.g. SolidWorks was open):
+    /// offer it again, so the add-in always ends up on the same version as the app.
+    /// </summary>
+    private static async Task OfferAddinUpdateAsync(Window owner, Updater updater, ReleaseInfo release, Version current)
+    {
+        var installed = SolidWorksAddinSetup.InstalledVersion;
+        if (installed == null || installed >= current || installed >= release.Version || release.Find(Updater.AddinAsset) == null) return;
+        var answer = MessageBox.Show(owner,
+            $"The SolidWorks add-in is version {installed.ToString(3)}, but Jarvis is {current.ToString(3)}. Update the add-in now so they match?\n\n" +
+            "Windows asks for permission once. SolidWorks has to be closed.",
+            "Update the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Information);
+        if (answer != MessageBoxResult.Yes) return;
+        try
+        {
+            owner.Cursor = System.Windows.Input.Cursors.Wait;
+            await UpdateAddinAsync(owner, updater, release, Path.Combine(Path.GetTempPath(), "Jarvis-addin-" + release.Version));
+        }
+        catch (Exception ex) when (ex is PdmException or IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            MessageBox.Show(owner, "The add-in wasn't updated: " + ex.Message + "\n\nJarvis offers it again next time it starts.",
+                "Update the SolidWorks add-in", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            owner.Cursor = null;
+        }
+    }
+
     /// <summary>Updates the SolidWorks add-in too, if it's installed and older (Windows asks for permission).</summary>
     private static async Task UpdateAddinAsync(Window owner, Updater updater, ReleaseInfo release, string folder)
     {
-        var addinDll = SolidWorksAddinSetup.AddinDll;
-        if (!File.Exists(addinDll) || release.Find(Updater.AddinAsset) == null) return;
-        var installed = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(addinDll).ProductVersion) ?? new Version(0, 0, 0, 0);
-        if (installed >= release.Version) return;
+        var installed = SolidWorksAddinSetup.InstalledVersion;
+        if (installed == null || release.Find(Updater.AddinAsset) == null || installed >= release.Version) return;
 
         while (SolidWorksAddinSetup.IsSolidWorksRunning)
         {
             var close = MessageBox.Show(owner,
-                "The SolidWorks add-in will be updated too. Close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in for now.",
+                "The SolidWorks add-in will be updated too. Close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in for now (Jarvis offers it again next time it starts).",
                 "Update the SolidWorks add-in", MessageBoxButton.OKCancel, MessageBoxImage.Information);
             if (close != MessageBoxResult.OK) return;
         }

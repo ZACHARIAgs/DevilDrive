@@ -215,6 +215,41 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteLocalFiles_OnlyDeletesFilesNeverCheckedIn_AndKeepsACopy()
+    {
+        Write(_bob, "scrap part.sldprt", "made here");
+        Write(_bob, "notes.txt", "edited");
+        var bob = await Open(_bob);
+
+        var result = await bob.DeleteLocalFilesAsync(new[] { "scrap part.sldprt", "notes.txt", "shared.txt" });
+
+        Assert.Equal(new[] { "scrap part.sldprt" }, result.Succeeded);
+        Assert.False(File.Exists(Path.Combine(_bob, "scrap part.sldprt")));
+        Assert.Equal(new[] { "notes.txt", "shared.txt" }, result.Failures.Select(f => f.Path));
+        Assert.All(result.Failures, f => Assert.Contains("is in the vault", f.Error.Message));
+        Assert.Equal("edited", Read(_bob, "notes.txt")); // vault files are never touched
+        var backup = Assert.Single(result.Notes);
+        var folder = backup.Substring(backup.IndexOf(FileUtil.BackupRoot, StringComparison.Ordinal)).TrimEnd(',', ' ').Split(',')[0];
+        Assert.Equal("made here", File.ReadAllText(Path.Combine(folder, "scrap part.sldprt")));
+        Assert.DoesNotContain((await bob.GetSnapshotAsync(contactVault: false)).Files, f => f.RelativePath == "scrap part.sldprt");
+    }
+
+    [Fact]
+    public async Task DeleteLocalFiles_RefusesAFileThatIsOpen()
+    {
+        Write(_bob, "open part.sldprt", "in SolidWorks");
+        var bob = await Open(_bob);
+
+        using (new FileStream(Path.Combine(_bob, "open part.sldprt"), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var result = await bob.DeleteLocalFilesAsync(new[] { "open part.sldprt" });
+            Assert.Empty(result.Succeeded);
+            Assert.IsType<FileInUseException>(Assert.Single(result.Failures).Error);
+        }
+        Assert.True(File.Exists(Path.Combine(_bob, "open part.sldprt")));
+    }
+
+    [Fact]
     public async Task UndoCheckOut_OfEditedFile_RestoresVaultVersion_AndKeepsBackup()
     {
         Write(_bob, "notes.txt", "mistake");

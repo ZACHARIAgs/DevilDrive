@@ -374,7 +374,7 @@ public sealed class VaultService : IVaultService
         await EnsureNotViewingMilestoneAsync(ct).ConfigureAwait(false);
         if (fetch)
         {
-            progress?.Report("Contacting the vault…");
+            progress?.Report("Contacting the vault\u2026");
             await FetchAsync(ct).ConfigureAwait(false);
         }
         if (!await UpstreamExistsAsync(ct).ConfigureAwait(false)) return GetLatestResult.UpToDate;
@@ -408,7 +408,7 @@ public sealed class VaultService : IVaultService
         var pinnedIncoming = pins.Pins.Where(p => incoming.Contains(p.Path)).ToList();
         foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, "HEAD", ct).ConfigureAwait(false);
 
-        progress?.Report($"Getting {incoming.Count} updated file(s) from the vault…");
+        progress?.Report($"Getting {incoming.Count} updated file(s) from the vault\u2026");
         var merge = await RunAsync(new[] { "merge", "--ff", "--no-edit", "--no-stat", "-m", "Merge vault changes", Upstream }, ct, TransferTimeout).ConfigureAwait(false);
         if (!merge.Success)
         {
@@ -511,7 +511,7 @@ public sealed class VaultService : IVaultService
         }
 
         // 2. Lock.
-        progress?.Report("Checking out…");
+        progress?.Report("Checking out\u2026");
         var locks = await GetLocksAsync(ct).ConfigureAwait(false);
         foreach (var rel in targets)
         {
@@ -652,7 +652,7 @@ public sealed class VaultService : IVaultService
         IReadOnlyList<LockInfo> locks = Array.Empty<LockInfo>();
         if (relatives.Any(lockable.Contains))
         {
-            progress?.Report("Checking check-outs…");
+            progress?.Report("Checking check-outs\u2026");
             locks = await GetLocksAsync(ct).ConfigureAwait(false);
         }
 
@@ -678,7 +678,7 @@ public sealed class VaultService : IVaultService
 
         if (changed.Count > 0)
         {
-            progress?.Report("Saving the new version…");
+            progress?.Report("Saving the new version\u2026");
             // Index entries (from the SolidWorks add-in) for the files being checked in go in the same commit.
             var commitPaths = changed.Concat(WriteIndexEntries(indexUpdates, changed))
                 .Concat(await CommittablePreviewsAsync(previews, ct).ConfigureAwait(false)).ToList();
@@ -693,7 +693,7 @@ public sealed class VaultService : IVaultService
             : 1;
         if (ahead > 0)
         {
-            progress?.Report("Sending to the vault…");
+            progress?.Report("Sending to the vault\u2026");
             try
             {
                 await PushWithRetryAsync(progress, ct).ConfigureAwait(false);
@@ -711,7 +711,7 @@ public sealed class VaultService : IVaultService
 
         if (!keepCheckedOut)
         {
-            progress?.Report("Releasing check-outs…");
+            progress?.Report("Releasing check-outs\u2026");
             foreach (var rel in relatives.Where(lockable.Contains))
             {
                 var fileLock = FindLock(locks, rel);
@@ -765,7 +765,7 @@ public sealed class VaultService : IVaultService
             var error = GitErrorClassifier.Classify(push, "check in");
             if (error is PushRejectedException rejected && rejected.Reason == PushRejectReason.OutOfDate && attempt < 3)
             {
-                progress?.Report("Someone checked in at the same moment. Merging and retrying…");
+                progress?.Report("Someone checked in at the same moment. Merging and retrying\u2026");
                 await SyncCoreAsync(progress, ct).ConfigureAwait(false);
                 continue;
             }
@@ -802,7 +802,7 @@ public sealed class VaultService : IVaultService
         var inUse = relatives.Where(r => changes.ContainsKey(r) && FileUtil.IsInUse(ToFullPath(r))).ToList();
         if (inUse.Count > 0) throw new FileInUseException(inUse, "Close them in SolidWorks (without saving), then try again.");
 
-        progress?.Report("Undoing check-out…");
+        progress?.Report("Undoing check-out\u2026");
         string? backupFolder = null;
         var released = new List<string>();
         foreach (var rel in relatives)
@@ -830,7 +830,7 @@ public sealed class VaultService : IVaultService
             }
             if (change != null && change.IsUntracked)
             {
-                result.Fail(rel, new PdmException($"{PathList.Name(rel)} is new and has never been checked in, so there's no vault version to go back to. Delete it yourself if you don't want it."));
+                result.Fail(rel, new PdmException($"{PathList.Name(rel)} is new and has never been checked in, so there's no vault version to go back to. Right-click it and choose Delete Local File if you don't want it."));
                 continue;
             }
             if (fileLock == null && change == null)
@@ -875,6 +875,58 @@ public sealed class VaultService : IVaultService
             await NotifyAsync(new VaultEvent(VaultEventKind.UndoCheckOut, UserDisplayName, released), result).ConfigureAwait(false);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Deletes files that are only on this PC (made in the vault folder, never checked in). A copy goes
+    /// to the backups folder first. Files that are in the vault are refused: those leave through check-in.
+    /// </summary>
+    public async Task<OperationResult> DeleteLocalFilesAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var relatives = Normalize(paths);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = new OperationResult();
+            var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
+            progress?.Report("Deleting\u2026");
+            string? backupFolder = null;
+            foreach (var rel in relatives)
+            {
+                var full = ToFullPath(rel);
+                if (!changes.TryGetValue(rel, out var change) || !change.IsUntracked || !File.Exists(full))
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} is in the vault, so it can't be deleted here (only files that were never checked in can)."));
+                    continue;
+                }
+                if (FileUtil.IsInUse(full))
+                {
+                    result.Fail(rel, new FileInUseException(new[] { rel }, "Close it in SolidWorks, then try again."));
+                    continue;
+                }
+                try
+                {
+                    backupFolder ??= FileUtil.NewBackupFolder();
+                    FileUtil.Backup(full, backupFolder, rel);
+                    FileUtil.SetReadOnly(full, false);
+                    File.Delete(full);
+                    result.Succeeded.Add(rel);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    result.Fail(rel, new PdmException($"{PathList.Name(rel)} couldn't be deleted: {ex.Message}", ex.ToString()));
+                }
+            }
+            if (result.Succeeded.Count > 0 && backupFolder != null)
+            {
+                result.Notes.Add($"A copy was kept in {backupFolder}, just in case.");
+            }
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     // ---------------------------------------------------------------- History and restore
@@ -924,7 +976,7 @@ public sealed class VaultService : IVaultService
                 throw new PdmException($"{PathList.Name(rel)} is checked out to you. Check it in or undo the check-out before using an older version.");
             }
 
-            progress?.Report($"Getting version {version.Version} of {PathList.Name(rel)}…");
+            progress?.Report($"Getting version {version.Version} of {PathList.Name(rel)}\u2026");
             await RestoreWorkingFileAsync(rel, version.CommitId, ct).ConfigureAwait(false);
             var latest = (await GetLatestVersionsAsync(ct).ConfigureAwait(false)).TryGetValue(rel, out var head) ? head : null;
             if (latest != null && latest.CommitId == version.CommitId) pins.Remove(rel); // that's just the latest
@@ -1000,7 +1052,7 @@ public sealed class VaultService : IVaultService
                     result.Fail(rel, new PdmException($"{PathList.Name(rel)} already uses the latest version."));
                     continue;
                 }
-                progress?.Report($"Getting the latest {PathList.Name(rel)}…");
+                progress?.Report($"Getting the latest {PathList.Name(rel)}\u2026");
                 await RestoreWorkingFileAsync(rel, "HEAD", ct).ConfigureAwait(false);
                 pins.Remove(rel);
                 result.Succeeded.Add(rel);
@@ -1055,7 +1107,7 @@ public sealed class VaultService : IVaultService
                 notes.Add($"Your unsaved changes to {PathList.Name(rel)} were backed up to {backupFolder}.");
             }
 
-            progress?.Report($"Getting version {version.Version}…");
+            progress?.Report($"Getting version {version.Version}\u2026");
             await RunCheckedAsync("restore the old version", new[] { "checkout", version.CommitId, "--", rel }, ct, TransferTimeout).ConfigureAwait(false);
             FileUtil.SetReadOnly(full, false);
 
@@ -1147,7 +1199,7 @@ public sealed class VaultService : IVaultService
         var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
         var locks = await GetLocksAsync(ct).ConfigureAwait(false);
 
-        progress?.Report("Freezing…");
+        progress?.Report("Freezing\u2026");
         var toFreeze = new List<string>();
         foreach (var rel in relatives)
         {
@@ -1223,7 +1275,7 @@ public sealed class VaultService : IVaultService
             var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
             var locks = await GetLocksAsync(ct).ConfigureAwait(false);
 
-            progress?.Report("Unfreezing…");
+            progress?.Report("Unfreezing\u2026");
             var unfrozen = new List<string>();
             foreach (var rel in relatives)
             {
@@ -1321,7 +1373,7 @@ public sealed class VaultService : IVaultService
         if (!commit.Success && !nothingToCommit) throw GitErrorClassifier.Classify(commit, "save to the vault");
         try
         {
-            progress?.Report("Sending to the vault…");
+            progress?.Report("Sending to the vault\u2026");
             await PushWithRetryAsync(progress, ct).ConfigureAwait(false);
         }
         catch (PdmException ex)
@@ -1572,7 +1624,7 @@ public sealed class VaultService : IVaultService
                 .ToList();
             if (mine.Count == 0) return result;
 
-            progress?.Report("Checking in files an admin asked for…");
+            progress?.Report("Checking in files an admin asked for\u2026");
             await SyncCoreAsync(progress, ct, fetch: false).ConfigureAwait(false);
 
             var changes = ToMap(await GetLocalChangesAsync(ct).ConfigureAwait(false));
@@ -1855,7 +1907,7 @@ public sealed class VaultService : IVaultService
                 var info = new FileInfo(ToFullPath(rel));
                 return info.Exists ? info.Length : 0;
             }
-            var list = string.Join("\n", exports.Select(r => $"• {r} ({ExportFiles.FormatSize(SizeOf(r))})"));
+            var list = string.Join("\n", exports.Select(r => $"\u2022 {r} ({ExportFiles.FormatSize(SizeOf(r))})"));
             return $"{(exports.Count == 1 ? "This file looks" : "These files look")} like an export (STEP, PDF, DXF, ...):\n{list}\n\n" +
                    "Exports can be made again from the model whenever they're needed, and every check-in keeps a full copy forever " +
                    "in the vault's storage on GitHub, which is limited.\n\n" +
@@ -1898,7 +1950,7 @@ public sealed class VaultService : IVaultService
                 await RunCheckedAsync("save the download folders", new[] { "config", "--local", "lfs.fetchinclude", string.Join(",", patterns) }, ct).ConfigureAwait(false);
             }
 
-            progress?.Report("Downloading files in the chosen folders…");
+            progress?.Report("Downloading files in the chosen folders\u2026");
             await RunCheckedAsync("download files", new[] { "lfs", "pull" }, ct, TransferTimeout).ConfigureAwait(false);
         }
         finally
@@ -1914,7 +1966,7 @@ public sealed class VaultService : IVaultService
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            progress?.Report($"Downloading {PathList.Format(relatives)}…");
+            progress?.Report($"Downloading {PathList.Format(relatives)}\u2026");
             await DownloadCoreAsync(relatives, ct).ConfigureAwait(false);
         }
         finally
@@ -1981,7 +2033,7 @@ public sealed class VaultService : IVaultService
             var tag = MilestoneTags.TagFor(name);
             if ((await RunAsync(new[] { "rev-parse", "--verify", "--quiet", "refs/tags/" + tag }, ct).ConfigureAwait(false)).Success)
             {
-                throw new PdmException($"There's already a milestone called “{name}”. Pick a different name.");
+                throw new PdmException($"There's already a milestone called \u201C{name}\u201D. Pick a different name.");
             }
 
             var message = description.Length > 0 ? name + "\n\n" + description : name;
@@ -2019,7 +2071,7 @@ public sealed class VaultService : IVaultService
             }
             await EnsureFilesFreeAsync("HEAD", tag, ct).ConfigureAwait(false);
 
-            progress?.Report("Getting the milestone's files…");
+            progress?.Report("Getting the milestone's files\u2026");
             await RunCheckedAsync("view the milestone", new[] { "checkout", "--quiet", "--detach", tag }, ct, TransferTimeout).ConfigureAwait(false);
         }
         finally
@@ -2037,7 +2089,7 @@ public sealed class VaultService : IVaultService
             if (await GetViewingMilestoneAsync(ct).ConfigureAwait(false) != null)
             {
                 await EnsureFilesFreeAsync("HEAD", Config.Branch, ct).ConfigureAwait(false);
-                progress?.Report("Returning to the latest files…");
+                progress?.Report("Returning to the latest files\u2026");
                 await RunCheckedAsync("return to the latest files", new[] { "checkout", "--quiet", Config.Branch }, ct, TransferTimeout).ConfigureAwait(false);
             }
             return await SyncCoreAsync(progress, ct).ConfigureAwait(false);

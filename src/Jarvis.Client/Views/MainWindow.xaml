@@ -182,6 +182,10 @@
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
+                <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource FaintTextBrush}" Margin="10,0,0,0"
+                           ToolTip="Jarvis checks for a newer version each time it starts" />
+            </StatusBarItem>
+            <StatusBarItem DockPanel.Dock="Right">
                 <TextBlock Text="{Binding InfoText}" Foreground="{StaticResource MutedTextBrush}" />
             </StatusBarItem>
             <StatusBarItem>
@@ -209,6 +213,8 @@
                         <MenuItem Header="Check Out" Command="{Binding CheckOutCommand}" />
                         <MenuItem Header="Check In&#x2026;" Command="{Binding CheckInCommand}" />
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
+                        <MenuItem Header="Delete Local File&#x2026;" Command="{Binding DeleteLocalCommand}"
+                                  ToolTip="Delete files that were made on this PC and never checked in" />
                         <Separator />
                         <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
                     <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />

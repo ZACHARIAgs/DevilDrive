@@ -29,6 +29,7 @@ public interface IVaultService
     Task<OperationResult> CheckInAsync(IEnumerable<string> paths, string comment, bool keepCheckedOut = false, IProgress<string>? progress = null, CancellationToken ct = default,
         IReadOnlyDictionary<string, IndexEntry?>? indexUpdates = null, IReadOnlyList<string>? previews = null);
     Task<OperationResult> UndoCheckOutAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
+    Task<OperationResult> DeleteLocalFilesAsync(IEnumerable<string> paths, IProgress<string>? progress = null, CancellationToken ct = default);
 
     Task<IReadOnlyList<FileVersion>> GetHistoryAsync(string path, CancellationToken ct = default);
     Task<OperationResult> RestoreVersionAsync(string path, FileVersion version, string comment, IProgress<string>? progress = null, CancellationToken ct = default);

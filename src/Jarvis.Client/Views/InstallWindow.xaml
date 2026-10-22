@@ -28,7 +28,7 @@
             <StackPanel>
                 <CheckBox x:Name="AddinBox" IsChecked="True" FontWeight="SemiBold" Content="Also install the SolidWorks add-in"
                           Checked="OnAddinChoice" Unchecked="OnAddinChoice" />
-                <TextBlock Foreground="#555" TextWrapping="Wrap" Margin="20,3,0,0"
+                <TextBlock x:Name="AddinNote" Foreground="#555" TextWrapping="Wrap" Margin="20,3,0,0"
                            Text="Check files out and in from SolidWorks' task pane. SolidWorks must be closed, and Windows asks for permission once. You can add it later in Jarvis's Settings." />
             </StackPanel>
         </Border>

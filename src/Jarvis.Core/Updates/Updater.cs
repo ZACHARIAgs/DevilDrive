@@ -143,6 +143,25 @@ public sealed class Updater
         return path;
     }
 
+    /// <summary>
+    /// The part of a release's notes worth showing in the update prompt: without the install
+    /// instructions at the top (they end with "You don't need the other files") and the checksums at the end.
+    /// </summary>
+    public static string WhatsNew(string notes)
+    {
+        var text = (notes ?? "").Replace("\r\n", "\n");
+        var checksums = text.IndexOf("**SHA-256 checksums**", StringComparison.Ordinal);
+        if (checksums >= 0) text = text.Substring(0, checksums);
+        var install = text.IndexOf("You don't need the other files", StringComparison.Ordinal);
+        if (install >= 0)
+        {
+            var lineEnd = text.IndexOf('\n', install);
+            text = lineEnd < 0 ? "" : text.Substring(lineEnd + 1);
+        }
+        text = text.Trim();
+        return text.Length > 600 ? text.Substring(0, 600) + "\u2026" : text;
+    }
+
     /// <summary>Lines like "&lt;sha256&gt;  &lt;file name&gt;" (sha256sum / Get-FileHash format).</summary>
     public static Dictionary<string, string> ParseChecksums(string text)
     {

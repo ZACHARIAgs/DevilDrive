@@ -49,6 +49,7 @@ public sealed class MainViewModel : ViewModelBase
         CheckOutCommand = new RelayCommand(async () => await CheckOutAsync(), () => CanEdit && CheckOutTargets().Count > 0);
         CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanEdit && CheckInTargets().Count > 0);
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
+        DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
@@ -80,6 +81,10 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand CheckOutCommand { get; }
     public ICommand CheckInCommand { get; }
     public ICommand UndoCheckOutCommand { get; }
+    public ICommand DeleteLocalCommand { get; }
+
+    /// <summary>"Jarvis 0.6.4" for the status bar.</summary>
+    public string VersionText { get; } = "Jarvis " + Jarvis.Core.Updates.Updater.CurrentVersion(System.Reflection.Assembly.GetExecutingAssembly()).ToString(3);
     public ICommand HistoryCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand BreakLockCommand { get; }
@@ -850,6 +855,20 @@ public sealed class MainViewModel : ViewModelBase
         if (!_dialogs.Confirm("Undo Check Out", message)) return Task.CompletedTask;
         return RunAsync("Undoing check-out…", async (vault, progress) =>
             Report(await vault.UndoCheckOutAsync(targets, progress), "Undid check-out"));
+    }
+
+    /// <summary>Files made in the vault folder that were never checked in.</summary>
+    private List<FileRowViewModel> DeleteLocalTargets() =>
+        _selected.Where(r => r.File.State == FileState.NotInVault && r.File.ExistsLocally).ToList();
+
+    private Task DeleteLocalAsync()
+    {
+        var targets = DeleteLocalTargets().Select(r => r.Path).ToList();
+        if (!_dialogs.Confirm("Delete Local File",
+                $"Delete {PathList.Format(targets)} from this PC?\n\n{(targets.Count == 1 ? "It has" : "They have")} never been checked in, so nobody else has {(targets.Count == 1 ? "it" : "them")}. " +
+                $"A copy is kept in {FileUtil.BackupRoot}, just in case.")) return Task.CompletedTask;
+        return RunAsync("Deleting\u2026", async (vault, progress) =>
+            Report(await vault.DeleteLocalFilesAsync(targets, progress), "Deleted"));
     }
 
     private Task BreakLockAsync()

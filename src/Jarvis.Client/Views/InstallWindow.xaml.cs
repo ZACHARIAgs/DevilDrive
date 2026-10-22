@@ -55,9 +55,17 @@ public partial class InstallWindow : Window
         SetStep(GitStep, Step.Pending, "Install Git and Git LFS, if they're missing (Windows may ask for permission)");
         SetStep(ShortcutStep, Step.Pending, "Add Jarvis to the Desktop and the Start menu");
         SetStep(ExplorerStep, Step.Pending, "Add Jarvis to File Explorer's right-click menu and 3D preview");
-        SetStep(AddinStep, Step.Pending, "Install the SolidWorks add-in (Windows asks for permission)");
-        if (!_alreadyInstalled && !layout.IsTest && !SolidWorksAddinSetup.IsAddinInstalled && SolidWorksAddinSetup.IsSolidWorksInstalled())
+        // Offer the add-in when SolidWorks is here and the add-in is missing, or older than this Jarvis (it updates along with it).
+        var addin = SolidWorksAddinSetup.InstalledVersion;
+        var addinUpdate = addin != null && addin < current;
+        SetStep(AddinStep, Step.Pending, (addinUpdate ? "Update" : "Install") + " the SolidWorks add-in (Windows asks for permission)");
+        if (!_alreadyInstalled && !layout.IsTest && (addin == null || addinUpdate) && SolidWorksAddinSetup.IsSolidWorksInstalled())
         {
+            if (addinUpdate)
+            {
+                AddinBox.Content = $"Also update the SolidWorks add-in ({addin!.ToString(3)} to {current.ToString(3)})";
+                AddinNote.Text = "So the add-in matches this version of Jarvis. SolidWorks must be closed, and Windows asks for permission once.";
+            }
             AddinChoice.Visibility = Visibility.Visible;
             OnAddinChoice(this, new RoutedEventArgs());
         }

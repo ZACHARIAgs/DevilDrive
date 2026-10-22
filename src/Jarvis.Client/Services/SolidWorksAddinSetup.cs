@@ -23,6 +23,10 @@ internal static class SolidWorksAddinSetup
 
     public static bool IsAddinInstalled => File.Exists(AddinDll);
 
+    /// <summary>Version of the installed add-in, or null if it isn't installed.</summary>
+    public static Version? InstalledVersion =>
+        IsAddinInstalled ? Updater.ParseVersion(FileVersionInfo.GetVersionInfo(AddinDll).ProductVersion) ?? new Version(0, 0, 0, 0) : null;
+
     public static bool IsSolidWorksRunning => Process.GetProcessesByName("SLDWORKS").Length > 0;
 
     /// <summary>Any SolidWorks version is installed: SLDWORKS.exe in the SOLIDWORKS Corp folders or where the registry says.</summary>
