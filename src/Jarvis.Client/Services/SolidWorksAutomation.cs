@@ -102,8 +102,8 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
     private const string AddinClsid = "{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}";
 
     /// <summary>
-    /// Asks the Jarvis add-in inside SolidWorks to make index records (properties, references, saved-in version,
-    /// 3D preview) for these files, as a check-in from SolidWorks would. Null if the add-in isn't loaded in this
+    /// Asks the Jarvis add-in inside SolidWorks to make index records (properties, references, saved-in version;
+    /// no 3D previews, see JarvisAddin.RecordFiles) for these files. Null if the add-in isn't loaded in this
     /// SolidWorks (or is older than 0.7.1); the files then get their records at a later check-in from SolidWorks.
     /// </summary>
     public IndexBatch? Record(string vaultRoot, IReadOnlyList<string> fullPaths)

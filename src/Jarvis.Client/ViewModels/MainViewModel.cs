@@ -866,7 +866,7 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// SolidWorks files checked in from the app get their index record and 3D preview right away when the
+    /// SolidWorks files checked in from the app get their index record (not the 3D preview) right away when the
     /// team's SolidWorks is open: the Jarvis add-in in it reads them. SolidWorks isn't started for this (it's slow,
     /// and a SolidWorks started in the background doesn't load add-ins): then the check-in goes ahead without
     /// them, and the next check-in from SolidWorks records them.

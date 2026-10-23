@@ -50,8 +50,10 @@ public sealed class JarvisAddin : ISwAddin
 
     /// <summary>
     /// Called by the desktop app (through SolidWorks' GetAddInObject) when SolidWorks files are checked in
-    /// from the app, which can't read them itself: reads each file's index record and saves its 3D preview,
-    /// exactly as a check-in from this pane does. <paramref name="fullPaths"/> is one path per line.
+    /// from the app, which can't read them itself: reads each file's index record (properties, references,
+    /// saved-in version), as a check-in from this pane does. No 3D previews: SolidWorks refuses the STL export
+    /// while it's answering another program (RPC_E_SERVERFAULT), so those come from the catch-up after the next
+    /// check-in from SolidWorks. <paramref name="fullPaths"/> is one path per line.
     /// Returns an <see cref="Jarvis.Core.Vault.IndexBatch"/> as text ("" if SolidWorks isn't ready).
     /// </summary>
     public string RecordFiles(string vaultRoot, string fullPaths)
@@ -67,10 +69,7 @@ public sealed class JarvisAddin : ISwAddin
             var relative = full.Substring(root.Length + 1).Replace('\\', '/');
             try
             {
-                var preview = SolidWorksSession.CanHavePreview(full) ? Jarvis.Core.Vault.VaultPaths.PreviewFor(relative) : null;
-                var previewFull = preview == null ? null : Path.Combine(root, preview.Replace('/', '\\'));
-                batch.Entries[relative] = session.IndexFile(full, root, previewFull, out var previewSaved);
-                if (previewSaved) batch.Previews.Add(preview!);
+                batch.Entries[relative] = session.IndexFile(full, root, previewPath: null, out _);
             }
             catch (Exception ex)
             {
