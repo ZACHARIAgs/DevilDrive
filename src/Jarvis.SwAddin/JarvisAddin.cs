@@ -35,6 +35,8 @@ public sealed class JarvisAddin : ISwAddin
         try
         {
             _sw = (ISldWorks)ThisSW;
+            // Register this object with SolidWorks, so GetAddInObject hands it to the Jarvis app (RecordFiles).
+            _sw.SetAddinCallbackInfo(0, this, Cookie);
             AddinLog.Write($"Loaded in SolidWorks {_sw.RevisionNumber()}");
             CreatePane(_sw);
             return true;
