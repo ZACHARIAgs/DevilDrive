@@ -299,6 +299,63 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_alice, "mine.txt")));
     }
 
+    /// <summary>bracket.sldasm (assembly) is used by frame.slddrw (drawing); both indexed.</summary>
+    private void AliceAddsIndexedAssemblyAndDrawing()
+    {
+        Write(_alice, "bracket.sldasm", "bracket");
+        Write(_alice, "frame.slddrw", "drawing");
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm", "index"));
+        File.WriteAllText(Path.Combine(_alice, ".pdm", "index", "bracket.sldasm.json"), "{\"references\":[]}");
+        File.WriteAllText(Path.Combine(_alice, ".pdm", "index", "frame.slddrw.json"), "{\"references\":[\"bracket.sldasm\"]}");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "assembly and drawing, indexed");
+        Git(_alice, "push");
+    }
+
+    [Fact]
+    public async Task Delete_RefusesFilesOtherFilesUse()
+    {
+        AliceAddsIndexedAssemblyAndDrawing();
+        var bob = await Open(_bob, login: "bob");
+        await bob.GetLatestAsync();
+        var alice = await Open(_alice, login: "alice", repoAdmin: true);
+
+        var request = await bob.RequestDeleteAsync(new[] { "bracket.sldasm" }, "Replaced by the welded version");
+        var delete = await alice.DeleteFromVaultAsync(new[] { "bracket.sldasm" }, "");
+
+        Assert.Contains("is used in frame.slddrw", Assert.Single(request.Failures).Error.Message);
+        Assert.Contains("is used in frame.slddrw", Assert.Single(delete.Failures).Error.Message);
+        Assert.Empty(delete.Succeeded);
+        Assert.True(File.Exists(Path.Combine(_alice, "bracket.sldasm")));
+    }
+
+    [Fact]
+    public async Task Delete_AllowsAFileTogetherWithEverythingThatUsesIt()
+    {
+        AliceAddsIndexedAssemblyAndDrawing();
+        var alice = await Open(_alice, login: "alice", repoAdmin: true);
+
+        var result = await alice.DeleteFromVaultAsync(new[] { "bracket.sldasm", "frame.slddrw" }, "");
+
+        Assert.Empty(result.Failures);
+        Assert.False(File.Exists(Path.Combine(_alice, "bracket.sldasm")));
+        Assert.False(File.Exists(Path.Combine(_alice, "frame.slddrw")));
+    }
+
+    [Fact]
+    public async Task Delete_RefusesSolidWorksFiles_WhileAnAssemblyIsntIndexed()
+    {
+        AliceAddsAssemblyAndDrawing(); // not indexed: nobody knows what they use
+        var alice = await Open(_alice, login: "alice", repoAdmin: true);
+
+        var part = await alice.DeleteFromVaultAsync(new[] { "frame.sldprt" }, "");
+        var text = await alice.DeleteFromVaultAsync(new[] { "notes.txt" }, "");
+
+        Assert.Contains("Run Rebuild Index", Assert.Single(part.Failures).Error.Message);
+        Assert.Contains("bracket.sldasm, frame.slddrw haven't been indexed", part.Failures[0].Error.Message);
+        Assert.Equal(new[] { "notes.txt" }, text.Succeeded); // not a SolidWorks file: nothing references it
+    }
+
     // ------------------------------------------------------------ moving files into folders
 
     /// <summary>Stands in for SolidWorks: which file uses which, and the reference rewrites it was asked for.</summary>

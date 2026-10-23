@@ -40,20 +40,34 @@ public sealed partial class MainViewModel
         _selected.Where(r => r.File.State is not (FileState.NotInVault or FileState.CheckedOutByOther or FileState.Frozen or FileState.InReview) &&
                              !VersionCopies.IsVersionCopy(r.Path)).ToList();
 
-    /// <summary>Assemblies and drawings (from the index) that use any of these files, other than the files themselves.</summary>
-    private List<string> UsersOf(IReadOnlyCollection<FileRowViewModel> rows) =>
-        rows.SelectMany(r => r.File.UsedIn)
-            .Where(u => !rows.Any(r => string.Equals(r.Path, u, StringComparison.OrdinalIgnoreCase)))
-            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(u => u, StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>
+    /// Only files nothing else uses can be deleted (the vault checks this too). Tells the user right away which
+    /// selected files are still used by an assembly or drawing (from the index) and returns the rest.
+    /// Files selected together don't count: an assembly and the parts only it uses can go together.
+    /// </summary>
+    private List<FileRowViewModel> WithoutUsedFiles(List<FileRowViewModel> rows, string title)
+    {
+        bool Selected(string path) => rows.Any(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
+        var used = rows.Select(r => (Row: r, Users: r.File.UsedIn.Where(u => !Selected(u)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()))
+            .Where(x => x.Users.Count > 0).ToList();
+        if (used.Count == 0) return rows;
+        var rest = rows.Except(used.Select(x => x.Row)).ToList();
+        _dialogs.ShowMessage(title,
+            "Only files that nothing else uses can be deleted. These are still used:\n\n" +
+            string.Join("\n", used.Select(x => $"\u2022 {x.Row.Name} is used in {PathList.Format(x.Users)}")) +
+            "\n\nRemove them from those assemblies or drawings and check those in first (or select those files too, to delete them together)." +
+            (rest.Count > 0 ? $"\n\nContinuing with {PathList.Format(rest.Select(r => r.Path).ToList())}." : ""),
+            isWarning: true);
+        return rest;
+    }
 
     private Task RequestDeleteAsync()
     {
-        var rows = RequestDeleteTargets();
-        var users = UsersOf(rows);
+        var rows = WithoutUsedFiles(RequestDeleteTargets(), "Request Delete");
+        if (rows.Count == 0) return Task.CompletedTask;
         var request = _dialogs.AskCheckIn("Request Delete", "Send Request", rows.Select(r => r.Path).ToList(), "", allowKeepCheckedOut: false,
             prompt: "Why should it be deleted? The admins see this when they decide.",
-            footnote: (users.Count > 0 ? $"Careful: {PathList.Format(users)} use{(users.Count == 1 ? "s" : "")} it. " : "") +
-                      "Nothing is deleted yet: the file stays in the vault until an admin deletes it.");
+            footnote: "Nothing is deleted yet: the file stays in the vault until an admin deletes it.");
         if (request == null) return Task.CompletedTask;
         return RunAsync("Sending the delete request\u2026", async (vault, progress) =>
             Report(await vault.RequestDeleteAsync(rows.Select(r => r.Path), request.Comment, progress), "Asked to delete"));
@@ -80,15 +94,14 @@ public sealed partial class MainViewModel
 
     private Task DeleteFromVaultAsync()
     {
-        var rows = DeleteFromVaultTargets();
-        var users = UsersOf(rows);
+        var rows = WithoutUsedFiles(DeleteFromVaultTargets(), "Delete from Vault");
+        if (rows.Count == 0) return Task.CompletedTask;
         var reasons = rows.Where(r => r.File.DeleteRequest != null)
             .Select(r => $"\u2022 {r.Name}: {r.File.DeleteRequestedBy} asked: \u201C{r.File.DeleteRequest!.Reason}\u201D").ToList();
         var defaultComment = rows.Count == 1 && rows[0].File.DeleteRequest is { } only
             ? $"Deleted {rows[0].Name} ({only.Reason})"
             : $"Deleted {PathList.Format(rows.Select(r => r.Path).ToList())}";
         var footnote = string.Join("\n", reasons) + (reasons.Count > 0 ? "\n\n" : "") +
-                       (users.Count > 0 ? $"WARNING: {PathList.Format(users)} use{(users.Count == 1 ? "s" : "")} it and will show it as missing. " : "") +
                        "It's deleted for everyone at their next Get Latest. Older versions stay in the vault's history.";
         var request = _dialogs.AskCheckIn("Delete from Vault (admin)", "Delete for Everyone", rows.Select(r => r.Path).ToList(), defaultComment,
             allowKeepCheckedOut: false, prompt: "Check-in comment (shown in History and Discord):", footnote: footnote);

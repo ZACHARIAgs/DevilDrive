@@ -151,9 +151,11 @@ Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do
 
 ### Deleting files from the vault
 
+**Only files that nothing else uses can be deleted** (or requested): a part an assembly or drawing still uses would leave it with a missing reference. Remove it from those files and check them in first, or select them too, to delete them together. Jarvis knows what uses what from the vault index, so if an assembly or drawing was never indexed, SolidWorks files can't be deleted until someone runs **Rebuild Index** in the SolidWorks pane.
+
 Teammates use **Request Delete** (right-click a file) and write why. Admins get a banner when there are requests; filter by **Delete requested** to see them, with the reason in the details panel. Then right-click:
 
-- **Delete from Vault… (admin)** deletes the file for everyone, with its index entry and 3D preview, in one check-in. It goes away from teammates' PCs at their next Get Latest. If assemblies or drawings use it, the dialog says so first. Admins can also do this without a request.
+- **Delete from Vault… (admin)** deletes the file for everyone, with its index entry and 3D preview, in one check-in. It goes away from teammates' PCs at their next Get Latest. Admins can also do this without a request.
 - **Reject Delete Request… (admin)** keeps the file; the reason goes to Discord.
 
 Older versions stay in the vault's history (History, milestones), so a deleted file can be brought back, and it still counts toward GitHub's LFS storage. The vault guard lets teammates add or withdraw only their own requests.

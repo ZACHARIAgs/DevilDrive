@@ -47,6 +47,10 @@ public sealed partial class VaultService
                 {
                     result.Fail(rel, new PdmException($"{PathList.Name(rel)} already has a delete request from {Config.DisplayNameFor(existing.RequestedBy)}."));
                 }
+                else if (StillUsedProblem(snapshot, rel, relatives) is { } used)
+                {
+                    result.Fail(rel, new PdmException(used));
+                }
                 else
                 {
                     list.Requests.Add(new DeleteRequest { Path = rel, RequestedBy = login, RequestedAt = DateTimeOffset.Now, Reason = reason });
@@ -65,6 +69,38 @@ public sealed partial class VaultService
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Only files nothing else uses can be deleted: deleting a part an assembly or drawing uses would leave
+    /// that file with a missing reference. Files deleted together (an assembly and the parts only it uses) don't
+    /// count. Uses the vault index; if an assembly or drawing was never indexed, nobody can tell, so it's refused.
+    /// Returns why the file can't be deleted, or null.
+    /// </summary>
+    private static string? StillUsedProblem(VaultSnapshot snapshot, string rel, IReadOnlyCollection<string> deletingTogether)
+    {
+        if (!IsSolidWorksFile(rel)) return null; // only SolidWorks files are referenced by assemblies and drawings
+        var name = PathList.Name(rel);
+        bool Deleting(string path) => deletingTogether.Any(d => SamePath(d, path));
+        var file = snapshot.Files.FirstOrDefault(f => SamePath(f.RelativePath, rel));
+        var users = (file?.UsedIn ?? Array.Empty<string>())
+            .Where(u => !Deleting(u) && snapshot.Files.Any(f => SamePath(f.RelativePath, u)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (users.Count > 0)
+        {
+            return $"{name} is used in {PathList.Format(users)}. Only files nothing else uses can be deleted: remove it from " +
+                   $"{(users.Count == 1 ? "that file" : "those files")} and check {(users.Count == 1 ? "it" : "them")} in first (or delete {(users.Count == 1 ? "it" : "them")} too).";
+        }
+        var unindexed = snapshot.Files
+            .Where(f => HasOwnReferences(f.RelativePath) && f.Index == null && f.State != FileState.NotInVault && !Deleting(f.RelativePath))
+            .Select(f => f.Name).ToList();
+        if (unindexed.Count > 0)
+        {
+            var listed = unindexed.Count <= 3 ? string.Join(", ", unindexed) : string.Join(", ", unindexed.Take(3)) + $" and {unindexed.Count - 3} more";
+            return $"Jarvis can't tell whether {name} is used: {listed} {(unindexed.Count == 1 ? "hasn't" : "haven't")} been indexed yet. " +
+                   "Run Rebuild Index in SolidWorks' Jarvis pane, then try again.";
+        }
+        return null;
     }
 
     /// <summary>Takes back your own delete requests (admins may take back anyone's: that's rejecting it).</summary>
@@ -151,7 +187,7 @@ public sealed partial class VaultService
                 FileState.CheckedOutByOther => $"{name} is checked out by {file.CheckedOutBy}. Ask them to check it in (or use Break Lock), then delete it.",
                 FileState.Frozen => $"{name} is frozen. Unfreeze it first.",
                 FileState.InReview => $"{name} is in review. Approve or reject the review first.",
-                _ => null,
+                _ => StillUsedProblem(snapshot, rel, relatives),
             };
             if (problem != null) result.Fail(rel, new PdmException(problem));
             else targets.Add(file!);
