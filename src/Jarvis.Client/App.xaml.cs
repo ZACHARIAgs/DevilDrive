@@ -12,8 +12,9 @@ namespace Jarvis.Client;
 public partial class App : Application
 {
     /// <summary>
-    /// Normal start opens the main window (or, run from outside the install folder, offers to install). "--explorer &lt;command&gt; &lt;path&gt;" comes from File Explorer's
-    /// right-click menu; "--register-explorer" (run by Setup) adds that menu; "--vaults" opens the Vaults window.
+    /// Normal start opens the main window (or, run from outside the install folder, offers to install). "--vaults" opens the
+    /// Vaults window. "--register-explorer" and "--explorer ..." come from older versions (Setup, File Explorer's old menu):
+    /// they only remove that old File Explorer integration.
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -23,7 +24,7 @@ public partial class App : Application
 
         if (args.Length >= 1 && args[0] == "--register-explorer")
         {
-            UpdateExplorerMenu(UserSettings.Load(), force: true);
+            ExplorerCleanup.RemoveOldIntegration();
             Shutdown();
             return;
         }
@@ -36,14 +37,8 @@ public partial class App : Application
             return;
         }
 
-        if (args.Length >= 3 && args[0] == "--explorer")
-        {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            await ExplorerCommandHost.RunAsync(args[1], args[2]);
-            // "Open"/"Show in Jarvis" leave the main window open; everything else is done.
-            if (MainWindow == null || !MainWindow.IsVisible) Shutdown();
-            return;
-        }
+        // Clicked in File Explorer's old Jarvis menu (still there until this cleans it up): just open Jarvis.
+        if (args.Length >= 1 && args[0] == "--explorer") args = Array.Empty<string>();
 
         // Run from Downloads (or anywhere but the install folder): install, like Setup.cmd. This copy then quits.
         if (args.Length == 0 && OfferInstall())
@@ -74,7 +69,7 @@ public partial class App : Application
         var window = new MainWindow { ShowVaultsOnLoad = args.Length >= 1 && args[0] == "--vaults" };
         MainWindow = window;
         window.Show();
-        UpdateExplorerMenu(UserSettings.Load());
+        ExplorerCleanup.RemoveOldIntegration();
         AppUpdater.CleanUpAfterUpdate();
         await AppUpdater.CheckAsync(window);
     }
@@ -84,49 +79,10 @@ public partial class App : Application
     {
         var exe = Environment.ProcessPath;
         var layout = InstallLayout.ForThisUser();
-        if (exe == null || !ExplorerIntegration.IsInstalledCopy(exe) || AppInstaller.IsInstalled(exe, layout)) return false;
+        if (exe == null || AppInstaller.IsDevelopmentBuild(exe) || AppInstaller.IsInstalled(exe, layout)) return false;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         new InstallWindow(layout, exe).ShowDialog();
         return true;
-    }
-
-    /// <summary>Keeps the right-click menu pointing at this copy and the current vault folder (or removes it).</summary>
-    public static void UpdateExplorerMenu(UserSettings settings, bool force = false)
-    {
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (exe == null || InstallLayout.ForThisUser().IsTest) return; // a trial install leaves File Explorer alone
-            ExplorerPreview.WriteVaultList(settings.Vaults);
-            UpdatePreviewPane(settings, force);
-            if (!settings.ExplorerMenu)
-            {
-                ExplorerIntegration.Unregister();
-            }
-            else if (force || ExplorerIntegration.IsInstalledCopy(exe))
-            {
-                ExplorerIntegration.Register(exe, settings.Vaults);
-            }
-        }
-        catch (Exception)
-        {
-            // The menu is a convenience; never block the app over it.
-        }
-    }
-
-    /// <summary>Installs or removes the 3D preview pane add-on to match Settings (installed copy only, like the menu).</summary>
-    private static void UpdatePreviewPane(UserSettings settings, bool force)
-    {
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (!settings.PreviewPane) ExplorerPreview.Unregister();
-            else if (exe != null && (force || ExplorerIntegration.IsInstalledCopy(exe))) ExplorerPreview.Register();
-        }
-        catch (Exception)
-        {
-            // A convenience; never block the app over it.
-        }
     }
 
     private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

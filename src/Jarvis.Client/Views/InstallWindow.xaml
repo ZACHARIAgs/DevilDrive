@@ -18,7 +18,6 @@
             <TextBlock x:Name="CopyStep" Style="{StaticResource StepText}" />
             <TextBlock x:Name="GitStep" Style="{StaticResource StepText}" />
             <TextBlock x:Name="ShortcutStep" Style="{StaticResource StepText}" />
-            <TextBlock x:Name="ExplorerStep" Style="{StaticResource StepText}" />
             <TextBlock x:Name="AddinStep" Style="{StaticResource StepText}" Visibility="Collapsed" />
         </StackPanel>
 

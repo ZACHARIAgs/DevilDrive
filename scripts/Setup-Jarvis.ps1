@@ -177,8 +177,6 @@ if (Test-Path $ExePath) {
         $shortcut.Save()
     }
     Write-Ok 'Shortcuts added to the Desktop and Start menu.'
-    Start-Process -FilePath $ExePath -ArgumentList '--register-explorer' -Wait
-    Write-Ok 'Added Jarvis to File Explorer''s right-click menu (Windows 11: under "Show more options").'
 }
 
 # 6. SolidWorks add-in (optional) ----------------------------------------------

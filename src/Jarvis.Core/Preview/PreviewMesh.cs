@@ -9,7 +9,7 @@ namespace Jarvis.Core.Preview;
 /// <summary>
 /// A 3D preview mesh ready for display: welded vertices with smooth normals on curved surfaces and
 /// sharp normals at real corners (split at the crease angle), plus the model's feature edges.
-/// UI-free (plain arrays) so the desktop app and the File Explorer preview can share it.
+/// UI-free (plain arrays).
 /// </summary>
 public sealed class PreviewMesh
 {

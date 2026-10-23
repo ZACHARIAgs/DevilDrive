@@ -18,7 +18,7 @@ for byte and would ask for Update Vault Setup.
   - `Vault/FileTree.cs`: files-in-use tree rows from SolidWorks components (pure, unit-tested).
   - `Git/GitRunner.cs` runs git.exe; `GitErrorClassifier` maps stderr to typed `PdmException`s with user-facing messages.
   - `Updates/Updater.cs`: GitHub Releases + SHA256SUMS. `Install/AppInstaller.cs`: Jarvis.exe installing itself (copy, winget Git, shortcuts). `Git/GitIdentity.cs`: user.name/email from GitHub. `Notifications/`: Discord webhook.
-- `src/Jarvis.Client` (.NET 8 WPF, MVVM-lite): vault view, history, 3D viewer, Settings, File Explorer menu, auto-update, Install window (run from outside the install folder) and Welcome window (Git, sign-in, name/email, invitations, add-in).
+- `src/Jarvis.Client` (.NET 8 WPF, MVVM-lite): vault view, history, 3D viewer, Settings, auto-update, Install window (run from outside the install folder) and Welcome window (Git, sign-in, name/email, invitations, add-in).
 - `src/Jarvis.SwAddin` (.NET Framework 4.8, COM add-in): task pane (`VaultPane`), files-in-use tree (`FileTreeView`), SolidWorks API wrapper (`SolidWorksSession`), `AssemblySaveGuard`.
 - `vault-template/`: files for a new vault, including the **vault guard** (`.github/workflows/vault-guard.yml` + `.github/vault-guard/guard.py`), a GitHub Action that undoes pushes breaking the rules. It's embedded into Core and installed by "Update Vault Setup".
 - `tests/Jarvis.Core.Tests`: xUnit. Integration tests use real Git against a local bare repo (no LFS lock server, so locking is covered by parser tests).

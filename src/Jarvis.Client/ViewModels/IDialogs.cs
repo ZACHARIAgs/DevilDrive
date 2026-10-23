@@ -17,21 +17,13 @@ public sealed class CheckInRequest
 
 public sealed class SettingsRequest
 {
-    public SettingsRequest(string vaultPath, bool explorerMenu, IReadOnlyList<string>? downloadFolders, bool previewPane, bool classicMenu)
+    public SettingsRequest(string vaultPath, IReadOnlyList<string>? downloadFolders)
     {
         VaultPath = vaultPath;
-        ExplorerMenu = explorerMenu;
         DownloadFolders = downloadFolders;
-        PreviewPane = previewPane;
-        ClassicMenu = classicMenu;
     }
 
-    public bool PreviewPane { get; }
-    /// <summary>Windows 11: use the classic full right-click menu on this PC.</summary>
-    public bool ClassicMenu { get; }
-
     public string VaultPath { get; }
-    public bool ExplorerMenu { get; }
     /// <summary>Folders to download; null means everything.</summary>
     public IReadOnlyList<string>? DownloadFolders { get; }
 }
@@ -59,8 +51,7 @@ public interface IDialogs
     CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null);
     /// <summary>The Vaults window: returns the vault to open (or null) and whether the list changed.</summary>
     (string? OpenFolder, bool Changed) ShowVaults();
-    SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders,
-        bool previewPane, bool classicMenu);
+    SettingsRequest? AskSettings(string vaultPath, string signedInAs, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders);
     void ShowHistory(string relativePath);
     void ShowMilestones();
     /// <summary>The vault's team: members, invitations, adding and removing people.</summary>

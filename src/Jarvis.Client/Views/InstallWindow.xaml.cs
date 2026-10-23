@@ -16,10 +16,10 @@ namespace Jarvis.Client.Views;
 
 /// <summary>
 /// Shown when Jarvis.exe runs from outside the install folder (e.g. straight from Downloads): copies
-/// itself to %LocalAppData%\Programs\Jarvis, installs Git if it's missing, adds shortcuts and the File
-/// Explorer menu, then starts the installed copy. What Setup.cmd does, without the console.
+/// itself to %LocalAppData%\Programs\Jarvis, installs Git if it's missing, adds shortcuts (and the
+/// SolidWorks add-in if chosen), then starts the installed copy. What Setup.cmd does, without the console.
 /// There's no "run without installing": a copy outside the install folder doesn't update itself, has no
-/// shortcuts or File Explorer menu, and the SolidWorks add-in can't find it. Closing the window quits.
+/// shortcuts, and the SolidWorks add-in can't find it. Closing the window quits.
 /// </summary>
 public partial class InstallWindow : Window
 {
@@ -54,7 +54,6 @@ public partial class InstallWindow : Window
         SetStep(CopyStep, Step.Pending, $"Copy Jarvis to {layout.InstallFolder}");
         SetStep(GitStep, Step.Pending, "Install Git and Git LFS, if they're missing (Windows may ask for permission)");
         SetStep(ShortcutStep, Step.Pending, "Add Jarvis to the Desktop and the Start menu");
-        SetStep(ExplorerStep, Step.Pending, "Add Jarvis to File Explorer's right-click menu and 3D preview");
         // Offer the add-in when SolidWorks is here and the add-in is missing, or older than this Jarvis (it updates along with it).
         var addin = SolidWorksAddinSetup.InstalledVersion;
         var addinUpdate = addin != null && addin < current;
@@ -137,18 +136,6 @@ public partial class InstallWindow : Window
             SetStep(ShortcutStep, Step.Problem, "The shortcuts couldn't be added (" + ex.Message + "). Start Jarvis from " + _layout.ExePath);
         }
 
-        if (_layout.IsTest)
-        {
-            SetStep(ExplorerStep, Step.Done, $"Skipped: trial install ({InstallLayout.TestRootVariable} is set)");
-        }
-        else
-        {
-            SetStep(ExplorerStep, Step.Working, "Adding Jarvis to File Explorer\u2026");
-            var registered = await RunInstalledAsync("--register-explorer");
-            SetStep(ExplorerStep, registered ? Step.Done : Step.Problem, registered
-                ? "Added to File Explorer (on Windows 11, right-click and choose Show more options)"
-                : "File Explorer's menu wasn't added; Jarvis adds it the next time it starts");
-        }
 
         var addinOk = !WantsAddin || await InstallAddinAsync();
 
@@ -219,22 +206,6 @@ public partial class InstallWindow : Window
             }
         }
         SetStep(GitStep, Step.Done, "Ready: " + tools.GitVersion);
-    }
-
-    /// <summary>Runs the installed exe with a command and waits (at most a minute). False if it didn't work.</summary>
-    private async Task<bool> RunInstalledAsync(string arguments)
-    {
-        try
-        {
-            using var process = Process.Start(new ProcessStartInfo(_layout.ExePath, arguments) { UseShellExecute = false });
-            if (process == null) return false;
-            var exited = process.WaitForExitAsync();
-            return await Task.WhenAny(exited, Task.Delay(TimeSpan.FromMinutes(1))) == exited && process.ExitCode == 0;
-        }
-        catch (Win32Exception)
-        {
-            return false;
-        }
     }
 
     private void StartInstalled()

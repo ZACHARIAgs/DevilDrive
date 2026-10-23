@@ -36,7 +36,7 @@ public static class AppUpdater
         var exe = Environment.ProcessPath;
         var assembly = Assembly.GetExecutingAssembly();
         var repo = Updater.BuiltInRepo(assembly);
-        if (exe == null || repo == null || !ExplorerIntegration.IsInstalledCopy(exe) || !AppInstaller.IsInstalled(exe, InstallLayout.ForThisUser())) return;
+        if (exe == null || repo == null || AppInstaller.IsDevelopmentBuild(exe) || !AppInstaller.IsInstalled(exe, InstallLayout.ForThisUser())) return;
 
         var updater = new Updater(repo);
         ReleaseInfo? release;

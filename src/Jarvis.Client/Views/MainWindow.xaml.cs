@@ -20,9 +20,6 @@ public partial class MainWindow : Window, IDialogs
         DataContext = _vm;
     }
 
-    /// <summary>A file to select once the vault is loaded ("Show in Jarvis" from File Explorer).</summary>
-    public string? PendingSelection { get; set; }
-
     /// <summary>Open the Vaults window once the vault is loaded.</summary>
     public bool ShowVaultsOnLoad { get; set; }
 
@@ -30,22 +27,6 @@ public partial class MainWindow : Window, IDialogs
     {
         await _vm.InitializeAsync();
         if (ShowVaultsOnLoad && _vm.ManageVaultsCommand.CanExecute(null)) _vm.ManageVaultsCommand.Execute(null);
-        if (PendingSelection == null || _vm.Vault == null) return;
-        try
-        {
-            var relative = _vm.Vault.ToRelativePath(PendingSelection);
-            var row = FilesGrid.Items.Cast<FileRowViewModel>().FirstOrDefault(r => string.Equals(r.Path, relative, System.StringComparison.OrdinalIgnoreCase));
-            if (row != null)
-            {
-                FilesGrid.SelectedItem = row;
-                FilesGrid.ScrollIntoView(row);
-                FilesGrid.Focus();
-            }
-        }
-        catch (Jarvis.Core.Errors.PdmException)
-        {
-            // Not inside the vault; just show the app.
-        }
     }
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -164,13 +145,10 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? new CheckInRequest(dialog.Comment, dialog.KeepCheckedOut) : null;
     }
 
-    public SettingsRequest? AskSettings(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders,
-        bool previewPane, bool classicMenu)
+    public SettingsRequest? AskSettings(string vaultPath, string signedInAs, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders)
     {
-        var dialog = new SettingsWindow(vaultPath, signedInAs, explorerMenu, folders, downloadFolders, previewPane, classicMenu) { Owner = this };
-        return dialog.ShowDialog() == true
-            ? new SettingsRequest(dialog.VaultPath, dialog.ExplorerMenu, dialog.DownloadFolders, dialog.PreviewPane, dialog.ClassicMenu)
-            : null;
+        var dialog = new SettingsWindow(vaultPath, signedInAs, folders, downloadFolders) { Owner = this };
+        return dialog.ShowDialog() == true ? new SettingsRequest(dialog.VaultPath, dialog.DownloadFolders) : null;
     }
 
     public (string? OpenFolder, bool Changed) ShowVaults()

@@ -15,13 +15,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Jarvis.Core\Jarvis.Core.csproj" />
-    <!-- File Explorer preview pane add-on (.NET Framework COM server): built first, embedded in the exe, installed per user. -->
-    <ProjectReference Include="..\Jarvis.PreviewHandler\Jarvis.PreviewHandler.csproj" ReferenceOutputAssembly="false" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="..\Jarvis.PreviewHandler\bin\$(Configuration)\net48\Jarvis.PreviewHandler.dll" LogicalName="PreviewHandler/Jarvis.PreviewHandler.dll" />
-    <EmbeddedResource Include="..\Jarvis.PreviewHandler\bin\$(Configuration)\net48\HelixToolkit.Wpf.dll" LogicalName="PreviewHandler/HelixToolkit.Wpf.dll" />
   </ItemGroup>
 
   <ItemGroup>

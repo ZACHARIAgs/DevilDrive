@@ -558,15 +558,13 @@ public sealed partial class MainViewModel : ViewModelBase
         settings.VaultPath = folder;
         settings.AddVault(folder);
         settings.Save();
-        App.UpdateExplorerMenu(settings);
         await OpenVaultAsync(folder);
     }
 
     private async Task ManageVaultsAsync()
     {
-        var (openFolder, changed) = _dialogs.ShowVaults();
+        var (openFolder, _) = _dialogs.ShowVaults();
         var settings = UserSettings.Load();
-        if (changed) App.UpdateExplorerMenu(settings);
         if (openFolder != null)
         {
             await SwitchVaultAsync(openFolder);
@@ -950,26 +948,13 @@ public sealed partial class MainViewModel : ViewModelBase
             : _vault.GitHubLogin == null ? "Not verified yet (are you online and signed in to GitHub?)"
             : $"{_vault.GitHubLogin}{(_vault.IsAdmin ? " (vault admin)" : "")}, verified with GitHub";
         var currentFolders = _snapshot?.DownloadFolders;
-        var classicMenu = ExplorerPreview.IsClassicMenu();
-        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, settings.ExplorerMenu, VaultFolders(), currentFolders, settings.PreviewPane, classicMenu);
+        var request = _dialogs.AskSettings(settings.VaultPath, signedInAs, VaultFolders(), currentFolders);
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
         settings.VaultPath = request.VaultPath;
         settings.AddVault(request.VaultPath);
-        settings.ExplorerMenu = request.ExplorerMenu;
-        settings.PreviewPane = request.PreviewPane;
         settings.Save();
-        App.UpdateExplorerMenu(settings);
-        if (request.ClassicMenu != classicMenu)
-        {
-            ExplorerPreview.SetClassicMenu(request.ClassicMenu);
-            if (_dialogs.Confirm("Restart File Explorer",
-                    "The right-click menu changes after File Explorer restarts. Restart it now? Open File Explorer windows close and the taskbar reloads for a moment."))
-            {
-                ExplorerPreview.RestartExplorer();
-            }
-        }
 
         if (pathChanged || _vault == null)
         {

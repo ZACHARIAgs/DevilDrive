@@ -47,12 +47,6 @@ The vault lives on GitHub's free plan: **10 GB of storage** (every version of ev
 
 Other ways to save space: turn off *Save tessellation data* (Tools → Options → Performance), delete unused configurations and embedded images, and check in at the end of a work session rather than after every tweak.
 
-### From File Explorer
-
-Right-click a file inside the vault and choose **Jarvis**. On Windows 11 it's under **Show more options** (or Shift+right-click), unless you tick **Settings → File Explorer → Show it directly**, which switches your PC to Windows' classic full right-click menu (untick it to go back). From there you can **Check Out**, **Check In**, **Undo Check Out**, **Download**, or **Show in Jarvis**. Selecting several files runs one command for all of them, with one check-in comment. Right-click empty space in a vault folder for **Get Latest**. You can turn the menu off in Settings.
-
-**3D preview pane:** turn on File Explorer's preview pane (**Alt+P**, or View → Details pane/Preview pane) and click a part or assembly in a vault: it shows the 3D model, and you can drag to rotate and scroll to zoom. Files without a 3D preview yet, and SolidWorks files outside your vaults, show the usual SolidWorks picture. Turn it off with **Settings → File Explorer → Rotatable 3D model in the preview pane**.
-
 ### Inside SolidWorks (add-in)
 
 Setup offers to install the **Jarvis add-in** (SolidWorks 2020 or newer, tested on 2024 and 2026; Windows asks for admin permission once). To add it later, close SolidWorks and double-click **Install SolidWorks Add-in.cmd** from the setup zip.
@@ -267,7 +261,6 @@ One install of Jarvis works with every group you're in; each group has its own v
 * **Add a group's vault:** click **Vaults** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
 * **Switch** with the **Vault** dropdown in the app.
 * **In SolidWorks you don't switch at all:** the pane works in whichever vault the open file is in, so you can have a capstone assembly and a club part open and the pane follows the active window. Its header shows the vault's name.
-* The **File Explorer** menu works in every vault in your list.
 * Each vault has its own admins (from that repo's GitHub roles), frozen files, reviews, milestones and Discord channel. Removing a vault from the list doesn't delete its files.
 
 If the club should get app updates from a different code repo (for example your own fork), change `<UpdateRepo>` in `Directory.Build.props` before building.
@@ -292,7 +285,6 @@ src/Jarvis.Core/     netstandard2.0. All vault logic, no UI. Reused by the Phase
   Errors/                 PdmException and subclasses, with user-facing messages
 src/Jarvis.Client/   WPF app (.NET 8), MVVM-lite
 src/Jarvis.SwAddin/  SolidWorks add-in (.NET Framework 4.8): task pane, reference-aware check-out/in
-src/Jarvis.PreviewHandler/  File Explorer 3D preview pane (.NET Framework 4.8 COM server, embedded in the app)
 tests/Jarvis.Core.Tests/  xUnit: parsers, error classification, and integration tests against real Git
 vault-template/           .gitattributes, .gitignore, pdm.json for a new vault
 scripts/                  Setup (teammates), Initialize-Vault (admin), Publish-Client (build the zip), Release-Client (publish an update)
@@ -318,7 +310,7 @@ The integration tests use a local bare repo in place of GitHub. A local remote h
 
 This produces the release files: a self-contained single-file `Jarvis.exe` (teammates don't need .NET), `Jarvis-SolidWorksAddin.zip` (with a READ ME FIRST note for anyone who opens it) and `SHA256SUMS`. It also builds `dist/Jarvis-Setup.zip` (`Setup.cmd`, `Setup-Jarvis.ps1` and the exe) for anyone who prefers a script; releases don't include it. Release notes always start with "download Jarvis.exe". Setup prints the installed exe's SHA-256 so it can be compared with the release.
 
-`Jarvis.exe` installs itself: run from anywhere but `%LocalAppData%\Programs\Jarvis`, it shows **Install Jarvis** (`Views/InstallWindow`, logic in `Core/Install/AppInstaller.cs`): copy itself there (removing the download mark), Git for Windows with `winget --silent --scope user` (falling back to a machine-wide install, or git-scm.com without winget), shortcuts, `--register-explorer`, then start the installed copy. Development builds (under `bin\`) never offer it. To try it without touching your real install, set `JARVIS_INSTALL_ROOT` to an empty folder and run a published `Jarvis.exe`: everything goes inside that folder and File Explorer is left alone. `Jarvis.exe --welcome` shows the welcome screen even on a PC that already has vaults.
+`Jarvis.exe` installs itself: run from anywhere but `%LocalAppData%\Programs\Jarvis`, it shows **Install Jarvis** (`Views/InstallWindow`, logic in `Core/Install/AppInstaller.cs`): copy itself there (removing the download mark), Git for Windows with `winget --silent --scope user` (falling back to a machine-wide install, or git-scm.com without winget), shortcuts, then start the installed copy. Development builds (under `bin\`) never offer it. To try it without touching your real install, set `JARVIS_INSTALL_ROOT` to an empty folder and run a published `Jarvis.exe`: everything goes inside that folder. `Jarvis.exe --welcome` shows the welcome screen even on a PC that already has vaults.
 
 ### Automatic updates
 
@@ -347,7 +339,6 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
 | Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
 | 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
-| File Explorer | per-user `HKCU\Software\Classes\*\shell\Jarvis` cascade with `AppliesTo` = vault path; `Jarvis.exe --explorer <command> <path>`; multi-select merged over a named pipe |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
@@ -360,7 +351,6 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 * **Design:** `JarvisAddin` (COM entry point and registration), `VaultPane` (WinForms task pane: watches the active document with a 1-second timer instead of SolidWorks events, then calls Core), `FileTreeView` (owner-drawn files-in-use tree with tick boxes), `SolidWorksSession` (component tree, references, properties, save, close/reopen), `AssemblySaveGuard` (the one SolidWorks event hook: Save in a read-only assembly saves only checked-out parts), `DescriptionForm` (descriptions for new files).
 * **Files in use:** `SolidWorksSession.GetFilesInUse` walks `GetRootComponent3().GetChildren()`, falling back to `IAssemblyDoc.GetComponents(false)` grouped by `GetParent()` (the root walk comes back empty for read-only assemblies whose parts aren't loaded), then to `GetDocumentDependencies2`. `Core/Vault/FileTree.cs` turns that into rows (unit-tested). The tree rebuilds when the active path, its save time or its component count changes.
 * **3D previews:** `Core/Preview/PreviewMesh.cs` reads the STL, welds vertices, smooths normals within a 35° crease angle and finds feature edges; `Client/Services/PreviewModel.cs` turns that into WPF geometry (satin material, edge lines as thin tubes, studio lights). `Jarvis.exe --render-preview in.stl out.png` renders one to an image for checking.
-* **Explorer preview pane:** `src/Jarvis.PreviewHandler` (.NET Framework 4.8 in-process COM server, because prevhost.exe needs one) links those two files instead of referencing Core. The app embeds its DLLs, writes them to `%LocalAppData%\Programs\Jarvis\PreviewHandler\<hash>` and registers them under HKCU (`.sldprt`/`.sldasm` → `ShellEx\{8895b1c6-…}`), with `DisableLowILProcessIsolation` so it gets the file path. It finds vaults through `%AppData%\Jarvis\vaults.txt`. Log: `%LocalAppData%\Jarvis\preview.log`.
 * **Older versions on this PC:** `VaultService.UseVersionAsync` runs `git restore --source=<commit> --worktree` and records the choice in `.git/capstone-pinned.json` (never committed). Snapshots treat pinned files as unchanged, Get Latest restores and re-pins them around the merge, and check-out/check-in refuse them.
 * **SolidWorks doesn't lock files.** It keeps a *shared* handle on every loaded file, so Git can read a saved file while it's open. Check-in therefore saves the targets in place (`SaveTargets`) instead of closing documents, and Core only refuses files nobody can read (`FileUtil.IsUnreadable`). Get Latest and Undo still close and reopen, because they replace files on disk.
 * **Dependencies:** SolidWorks is the host process, so binding redirects don't apply. `AssemblyResolver` loads System.Text.Json and friends from the add-in folder.

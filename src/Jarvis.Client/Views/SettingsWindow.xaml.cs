@@ -12,15 +12,11 @@ namespace Jarvis.Client.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(string vaultPath, string signedInAs, bool explorerMenu, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders,
-        bool previewPane, bool classicMenu)
+    public SettingsWindow(string vaultPath, string signedInAs, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders)
     {
         InitializeComponent();
         VaultPathBox.Text = vaultPath;
         SignedInText.Text = signedInAs;
-        ExplorerMenuBox.IsChecked = explorerMenu;
-        PreviewPaneBox.IsChecked = previewPane;
-        ClassicMenuBox.IsChecked = classicMenu;
 
         var chosen = new HashSet<string>(downloadFolders ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         foreach (var folder in folders.Union(chosen, StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
@@ -68,9 +64,6 @@ public partial class SettingsWindow : Window
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();
-    public bool ExplorerMenu => ExplorerMenuBox.IsChecked == true;
-    public bool PreviewPane => PreviewPaneBox.IsChecked == true;
-    public bool ClassicMenu => ClassicMenuBox.IsChecked == true;
 
     /// <summary>Folders to download, or null for everything (also when "only these" is picked with none ticked).</summary>
     public IReadOnlyList<string>? DownloadFolders

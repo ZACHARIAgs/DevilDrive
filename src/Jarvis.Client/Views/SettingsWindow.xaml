@@ -17,13 +17,6 @@
                    Text="Checked with GitHub using your saved sign-in, so it can't be changed here. Admin rights come from this account." />
         <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
 
-        <TextBlock FontWeight="SemiBold" Text="File Explorer" Margin="0,16,0,0" />
-        <CheckBox x:Name="ExplorerMenuBox" Margin="0,4,0,0" Content="Check In / Check Out / Get Latest in the right-click menu" />
-        <CheckBox x:Name="ClassicMenuBox" Margin="20,4,0,0">
-            <TextBlock TextWrapping="Wrap" Text="Show it directly, without &quot;Show more options&quot; (switches this PC to Windows' classic full right-click menu everywhere; File Explorer restarts)" />
-        </CheckBox>
-        <CheckBox x:Name="PreviewPaneBox" Margin="0,6,0,0" Content="Rotatable 3D model of parts and assemblies in the preview pane (Alt+P)" />
-
         <TextBlock FontWeight="SemiBold" Text="SolidWorks add-in" Margin="0,16,0,0" />
         <DockPanel Margin="0,2,0,0">
             <Button x:Name="AddinButton" DockPanel.Dock="Right" Content="Install the SolidWorks add-in" Padding="10,2" Margin="8,0,0,0"

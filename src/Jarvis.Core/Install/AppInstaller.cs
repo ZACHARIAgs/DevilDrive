@@ -32,7 +32,7 @@ public sealed class InstallLayout
     public string InstallFolder { get; }
     /// <summary>Desktop and Start menu.</summary>
     public IReadOnlyList<string> ShortcutFolders { get; }
-    /// <summary>Installing into <see cref="TestRootVariable"/>: leave File Explorer and the rest of Windows alone.</summary>
+    /// <summary>Installing into <see cref="TestRootVariable"/>: leave the rest of Windows alone.</summary>
     public bool IsTest { get; }
     public string ExePath => Path.Combine(InstallFolder, ExeName);
 
@@ -75,6 +75,10 @@ public static class AppInstaller
     public const string GitPackage = "Git.Git";
     public const string GitLfsPackage = "GitHub.GitLFS";
     public const string GitDownloadPage = "https://git-scm.com/download/win";
+
+    /// <summary>A build from Visual Studio or dotnet (under a bin folder): it never installs or updates itself.</summary>
+    public static bool IsDevelopmentBuild(string exePath) =>
+        exePath.IndexOf(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) >= 0;
 
     /// <summary>The exe runs from the install folder already.</summary>
     public static bool IsInstalled(string exePath, InstallLayout layout) =>

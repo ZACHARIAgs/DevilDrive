@@ -8,7 +8,6 @@ namespace Jarvis.Client.Services;
 /// <summary>
 /// Turns a <see cref="PreviewMesh"/> into a WPF model that looks like SolidWorks' "shaded with edges":
 /// a light satin-grey surface with smooth shading and thin dark lines along the real edges.
-/// Shared with the File Explorer preview handler (linked source file), so keep it WPF-only.
 /// </summary>
 public static class PreviewModel
 {

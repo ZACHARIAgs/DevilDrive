@@ -17,12 +17,6 @@ public sealed class UserSettings
     /// <summary>Every vault folder on this PC (one per group). The add-in uses whichever one holds the open file.</summary>
     public List<string> Vaults { get; set; } = new List<string>();
 
-    /// <summary>Show the Jarvis submenu in File Explorer's right-click menu.</summary>
-    public bool ExplorerMenu { get; set; } = true;
-
-    /// <summary>Show vault parts and assemblies as rotatable 3D models in File Explorer's preview pane.</summary>
-    public bool PreviewPane { get; set; } = true;
-
     public static string FilePath => Path.Combine(
         AppFolders.Roaming, "settings.json");
 

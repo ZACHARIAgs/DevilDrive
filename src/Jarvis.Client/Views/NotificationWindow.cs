@@ -6,7 +6,7 @@ using System.Windows.Threading;
 
 namespace Jarvis.Client.Views;
 
-/// <summary>Small borderless message in the corner of the screen, used by the File Explorer commands.</summary>
+/// <summary>Small borderless message in the corner of the screen, e.g. when a watched file becomes free.</summary>
 public sealed class NotificationWindow : Window
 {
     private readonly TextBlock _text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x29, 0x37)) };
