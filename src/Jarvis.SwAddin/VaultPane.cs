@@ -66,7 +66,6 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _getLatest;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
-    private readonly ModernButton _rebuildIndex;
     private readonly CaptionLabel _status;
     private readonly ActivityBar _activity;
 
@@ -138,7 +137,6 @@ internal sealed class VaultPane : UserControl
         _getLatest = new ModernButton("Get Latest", "");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Jarvis", "");
-        _rebuildIndex = new ModernButton("Rebuild Index", "\uE895");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
         _activity = new ActivityBar();
@@ -148,7 +146,7 @@ internal sealed class VaultPane : UserControl
             _header, _picker, _activity, _status, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
-            _getLatest, _refresh, _exportBom, _openApp, _rebuildIndex,
+            _getLatest, _refresh, _exportBom, _openApp,
             // Which add-in this is, so it can be compared with the app (it updates along with it).
             new CaptionLabel("Jarvis add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
         });
@@ -171,7 +169,6 @@ internal sealed class VaultPane : UserControl
         _getLatest.Click += async (_, _) => { EnsureUiContext(); await GetLatestAsync(); };
         _refresh.Click += async (_, _) => { EnsureUiContext(); await RefreshAsync(contactVault: true); };
         _openApp.Click += (_, _) => OpenDesktopApp();
-        _rebuildIndex.Click += async (_, _) => { EnsureUiContext(); await RebuildIndexAsync(); };
         _exportBom.Click += (_, _) => ExportBom();
         _timer.Tick += async (_, _) => await OnTickAsync();
 
@@ -508,7 +505,6 @@ internal sealed class VaultPane : UserControl
         _getLatest.Enabled = ready && !viewingMilestone;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
-        _rebuildIndex.Enabled = ready;
         _exportBom.Visible = _currentPath != null && Path.GetExtension(_currentPath).Equals(".sldasm", StringComparison.OrdinalIgnoreCase);
         _exportBom.Enabled = !_busy;
 
@@ -1054,7 +1050,7 @@ internal sealed class VaultPane : UserControl
                 p => p,
                 p => WithDescription(p, _sw.FindOpen(p) is { } doc ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties, newDescriptions),
                 StringComparer.OrdinalIgnoreCase);
-            // 3D previews for the app's viewer, from the open models (unopened ones get theirs from Rebuild Index).
+            // 3D previews for the app's viewer, from the open models (unopened ones get theirs from a later check-in's catch-up).
             progress.Report("Saving 3D previews…");
             var previews = new List<string>();
             foreach (var path in targets.Where(SolidWorksSession.CanHavePreview))
@@ -1069,8 +1065,53 @@ internal sealed class VaultPane : UserControl
             // Released files are read-only on disk again; show them read-only in SolidWorks too.
             if (!keep) _sw.MakeReadOnly(checkedIn.Succeeded.Select(_vault.ToFullPath));
             if (checkedIn.Failures.Count == 0) _tree.ClearTicks();
-            return Report(checkedIn, "Checked in");
+            var report = Report(checkedIn, "Checked in");
+            // Keep the index complete: record a few files whose record is missing or out of date (checked in from the app).
+            var alsoIndexed = checkedIn.Failures.Count == 0 ? await CatchUpIndexAsync(progress) : null;
+            return alsoIndexed == null ? report : report + " " + alsoIndexed;
         });
+    }
+
+    /// <summary>Files already tried this session, so a file whose preview can't be made isn't opened again at every check-in.</summary>
+    private readonly HashSet<string> _recordAttempted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// After a check-in: records a few other files whose index record is missing or out of date, or that
+    /// have no 3D preview (checked in from the desktop app, which can't read SolidWorks files), so the
+    /// index stays complete without anyone running anything. Returns a line for the status, or null.
+    /// Never fails the check-in it follows.
+    /// </summary>
+    private async Task<string?> CatchUpIndexAsync(IProgress<string> progress)
+    {
+        if (_vault == null) return null;
+        try
+        {
+            var snapshot = await _vault.GetSnapshotAsync(contactVault: false);
+            var files = IndexCatchUp.FilesToRecord(snapshot.Files, rel => File.Exists(_vault.ToFullPath(rel)), _recordAttempted)
+                .Take(IndexCatchUp.PerCheckIn).ToList();
+            if (files.Count == 0) return null;
+
+            var entries = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
+            var previews = new List<string>();
+            for (var i = 0; i < files.Count; i++)
+            {
+                _recordAttempted.Add(files[i].RelativePath);
+                progress.Report($"Updating the vault index ({i + 1} of {files.Count}): {files[i].Name}…");
+                await Task.Delay(1); // let the pane repaint between files
+                var full = _vault.ToFullPath(files[i].RelativePath);
+                var preview = SolidWorksSession.CanHavePreview(full) ? VaultPaths.PreviewFor(files[i].RelativePath) : null;
+                entries[files[i].RelativePath] = _sw.IndexFile(full, _vault.VaultRoot, preview == null ? null : _vault.ToFullPath(preview), out var previewSaved);
+                if (previewSaved) previews.Add(preview!);
+            }
+            await _vault.UpdateIndexAsync(entries, progress, previews: previews);
+            AddinLog.Write($"Index catch-up after check-in: {string.Join(", ", files.Select(f => f.RelativePath))}");
+            return $"Also updated the vault index for {files.Count} other file(s).";
+        }
+        catch (Exception ex)
+        {
+            AddinLog.Write("Index catch-up after check-in failed: " + ex);
+            return null;
+        }
     }
 
     /// <summary>The Description property of a SolidWorks file (from the open document, or the vault index).</summary>
@@ -1520,42 +1561,6 @@ internal sealed class VaultPane : UserControl
             return closed.Paths.Count > 0
                 ? $"Downloaded {PathList.Format(missing)} and reopened {Path.GetFileName(top)}."
                 : $"Downloaded {PathList.Format(missing)}. Save and reopen {Path.GetFileName(top)} to load them.";
-        });
-    }
-
-    /// <summary>Reads references, properties and saved-in version of every SolidWorks file in the vault into the index.</summary>
-    private async Task RebuildIndexAsync()
-    {
-        if (_vault == null || _snapshot == null) return;
-        var files = _snapshot.Files.Where(f => f.ExistsLocally && IsSolidWorksFile(f.RelativePath)).ToList();
-        if (files.Count == 0)
-        {
-            SetStatus("No SolidWorks files in the vault yet.");
-            return;
-        }
-
-        var answer = MessageBox.Show(_sw.MainWindow,
-            $"Rebuild the vault index for {files.Count} SolidWorks file(s)?\n\n" +
-            "Each file is opened in the background (read-only) to read its properties and references, so this can take a few minutes. " +
-            "The results show up for everyone: part numbers, descriptions, materials, where-used and saved-in versions.",
-            "Rebuild Index", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-        if (answer != DialogResult.OK) return;
-
-        await RunAsync("Indexing\u2026", async progress =>
-        {
-            var entries = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
-            var previews = new List<string>();
-            for (var i = 0; i < files.Count; i++)
-            {
-                progress.Report($"Indexing {i + 1} of {files.Count}: {files[i].Name}");
-                await Task.Delay(1); // let the pane repaint between files
-                var full = _vault.ToFullPath(files[i].RelativePath);
-                var preview = SolidWorksSession.CanHavePreview(full) ? VaultPaths.PreviewFor(files[i].RelativePath) : null;
-                entries[files[i].RelativePath] = _sw.IndexFile(full, _vault.VaultRoot, preview == null ? null : _vault.ToFullPath(preview), out var previewSaved);
-                if (previewSaved) previews.Add(preview!);
-            }
-            await _vault.UpdateIndexAsync(entries, progress, previews: previews);
-            return $"Indexed {entries.Count} file(s) and saved {previews.Count} 3D preview(s).";
         });
     }
 

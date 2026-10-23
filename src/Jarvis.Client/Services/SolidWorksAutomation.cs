@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -92,6 +93,35 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
             }
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>The Jarvis add-in's COM id: SolidWorks hands out the running add-in by it (GetAddInObject).</summary>
+    private const string AddinClsid = "{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}";
+
+    /// <summary>
+    /// Asks the Jarvis add-in inside SolidWorks to make index records (properties, references, saved-in version,
+    /// 3D preview) for these files, as a check-in from SolidWorks would. Null if the add-in isn't loaded in this
+    /// SolidWorks (or is older than 0.7.1); the files then get their records at a later check-in from SolidWorks.
+    /// </summary>
+    public IndexBatch? Record(string vaultRoot, IReadOnlyList<string> fullPaths)
+    {
+        try
+        {
+            var addin = Call("GetAddInObject", AddinClsid);
+            if (addin == null && File.Exists(SolidWorksAddinSetup.AddinDll))
+            {
+                // A SolidWorks started in the background doesn't always load add-ins by itself.
+                Call("LoadAddIn", SolidWorksAddinSetup.AddinDll);
+                addin = Call("GetAddInObject", AddinClsid);
+            }
+            if (addin == null) return null;
+            var json = addin.GetType().InvokeMember("RecordFiles", BindingFlags.InvokeMethod, null, addin, new object[] { vaultRoot, string.Join("\n", fullPaths) }) as string;
+            return IndexBatch.Parse(json);
+        }
+        catch (Exception ex) when (ex is COMException or TargetInvocationException or MissingMethodException)
+        {
+            return null;
+        }
     }
 
     public bool ReplaceReference(string referencingFile, string oldReference, string newReference) =>

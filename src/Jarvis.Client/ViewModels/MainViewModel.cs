@@ -185,7 +185,7 @@ public sealed partial class MainViewModel : ViewModelBase
             }
             else if (IsCadFile(row.Path) && !row.Path.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase))
             {
-                details.PreviewNote = "No 3D preview yet. It's made when the file is checked in from SolidWorks, or with Rebuild Index in the SolidWorks pane.";
+                details.PreviewNote = "No 3D preview yet. It's added the next time anyone checks in from SolidWorks (any file).";
             }
         }
 
@@ -383,7 +383,7 @@ public sealed partial class MainViewModel : ViewModelBase
             IndexNote = index != null
                 ? $"Properties and references as of {index.UpdatedAt.LocalDateTime:MMM d, h:mm tt} ({index.UpdatedBy}). They update when the file is checked in from SolidWorks."
                 : IsCadFile(f.RelativePath)
-                    ? "No properties or references recorded yet. They're filled in when the file is checked in from SolidWorks, or with Rebuild Index in the SolidWorks pane."
+                    ? "No properties or references recorded yet. They're filled in the next time anyone checks in from SolidWorks (any file)."
                     : "",
         };
     }
@@ -857,7 +857,45 @@ public sealed partial class MainViewModel : ViewModelBase
         var request = _dialogs.AskCheckIn("Check In", "Check In", targets, "", allowKeepCheckedOut: true, footnote: footnote);
         if (request == null) return;
         await RunAsync("Checking in…", async (vault, progress) =>
-            Report(await vault.CheckInAsync(targets, request.Comment, request.KeepCheckedOut, progress), "Checked in"));
+        {
+            var (index, previews, note) = await RecordSolidWorksFilesAsync(vault, targets, progress);
+            var result = await vault.CheckInAsync(targets, request.Comment, request.KeepCheckedOut, progress, indexUpdates: index, previews: previews);
+            var report = Report(result, "Checked in");
+            return note == null ? report : report + " " + note;
+        });
+    }
+
+    /// <summary>
+    /// SolidWorks files checked in from the app get their index record and 3D preview right away: the Jarvis
+    /// add-in reads them inside the team's SolidWorks (started in the background if it isn't open). If that
+    /// isn't possible, the check-in goes ahead without them, and a later check-in from SolidWorks records them.
+    /// </summary>
+    private static async Task<(Dictionary<string, IndexEntry?>? Index, List<string>? Previews, string? Note)> RecordSolidWorksFilesAsync(
+        VaultService vault, IReadOnlyList<string> targets, IProgress<string> progress)
+    {
+        var files = targets.Where(VaultService.IsSolidWorksFile).Select(vault.ToFullPath).Where(File.Exists).ToList();
+        if (files.Count == 0) return (null, null, null);
+        const string later = "Their part numbers, descriptions and 3D previews are added the next time someone checks in from SolidWorks.";
+        if (!SolidWorksAddinSetup.IsAddinInstalled) return (null, null, later);
+
+        progress.Report("Reading the SolidWorks files…");
+        SolidWorksAutomation? solidWorks = null;
+        try
+        {
+            solidWorks = await Task.Run(() => SolidWorksAutomation.Connect(vault.Config.SolidWorksVersion, progress));
+            var batch = await Task.Run(() => solidWorks.Record(vault.VaultRoot, files));
+            if (batch == null || batch.Entries.Count == 0) return (null, null, later);
+            var index = batch.Entries.ToDictionary(e => e.Key, e => (IndexEntry?)e.Value, StringComparer.OrdinalIgnoreCase);
+            return (index, batch.Previews, null);
+        }
+        catch (PdmException)
+        {
+            return (null, null, later);
+        }
+        finally
+        {
+            if (solidWorks != null) await Task.Run(solidWorks.Dispose);
+        }
     }
 
     private Task UndoCheckOutAsync()

@@ -145,7 +145,7 @@ Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do
 
 ### Deleting files from the vault
 
-**Only files that nothing else uses can be deleted** (or requested): a part an assembly or drawing still uses would leave it with a missing reference. Remove it from those files and check them in first, or select them too, to delete them together. Jarvis knows what uses what from the vault index, so if an assembly or drawing was never indexed, SolidWorks files can't be deleted until someone runs **Rebuild Index** in the SolidWorks pane.
+**Only files that nothing else uses can be deleted** (or requested): a part an assembly or drawing still uses would leave it with a missing reference. Remove it from those files and check them in first, or select them too, to delete them together. Jarvis knows what uses what from the vault index, so if an assembly or drawing isn't indexed yet, SolidWorks files can't be deleted until it is (that happens at the next check-in from SolidWorks by someone who has it).
 
 Teammates use **Request Delete** (right-click a file) and write why. Admins get a banner when there are requests; filter by **Delete requested** to see them, with the reason in the details panel. Then right-click:
 
@@ -216,7 +216,7 @@ The desktop app reminds people at check-in, but only SolidWorks can read a file'
 
 ### Vault index (part numbers, properties, where-used)
 
-The SolidWorks add-in records each file's custom properties, references and saved-in version whenever it's checked in from SolidWorks. Files added before the add-in, or checked in from the desktop app, aren't recorded until you click **Rebuild Index** in the SolidWorks pane, which reads every SolidWorks file in the vault (it takes a few minutes). The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
+Jarvis records each SolidWorks file's custom properties, references, saved-in version and 3D preview whenever it's checked in: from the SolidWorks pane directly, and from the Jarvis app by asking the add-in inside SolidWorks (started in the background if it isn't open; if the add-in isn't installed, the check-in still goes ahead). Anything still missing or out of date (files from before the add-in, or checked in when SolidWorks wasn't available) is caught up automatically: every check-in from the SolidWorks pane also records up to 10 such files. Nobody has to run anything. The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
 
 ### Review before release
 
@@ -333,12 +333,12 @@ The app checks this repo's **GitHub Releases** each time it starts. When there's
 | Break Lock | `lfs unlock --force --id` |
 | Version `7/10` | check-ins touching the file in `HEAD` / plus those in `HEAD..origin/main` (`git log --name-only`) |
 | Version guard | add-in reads `ISldWorks.VersionHistory` (file version 17000 = 2024, 19000 = 2026) and compares with `pdm.json` `solidWorksVersion` |
-| Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in; Rebuild Index commits them all |
+| Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in (from the app: the app asks the add-in through SolidWorks' `GetAddInObject` and `JarvisAddin.RecordFiles`); after each SolidWorks check-in `IndexCatchUp` picks up to 10 files with a missing or outdated record or no preview |
 | Milestones | annotated tag `milestone/<name>` on the vault's latest commit; viewing = `checkout --detach <tag>`, Return to Latest = `checkout main` + Get Latest |
 | Rename / Move, Move to Folder | `VaultService.PlanMoveAsync` / `MoveAsync` (Core): find referencing files with an `IReferenceEditor` (the add-in's SolidWorks, or the app's `SolidWorksAutomation`, which drives the team's SolidWorks over COM, started hidden if needed), check out, move, `ReplaceReferencedDocument` on each, move index entries and previews, check in old paths + new paths + referencing files; everything is put back if a reference can't be updated |
 | Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
 | Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
-| 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in / Rebuild Index; over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
+| 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in (and the catch-up); over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
 | Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
 | Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
 | Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |

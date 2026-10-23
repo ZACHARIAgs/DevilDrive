@@ -98,7 +98,7 @@ public sealed partial class VaultService
         {
             var listed = unindexed.Count <= 3 ? string.Join(", ", unindexed) : string.Join(", ", unindexed.Take(3)) + $" and {unindexed.Count - 3} more";
             return $"Jarvis can't tell whether {name} is used: {listed} {(unindexed.Count == 1 ? "hasn't" : "haven't")} been indexed yet. " +
-                   "Run Rebuild Index in SolidWorks' Jarvis pane, then try again.";
+                   "They're indexed the next time someone who has them checks in any file from SolidWorks' Jarvis pane; then try again.";
         }
         return null;
     }

@@ -46,6 +46,39 @@ public sealed class JarvisAddin : ISwAddin
         }
     }
 
+    /// <summary>
+    /// Called by the desktop app (through SolidWorks' GetAddInObject) when SolidWorks files are checked in
+    /// from the app, which can't read them itself: reads each file's index record and saves its 3D preview,
+    /// exactly as a check-in from this pane does. <paramref name="fullPaths"/> is one path per line.
+    /// Returns an <see cref="Jarvis.Core.Vault.IndexBatch"/> as text ("" if SolidWorks isn't ready).
+    /// </summary>
+    public string RecordFiles(string vaultRoot, string fullPaths)
+    {
+        if (_sw == null) return "";
+        var session = new SolidWorksSession(_sw);
+        var batch = new Jarvis.Core.Vault.IndexBatch();
+        var root = Path.GetFullPath(vaultRoot).TrimEnd('\\');
+        foreach (var line in fullPaths.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var full = Path.GetFullPath(line.Trim());
+            if (!full.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase) || !File.Exists(full)) continue;
+            var relative = full.Substring(root.Length + 1).Replace('\\', '/');
+            try
+            {
+                var preview = SolidWorksSession.CanHavePreview(full) ? Jarvis.Core.Vault.VaultPaths.PreviewFor(relative) : null;
+                var previewFull = preview == null ? null : Path.Combine(root, preview.Replace('/', '\\'));
+                batch.Entries[relative] = session.IndexFile(full, root, previewFull, out var previewSaved);
+                if (previewSaved) batch.Previews.Add(preview!);
+            }
+            catch (Exception ex)
+            {
+                AddinLog.Write($"Recording {relative} for the app failed: {ex.Message}");
+            }
+        }
+        AddinLog.Write($"Recorded {batch.Entries.Count} file(s) for a check-in from the app");
+        return batch.Serialize();
+    }
+
     public bool DisconnectFromSW()
     {
         try

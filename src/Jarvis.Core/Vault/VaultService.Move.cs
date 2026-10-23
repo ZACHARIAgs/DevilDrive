@@ -163,7 +163,7 @@ public sealed partial class VaultService
         foreach (var unknown in snapshot.Files.Where(f => !IsOnThisPc(f) && HasOwnReferences(f.RelativePath) && !index.ContainsKey(f.RelativePath)))
         {
             plan.Problems.Add($"{unknown.Name} isn't on this PC and Jarvis doesn't know which files it uses, so it might use this one. " +
-                              "Download it first (right-click it in Jarvis, Download), or have someone run Rebuild Index in SolidWorks.");
+                              "Download it first (right-click it in Jarvis, Download), or have someone who has it check in any file from SolidWorks.");
         }
 
         foreach (var parent in parents.Where(p => !plan.Moves.Any(m => string.Equals(m.From, p, StringComparison.OrdinalIgnoreCase))))

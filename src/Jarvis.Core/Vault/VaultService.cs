@@ -1779,7 +1779,7 @@ public sealed partial class VaultService : IVaultService
 
     /// <summary>
     /// Saves index entries (references, properties, saved-in version) without checking in any CAD
-    /// file. Used by the SolidWorks add-in's Rebuild Index. Null entries remove a file's entry.
+    /// file. Used by the SolidWorks add-in to catch up records after a check-in. Null entries remove a file's entry.
     /// </summary>
     public async Task<OperationResult> UpdateIndexAsync(IReadOnlyDictionary<string, IndexEntry?> entries, IProgress<string>? progress = null, CancellationToken ct = default,
         IReadOnlyList<string>? previews = null)

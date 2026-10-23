@@ -10,7 +10,8 @@ namespace Jarvis.Core.Vault;
 /// <summary>
 /// What the SolidWorks add-in knows about a file: which SolidWorks saved it, what it references, and
 /// its custom properties. Only SolidWorks can read these, so the add-in records them at check-in
-/// (and with Rebuild Index), and the desktop app shows them.
+/// (checking in from the desktop app asks the add-in too; anything missed is caught up at the next check-in
+/// from SolidWorks), and the desktop app shows them.
 /// </summary>
 public sealed class IndexEntry
 {

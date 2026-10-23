@@ -351,7 +351,7 @@ public sealed class VaultIntegrationTests : IDisposable
         var part = await alice.DeleteFromVaultAsync(new[] { "frame.sldprt" }, "");
         var text = await alice.DeleteFromVaultAsync(new[] { "notes.txt" }, "");
 
-        Assert.Contains("Run Rebuild Index", Assert.Single(part.Failures).Error.Message);
+        Assert.Contains("checks in any file from SolidWorks", Assert.Single(part.Failures).Error.Message);
         Assert.Contains("bracket.sldasm, frame.slddrw haven't been indexed", part.Failures[0].Error.Message);
         Assert.Equal(new[] { "notes.txt" }, text.Succeeded); // not a SolidWorks file: nothing references it
     }
