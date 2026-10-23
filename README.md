@@ -216,7 +216,7 @@ The desktop app reminds people at check-in, but only SolidWorks can read a file'
 
 ### Vault index (part numbers, properties, where-used)
 
-Jarvis records each SolidWorks file's custom properties, references, saved-in version and 3D preview whenever it's checked in: from the SolidWorks pane directly, and from the Jarvis app by asking the add-in inside SolidWorks (started in the background if it isn't open; if the add-in isn't installed, the check-in still goes ahead). Anything still missing or out of date (files from before the add-in, or checked in when SolidWorks wasn't available) is caught up automatically: every check-in from the SolidWorks pane also records up to 10 such files. Nobody has to run anything. The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
+Jarvis records each SolidWorks file's custom properties, references, saved-in version and 3D preview whenever it's checked in: from the SolidWorks pane directly, and from the Jarvis app by asking the add-in in SolidWorks when SolidWorks is open (if it isn't, the check-in still goes ahead and the files are recorded later). Anything still missing or out of date (files from before the add-in, or checked in when SolidWorks wasn't available) is caught up automatically: every check-in from the SolidWorks pane also records up to 10 such files. Nobody has to run anything. The app recognizes common property names: `PartNo`/`Part Number`/`Number`, `Description`, `Material`.
 
 ### Review before release
 

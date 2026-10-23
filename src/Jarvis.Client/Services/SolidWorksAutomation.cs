@@ -31,6 +31,9 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
         _startedProcesses = startedProcesses;
     }
 
+    /// <summary>Jarvis started this SolidWorks (hidden); it's closed again when this is disposed.</summary>
+    public bool StartedHere => _startedProcesses.Count > 0;
+
     /// <summary>SolidWorks' COM name: "SldWorks.Application.34" is 2026 (revision = year - 1992).</summary>
     public static string ProgIdFor(int? year) => year is int y ? $"SldWorks.Application.{y - 1992}" : "SldWorks.Application";
 
@@ -108,13 +111,7 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
         try
         {
             var addin = Call("GetAddInObject", AddinClsid);
-            if (addin == null && File.Exists(SolidWorksAddinSetup.AddinDll))
-            {
-                // A SolidWorks started in the background doesn't always load add-ins by itself.
-                Call("LoadAddIn", SolidWorksAddinSetup.AddinDll);
-                addin = Call("GetAddInObject", AddinClsid);
-            }
-            if (addin == null) return null;
+            if (addin == null) return null; // not loaded in this SolidWorks (one started in the background doesn't load add-ins)
             var json = addin.GetType().InvokeMember("RecordFiles", BindingFlags.InvokeMethod, null, addin, new object[] { vaultRoot, string.Join("\n", fullPaths) }) as string;
             return IndexBatch.Parse(json);
         }

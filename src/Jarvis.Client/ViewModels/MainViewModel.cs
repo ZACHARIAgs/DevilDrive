@@ -866,9 +866,10 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// SolidWorks files checked in from the app get their index record and 3D preview right away: the Jarvis
-    /// add-in reads them inside the team's SolidWorks (started in the background if it isn't open). If that
-    /// isn't possible, the check-in goes ahead without them, and a later check-in from SolidWorks records them.
+    /// SolidWorks files checked in from the app get their index record and 3D preview right away when the
+    /// team's SolidWorks is open: the Jarvis add-in in it reads them. SolidWorks isn't started for this (it's slow,
+    /// and a SolidWorks started in the background doesn't load add-ins): then the check-in goes ahead without
+    /// them, and the next check-in from SolidWorks records them.
     /// </summary>
     private static async Task<(Dictionary<string, IndexEntry?>? Index, List<string>? Previews, string? Note)> RecordSolidWorksFilesAsync(
         VaultService vault, IReadOnlyList<string> targets, IProgress<string> progress)
@@ -876,13 +877,14 @@ public sealed partial class MainViewModel : ViewModelBase
         var files = targets.Where(VaultService.IsSolidWorksFile).Select(vault.ToFullPath).Where(File.Exists).ToList();
         if (files.Count == 0) return (null, null, null);
         const string later = "Their part numbers, descriptions and 3D previews are added the next time someone checks in from SolidWorks.";
-        if (!SolidWorksAddinSetup.IsAddinInstalled) return (null, null, later);
+        if (!SolidWorksAddinSetup.IsAddinInstalled || !SolidWorksAddinSetup.IsSolidWorksRunning) return (null, null, later);
 
         progress.Report("Reading the SolidWorks files…");
         SolidWorksAutomation? solidWorks = null;
         try
         {
             solidWorks = await Task.Run(() => SolidWorksAutomation.Connect(vault.Config.SolidWorksVersion, progress));
+            if (solidWorks.StartedHere) return (null, null, later); // the open SolidWorks is another version: don't use a hidden one
             var batch = await Task.Run(() => solidWorks.Record(vault.VaultRoot, files));
             if (batch == null || batch.Entries.Count == 0) return (null, null, later);
             var index = batch.Entries.ToDictionary(e => e.Key, e => (IndexEntry?)e.Value, StringComparer.OrdinalIgnoreCase);
