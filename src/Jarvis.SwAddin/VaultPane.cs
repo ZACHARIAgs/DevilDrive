@@ -494,8 +494,9 @@ internal sealed class VaultPane : UserControl
             _watch.Text = WatchList.IsWatching(_vault.VaultRoot, file.RelativePath) ? "Stop notifying me" : "Notify me when it's free";
         }
         _downloadRefs.Enabled = ready && _snapshot?.ViewingMilestone == null;
-        _rename.Visible = file != null && file.ExistsLocally && IsSolidWorksFile(file.RelativePath) && !file.HasLocalChanges &&
-                          state is FileState.Available or FileState.CheckedOutByMe;
+        // Shown even when it can't be done right now (e.g. changes not checked in): clicking it says what's in the way.
+        _rename.Visible = file != null && file.ExistsLocally && !file.NotDownloaded && IsSolidWorksFile(file.RelativePath) &&
+                          state is FileState.Available or FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut;
         _checkIn.Primary = canCheckIn;
         _checkOut.Primary = canCheckOut && !canCheckIn;
         // Editing in a newer SolidWorks than the team's would save files the others can't open.

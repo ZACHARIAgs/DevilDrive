@@ -29,9 +29,13 @@ internal sealed class AddinReferenceEditor : IReferenceEditor
     public bool ReplaceReference(string referencingFile, string oldReference, string newReference) =>
         OnUi(() => _sw.ReplaceReference(referencingFile, oldReference, newReference));
 
-    /// <summary>Saves and closes the files (they're checked out by now), so they can be moved and repointed.</summary>
+    /// <summary>
+    /// Closes the files and everything using them, so they can be moved and repointed. Documents you have
+    /// checked out are saved first; read-only ones are closed without saving (they can't be saved, and an
+    /// assembly often shows as changed just from being opened).
+    /// </summary>
     public void Release(IReadOnlyList<string> fullPaths) =>
-        OnUi(() => _closed = _sw.CloseDocumentsUsing(fullPaths, CloseMode.Save));
+        OnUi(() => _closed = _sw.CloseDocumentsUsing(fullPaths, CloseMode.SaveWritableDiscardReadOnly));
 
     /// <summary>Reopens what was closed, at the new paths.</summary>
     public void Restore(IReadOnlyDictionary<string, string> movedFullPaths)

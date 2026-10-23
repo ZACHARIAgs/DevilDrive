@@ -90,7 +90,7 @@ public sealed partial class VaultService
         foreach (var move in all)
         {
             var name = PathList.Name(move.From);
-            if (!files.TryGetValue(move.From, out var file) || !file.ExistsLocally)
+            if (!files.TryGetValue(move.From, out var file) || !IsOnThisPc(file))
             {
                 plan.Problems.Add($"{name} isn't on this PC. Download it first.");
                 continue;
@@ -136,7 +136,7 @@ public sealed partial class VaultService
         }
 
         var movedFull = new HashSet<string>(movedSolidWorks.Select(m => ToFullPath(m.From)), StringComparer.OrdinalIgnoreCase);
-        var candidates = snapshot.Files.Where(f => f.ExistsLocally && IsSolidWorksFile(f.RelativePath)).ToList();
+        var candidates = snapshot.Files.Where(f => IsOnThisPc(f) && IsSolidWorksFile(f.RelativePath)).ToList();
         var parents = new List<string>();
         for (var i = 0; i < candidates.Count; i++)
         {
@@ -154,10 +154,16 @@ public sealed partial class VaultService
         var index = VaultIndex.ReadAll(VaultRoot);
         foreach (var pair in VaultIndex.WhereUsed(index).Where(p => movedSolidWorks.Any(m => string.Equals(m.From, p.Key, StringComparison.OrdinalIgnoreCase))))
         {
-            foreach (var user in pair.Value.Where(u => files.TryGetValue(u, out var f) && !f.ExistsLocally))
+            foreach (var user in pair.Value.Where(u => files.TryGetValue(u, out var f) && !IsOnThisPc(f)))
             {
                 plan.Problems.Add($"{PathList.Name(user)} uses {PathList.Name(pair.Key)} but isn't on this PC. Download it first, so its reference can be updated.");
             }
+        }
+        // An assembly or drawing that isn't here and was never indexed might use it too: nobody can tell, so don't risk breaking it.
+        foreach (var unknown in snapshot.Files.Where(f => !IsOnThisPc(f) && HasOwnReferences(f.RelativePath) && !index.ContainsKey(f.RelativePath)))
+        {
+            plan.Problems.Add($"{unknown.Name} isn't on this PC and Jarvis doesn't know which files it uses, so it might use this one. " +
+                              "Download it first (right-click it in Jarvis, Download), or have someone run Rebuild Index in SolidWorks.");
         }
 
         foreach (var parent in parents.Where(p => !plan.Moves.Any(m => string.Equals(m.From, p, StringComparison.OrdinalIgnoreCase))))
@@ -191,6 +197,9 @@ public sealed partial class VaultService
         }
         return plan;
     }
+
+    /// <summary>The real file is here (not missing, and not just the placeholder "only download my folders" leaves).</summary>
+    private static bool IsOnThisPc(VaultFile file) => file.ExistsLocally && !file.NotDownloaded;
 
     private static bool HasOwnReferences(string fullPath) =>
         fullPath.EndsWith(".sldasm", StringComparison.OrdinalIgnoreCase) || fullPath.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase);
@@ -323,17 +332,28 @@ public sealed partial class VaultService
                 local.Notes.Add("These files have never been checked in, so they were only moved on this PC.");
                 return local;
             }
+            OperationResult result;
             try
             {
-                var result = await CheckInAsync(paths, comment, progress: progress, ct: ct, indexUpdates: indexUpdates, previews: previews).ConfigureAwait(false);
+                result = await CheckInAsync(paths, comment, progress: progress, ct: ct, indexUpdates: indexUpdates, previews: previews).ConfigureAwait(false);
                 result.Succeeded.RemoveAll(p => newPlace.ContainsKey(p));
-                return result;
             }
             catch (PdmException ex)
             {
                 throw new PdmException(ex.Message + "\n\nThe files are moved on this PC but the move isn't in the vault yet. " +
                                        "Select the moved files and the files that use them, and click Check In to finish.", ex.Detail, ex);
             }
+
+            // 6. What was checked out to you before the move stays checked out (at its new place), so you can keep working.
+            var keep = plan.Moves.Select(m => m.From).Concat(plan.Parents)
+                .Where(r => files.TryGetValue(r, out var f) && f.IsLockable && f.State == FileState.CheckedOutByMe)
+                .Select(Now).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (keep.Count > 0)
+            {
+                var again = await CheckOutAsync(keep, progress, ct).ConfigureAwait(false);
+                result.Warnings.AddRange(again.Failures.Select(f => $"{PathList.Name(f.Path)} was moved but couldn't be checked out to you again: {f.Error.Message} Check it out before editing."));
+            }
+            return result;
         }
         finally
         {

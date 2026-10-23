@@ -397,6 +397,36 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Move_RefusesWhenAnAssemblyThatIsntHereWasNeverIndexed()
+    {
+        AliceAddsAssemblyAndDrawing();
+        File.Delete(Path.Combine(_alice, "bracket.sldasm")); // not on this PC, and nothing in the index says what it uses
+        var alice = await Open(_alice);
+
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "frame.sldprt" }, "Frame"), new FakeSolidWorks());
+
+        Assert.False(plan.CanMove);
+        Assert.Contains(plan.Problems, p => p.StartsWith("bracket.sldasm isn't on this PC and Jarvis doesn't know which files it uses"));
+        Assert.Contains(plan.Problems, p => p.Contains("Download it first"));
+    }
+
+    [Fact]
+    public async Task Move_AllowsIt_WhenTheIndexSaysTheMissingAssemblyDoesntUseIt()
+    {
+        AliceAddsAssemblyAndDrawing();
+        Directory.CreateDirectory(Path.Combine(_alice, ".pdm", "index"));
+        File.WriteAllText(Path.Combine(_alice, ".pdm", "index", "bracket.sldasm.json"), "{\"references\":[\"other.sldprt\"]}");
+        Git(_alice, "add", "-A");
+        Git(_alice, "commit", "-m", "index");
+        File.Delete(Path.Combine(_alice, "bracket.sldasm"));
+        var alice = await Open(_alice);
+
+        var plan = await alice.PlanMoveAsync(VaultService.IntoFolder(new[] { "frame.sldprt" }, "Frame"), new FakeSolidWorks());
+
+        Assert.True(plan.CanMove, string.Join(" ", plan.Problems));
+    }
+
+    [Fact]
     public void MoveComment_SaysWhatHappened()
     {
         Assert.Equal("Moved a.sldprt to Frame/Parts", VaultService.MoveComment(new[] { new FileMove("a.sldprt", "Frame/Parts/a.sldprt") }));

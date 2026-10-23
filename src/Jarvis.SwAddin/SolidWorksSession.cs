@@ -21,6 +21,11 @@ internal enum CloseMode
     DiscardTargets,
     /// <summary>Close read-only (not checked out) documents even with unsaved changes: they can't be saved anyway (switching versions).</summary>
     DiscardReadOnly,
+    /// <summary>
+    /// Save writable documents and close read-only ones without saving (Rename / Move). Assemblies opened
+    /// read-only often show as changed right after opening (rebuilt mates); that can't be saved and isn't real work.
+    /// </summary>
+    SaveWritableDiscardReadOnly,
 }
 
 internal sealed class ClosedDocuments
@@ -664,11 +669,12 @@ internal sealed class SolidWorksSession
         foreach (var doc in toClose.Where(d => d.GetSaveFlag()))
         {
             var path = doc.GetPathName();
-            if (mode == CloseMode.Save && !doc.IsOpenedReadOnly())
+            if ((mode == CloseMode.Save || mode == CloseMode.SaveWritableDiscardReadOnly) && !doc.IsOpenedReadOnly())
             {
                 Save(doc);
                 continue;
             }
+            if (mode == CloseMode.SaveWritableDiscardReadOnly) continue;
             if (mode == CloseMode.DiscardTargets && targetSet.Contains(path)) continue;
             if (mode == CloseMode.DiscardReadOnly && doc.IsOpenedReadOnly()) continue;
             throw new PdmException($"{Path.GetFileName(path)} has unsaved changes. Save it (or close it without saving), then try again.");
