@@ -119,6 +119,9 @@ public sealed class VaultFile
     public AdminCheckInRequest? CheckInRequest { get; set; }
     /// <summary>Display name of the admin who asked.</summary>
     public string? CheckInRequestedBy { get; set; }
+    /// <summary>Someone asked the admins to delete this file from the vault.</summary>
+    public DeleteRequest? DeleteRequest { get; set; }
+    public string? DeleteRequestedBy { get; set; }
 
     /// <summary>References, properties and saved-in version recorded by the SolidWorks add-in (null if not indexed).</summary>
     public IndexEntry? Index { get; set; }

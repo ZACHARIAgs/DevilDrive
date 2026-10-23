@@ -24,6 +24,9 @@ public enum VaultEventKind
     ReviewSubmitted,
     ReviewRejected,
     ReviewWithdrawn,
+    DeleteRequested,
+    DeleteRejected,
+    DeletedFromVault,
 }
 
 public sealed class VaultEvent
@@ -134,6 +137,18 @@ public sealed class DiscordWebhookNotifier : INotifier
                 break;
             case VaultEventKind.ReviewRejected:
                 message = $"❌ **{user}** (admin) rejected {files} (submitted by **{Escape(e.PreviousOwner ?? "someone")}**). It can be edited again.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.DeleteRequested:
+                message = $"\U0001F5D1 **{user}** asked to delete {files} from the vault. An admin can delete it or reject the request in Jarvis.";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.DeleteRejected:
+                message = $"\u21A9 **{user}** (admin) kept {files} (didn't delete it, as **{Escape(e.PreviousOwner ?? "someone")}** asked).";
+                if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
+                break;
+            case VaultEventKind.DeletedFromVault:
+                message = $"\U0001F5D1 **{user}** (admin) deleted {files} from the vault. It goes away from everyone's PC at their next Get Latest.";
                 if (!string.IsNullOrWhiteSpace(e.Comment)) message += "\n> " + Escape(e.Comment!.Trim()).Replace("\n", "\n> ");
                 break;
             case VaultEventKind.ReviewWithdrawn:

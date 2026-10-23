@@ -70,6 +70,7 @@ public sealed class FileRowViewModel : ViewModelBase
             if (File.PinnedVersion != null) text += $" (using older version {File.PinnedVersion.Version} on this PC; right-click, Return to Latest Version)";
             else if (File.IsOutdated && File.ExistsLocally) text += ", newer version in vault";
             if (File.CheckInRequest != null) text += $" (check-in requested by {File.CheckInRequestedBy})";
+            if (File.DeleteRequest != null) text += $" (delete requested by {File.DeleteRequestedBy})";
             if (File.NotDownloaded) text += " (not downloaded: right-click, Download)";
             if (File.ChangedSinceDrawing.Count > 0) text += " (drawing may be out of date)";
             if (IsWatched) text += " (you'll be told when it's free)";

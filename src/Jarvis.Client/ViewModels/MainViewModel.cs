@@ -51,6 +51,7 @@ public sealed partial class MainViewModel : ViewModelBase
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
         DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
         InitializeFolderCommands();
+        InitializeDeleteCommands();
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
@@ -342,6 +343,11 @@ public sealed partial class MainViewModel : ViewModelBase
         if (f.CheckInRequest != null)
         {
             facts.Add(new PropertyRow("Check-in requested", $"{f.CheckInRequestedBy}, {f.CheckInRequest.RequestedAt.LocalDateTime:MMM d, h:mm tt}"));
+        }
+        if (f.DeleteRequest != null)
+        {
+            facts.Add(new PropertyRow("Delete requested", $"{f.DeleteRequestedBy}, {f.DeleteRequest.RequestedAt.LocalDateTime:MMM d, h:mm tt}"));
+            facts.Add(new PropertyRow("Why", f.DeleteRequest.Reason));
         }
         facts.Add(new PropertyRow("Folder", row.Folder));
 
@@ -685,6 +691,12 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             lines.Add($"{waiting} file(s) are waiting for your review. Filter by \"In review\", then right-click and choose Approve & Release or Reject.");
         }
+        var deleteRequests = snapshot.Files.Count(f => f.DeleteRequest != null);
+        if (IsAdmin && deleteRequests > 0)
+        {
+            lines.Add($"{deleteRequests} file(s) have a delete request. Filter by \"Delete requested\", then right-click and choose Delete from Vault or Reject Delete Request.");
+            if (brush != ErrorBrush) brush = WarningBrush;
+        }
         HasSetupProblems = snapshot.SetupProblems.Count > 0;
         if (HasSetupProblems)
         {
@@ -738,6 +750,7 @@ public sealed partial class MainViewModel : ViewModelBase
             5 => f.State == FileState.Frozen,
             6 => f.NotDownloaded,
             7 => f.State == FileState.InReview,
+            8 => f.DeleteRequest != null,
             _ => true,
         };
     }

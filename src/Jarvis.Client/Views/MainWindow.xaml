@@ -167,6 +167,7 @@
                 <ComboBoxItem Content="Frozen" />
                 <ComboBoxItem Content="Not downloaded" />
                 <ComboBoxItem Content="In review" />
+                <ComboBoxItem Content="Delete requested" />
             </ComboBox>
             <Grid>
                 <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Padding="32,5,8,5"
@@ -258,6 +259,14 @@
                                   ToolTip="Delete files that were made on this PC and never checked in" />
                         <MenuItem Header="Move to Folder&#x2026;" Command="{Binding MoveToFolderCommand}"
                                   ToolTip="Move the selected files to another folder (or drag them onto a folder on the left)" />
+                        <MenuItem Header="Request Delete&#x2026;" Command="{Binding RequestDeleteCommand}"
+                                  ToolTip="Ask the admins to delete the file from the vault for everyone, and say why" />
+                        <MenuItem Header="Withdraw Delete Request" Command="{Binding WithdrawDeleteRequestCommand}" />
+                        <MenuItem Header="Delete from Vault&#x2026; (admin)" Command="{Binding DeleteFromVaultCommand}"
+                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="Delete the file for everyone (it goes away at their next Get Latest)" />
+                        <MenuItem Header="Reject Delete Request&#x2026; (admin)" Command="{Binding RejectDeleteRequestCommand}"
+                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                         <Separator />
                         <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
                     <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />

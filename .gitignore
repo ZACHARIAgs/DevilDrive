@@ -4,3 +4,6 @@ dist/
 .vs/
 *.user
 TestResults/
+
+# Python bytecode (from checking the vault guard)
+__pycache__/

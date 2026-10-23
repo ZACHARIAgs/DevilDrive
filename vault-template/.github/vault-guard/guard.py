@@ -11,6 +11,7 @@ commands instead of the app. It checks the push against the vault rules:
   * non-admins don't change frozen files, or files someone else has checked out;
   * only admins create, move or delete milestones (milestone/* tags);
   * reviews: non-admins only submit or withdraw their own, and nobody but admins changes a file in review;
+  * delete requests: non-admins only add or withdraw their own (admins delete the file or reject them);
   * (warning only) files saved in a newer SolidWorks than the team's version, force pushes.
 
 A push that breaks a rule is undone straight away with a new commit that puts every file it
@@ -29,6 +30,7 @@ ADMIN_ONLY_FILES = ("pdm.json", ".pdm/frozen.json")
 ADMIN_ONLY_PREFIXES = (".github/",)
 REQUESTS = ".pdm/checkin-requests.json"
 REVIEWS = ".pdm/reviews.json"
+DELETE_REQUESTS = ".pdm/delete-requests.json"
 FROZEN = ".pdm/frozen.json"
 INDEX_PREFIX = ".pdm/index/"
 
@@ -106,6 +108,14 @@ def review_keys(text):
     return {
         (str(r.get("path", "")).lower(), str(r.get("submittedBy", "")).lower())
         for r in load_json(text).get("reviews", [])
+        if isinstance(r, dict)
+    }
+
+
+def delete_request_keys(text):
+    return {
+        (str(r.get("path", "")).lower(), str(r.get("requestedBy", "")).lower())
+        for r in load_json(text).get("requests", [])
         if isinstance(r, dict)
     }
 
@@ -234,6 +244,12 @@ def main():
                 violations.append("submitted a review in someone else's name")
             if [key for key in old - new if key[1] != actor.lower()]:
                 violations.append("removed someone else's review (only admins approve or reject)")
+        if DELETE_REQUESTS in changed:
+            old, new = delete_request_keys(show(before, DELETE_REQUESTS)), delete_request_keys(show(after, DELETE_REQUESTS))
+            if [key for key in new - old if key[1] != actor.lower()]:
+                violations.append("asked to delete a file in someone else's name")
+            if [key for key in old - new if key[1] != actor.lower()]:
+                violations.append("removed someone else's delete request (only admins delete files or reject requests)")
         in_review = {key[0] for key in review_keys(show(before, REVIEWS))} & {key[0] for key in review_keys(show(after, REVIEWS))}
         for path in changed:
             if path.lower() in in_review:

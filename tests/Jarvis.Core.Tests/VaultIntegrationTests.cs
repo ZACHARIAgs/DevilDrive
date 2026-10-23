@@ -214,6 +214,91 @@ public sealed class VaultIntegrationTests : IDisposable
         Assert.DoesNotContain(snapshot.Files, f => f.RelativePath == ".gitattributes");
     }
 
+    // ------------------------------------------------------------ delete requests
+
+    [Fact]
+    public async Task DeleteRequest_IsSeenByEveryone_AndOnlyTheRequesterOrAnAdminTakesItBack()
+    {
+        var bob = await Open(_bob, login: "bob");
+        var tooShort = await Assert.ThrowsAsync<PdmException>(() => bob.RequestDeleteAsync(new[] { "notes.txt" }, "old"));
+        Assert.Contains("Write why it should be deleted", tooShort.Message);
+
+        var result = await bob.RequestDeleteAsync(new[] { "notes.txt" }, "Replaced by the new notes, nothing uses it");
+        Assert.Equal(new[] { "notes.txt" }, result.Succeeded);
+        var again = await bob.RequestDeleteAsync(new[] { "notes.txt" }, "Asking a second time for no reason");
+        Assert.Contains("already has a delete request", Assert.Single(again.Failures).Error.Message);
+
+        var carol = await Open(_alice, login: "carol");
+        await carol.GetLatestAsync();
+        var seen = (await carol.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "notes.txt");
+        Assert.Equal("bob", seen.DeleteRequest!.RequestedBy);
+        Assert.Equal("Replaced by the new notes, nothing uses it", seen.DeleteRequest.Reason);
+        var notHers = await carol.WithdrawDeleteRequestAsync(new[] { "notes.txt" });
+        Assert.Contains("Only they or an admin", Assert.Single(notHers.Failures).Error.Message);
+        await Assert.ThrowsAsync<PdmException>(() => carol.RejectDeleteRequestAsync(new[] { "notes.txt" }, "no"));
+
+        var withdrawn = await bob.WithdrawDeleteRequestAsync(new[] { "notes.txt" });
+        Assert.Equal(new[] { "notes.txt" }, withdrawn.Succeeded);
+        Assert.Null((await bob.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "notes.txt").DeleteRequest);
+    }
+
+    [Fact]
+    public async Task DeleteRequest_NotForFilesOutsideTheVault()
+    {
+        Write(_bob, "scratch.txt", "local only");
+        var bob = await Open(_bob, login: "bob");
+
+        var result = await bob.RequestDeleteAsync(new[] { "scratch.txt" }, "Made by mistake, not needed");
+
+        Assert.Contains("Delete Local File", Assert.Single(result.Failures).Error.Message);
+    }
+
+    [Fact]
+    public async Task DeleteFromVault_AdminDeletesForEveryone_AndClosesTheRequest()
+    {
+        var bob = await Open(_bob, login: "bob");
+        await bob.RequestDeleteAsync(new[] { "notes.txt" }, "Replaced by the new notes, nothing uses it");
+        var alice = await Open(_alice, login: "alice", repoAdmin: true);
+        await alice.GetLatestAsync();
+
+        var result = await alice.DeleteFromVaultAsync(new[] { "notes.txt", "never-there.txt" }, "");
+
+        Assert.Equal(new[] { "notes.txt" }, result.Succeeded);
+        Assert.Contains("isn't in the vault", Assert.Single(result.Failures).Error.Message);
+        Assert.False(File.Exists(Path.Combine(_alice, "notes.txt")));
+
+        await bob.GetLatestAsync();
+        Assert.False(File.Exists(Path.Combine(_bob, "notes.txt")));
+        var snapshot = await bob.GetSnapshotAsync(contactVault: false);
+        Assert.DoesNotContain(snapshot.Files, f => f.RelativePath == "notes.txt");
+        Assert.DoesNotContain("notes.txt", Read(_bob, ".pdm/delete-requests.json"));
+    }
+
+    [Fact]
+    public async Task DeleteFromVault_OnlyAdmins()
+    {
+        var bob = await Open(_bob, login: "bob");
+        var ex = await Assert.ThrowsAsync<PdmException>(() => bob.DeleteFromVaultAsync(new[] { "notes.txt" }, ""));
+        Assert.Contains("Only vault admins", ex.Message);
+        Assert.True(File.Exists(Path.Combine(_bob, "notes.txt")));
+    }
+
+    [Fact]
+    public async Task DeleteRequest_AdminRejects_FileStays()
+    {
+        var bob = await Open(_bob, login: "bob");
+        await bob.RequestDeleteAsync(new[] { "mine.txt" }, "I think this is a duplicate of notes");
+        var alice = await Open(_alice, login: "alice", repoAdmin: true);
+        await alice.GetLatestAsync();
+
+        var result = await alice.RejectDeleteRequestAsync(new[] { "mine.txt" }, "It's still used for the report");
+
+        Assert.Equal(new[] { "mine.txt" }, result.Succeeded);
+        var file = (await alice.GetSnapshotAsync(contactVault: false)).Files.Single(f => f.RelativePath == "mine.txt");
+        Assert.Null(file.DeleteRequest);
+        Assert.True(File.Exists(Path.Combine(_alice, "mine.txt")));
+    }
+
     // ------------------------------------------------------------ moving files into folders
 
     /// <summary>Stands in for SolidWorks: which file uses which, and the reference rewrites it was asked for.</summary>

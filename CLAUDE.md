@@ -42,7 +42,7 @@ dotnet run --project src/Jarvis.Client
 - PDM vocabulary in the UI: check out, check in, Get Latest, vault, version, revision, frozen. Plain, specific messages that say what to do next.
 - SolidWorks API calls on the UI thread; Git work is async so SolidWorks never freezes.
 - Admin = GitHub **Admin or Maintain** role on the vault repo (verified with the user's saved Git credential), never a list in a file.
-- Shared state lives in the vault under `.pdm/` (frozen.json, checkin-requests.json, reviews.json, index/, preview/) and is checked by the vault guard.
+- Shared state lives in the vault under `.pdm/` (frozen.json, checkin-requests.json, reviews.json, delete-requests.json, index/, preview/) and is checked by the vault guard.
 - Commit messages: written to a temp file and committed with `git commit -F` (here-strings with quotes break). Push only when the user says so.
 - Source files keep non-ASCII characters as `\uXXXX` escapes in C# strings.
 

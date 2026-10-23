@@ -225,6 +225,7 @@ public sealed partial class VaultService : IVaultService
         var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
         var requests = CheckInRequestList.Parse(await ReadVaultTextAsync(CheckInRequestList.RelativePath, ct).ConfigureAwait(false));
         var reviews = ReviewList.Parse(await ReadVaultTextAsync(ReviewList.RelativePath, ct).ConfigureAwait(false));
+        var deleteRequests = DeleteRequestList.Parse(await ReadVaultTextAsync(DeleteRequestList.RelativePath, ct).ConfigureAwait(false));
         var pins = PinnedVersions.Load(VaultRoot);
         var index = VaultIndex.ReadAll(VaultRoot);
         var usedIn = VaultIndex.WhereUsed(index);
@@ -297,6 +298,8 @@ public sealed partial class VaultService : IVaultService
                 ReviewSubmittedBy = review == null ? null : Config.DisplayNameFor(review.SubmittedBy),
                 CheckInRequest = request,
                 CheckInRequestedBy = request == null ? null : Config.DisplayNameFor(request.RequestedBy),
+                DeleteRequest = deleteRequests.Find(path),
+                DeleteRequestedBy = deleteRequests.Find(path) is { } deleteRequest ? Config.DisplayNameFor(deleteRequest.RequestedBy) : null,
                 Index = index.TryGetValue(path, out var indexEntry) ? indexEntry : null,
                 UsedIn = usedIn.TryGetValue(path, out var parents) ? parents : (IReadOnlyList<string>)Array.Empty<string>(),
                 NotDownloaded = placeholders.Contains(path),

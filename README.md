@@ -25,6 +25,7 @@ Go to the **[latest release](https://github.com/aturne59-stack/jarvis/releases/l
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\Jarvis\Backups`.
+* **Request Delete** (right-click): ask the admins to delete a file from the vault for everyone. Write why; they see the request in Jarvis (and Discord) and either delete the file or reject the request. Changed your mind? **Withdraw Delete Request**.
 * **Delete Local File** (right-click) removes a file you made in the vault folder but never checked in (it shows as *Not in vault*). Files that are in the vault can't be deleted this way. A copy is kept in the same backups folder.
 * **Folders**: the tree on the left shows the vault's folders; click one to see its files (and its subfolders' files). Right-click a folder for **New Folder…** (it reaches teammates once files are in it) or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: Jarvis starts SolidWorks (your team's version) in the background for that, so the first move takes a little longer. Files that are open in SolidWorks have to be closed first. Files you had checked out are still checked out to you afterwards. If an assembly or drawing that isn't downloaded on your PC might use the file (Jarvis can't tell because it was never indexed), the move is refused until you download it.
 * The version you're on is shown at the bottom right of Jarvis and at the bottom of the SolidWorks pane. The add-in updates along with the app: if its update was skipped (SolidWorks was open), Jarvis offers it again at the next start.
@@ -147,6 +148,15 @@ All in the app, no scripts or GitHub settings pages:
 Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do it). `scripts/Initialize-Vault.ps1` still works for a repo you created yourself.
 
 `pdm.json` lives in the vault, so you can change names or the webhook later. Edit it in `C:\CapstoneVault` and check it in. Everyone picks up the change on their next Get Latest.
+
+### Deleting files from the vault
+
+Teammates use **Request Delete** (right-click a file) and write why. Admins get a banner when there are requests; filter by **Delete requested** to see them, with the reason in the details panel. Then right-click:
+
+- **Delete from Vault… (admin)** deletes the file for everyone, with its index entry and 3D preview, in one check-in. It goes away from teammates' PCs at their next Get Latest. If assemblies or drawings use it, the dialog says so first. Admins can also do this without a request.
+- **Reject Delete Request… (admin)** keeps the file; the reason goes to Discord.
+
+Older versions stay in the vault's history (History, milestones), so a deleted file can be brought back, and it still counts toward GitHub's LFS storage. The vault guard lets teammates add or withdraw only their own requests.
 
 ### Who's an admin (and why typing a name doesn't work)
 
