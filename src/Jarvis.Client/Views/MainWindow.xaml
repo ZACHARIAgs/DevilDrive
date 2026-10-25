@@ -86,6 +86,13 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Explorer" />
                     </StackPanel>
                 </Button>
+                <Button AutomationProperties.Name="McMaster" Command="{Binding AddMcMasterCommand}"
+                        ToolTip="Add a McMaster-Carr part by its part number (goes in COTS\MCMASTER).">
+                    <StackPanel MinWidth="64">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7BF;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="McMaster" />
+                    </StackPanel>
+                </Button>
                 <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
                 <Button AutomationProperties.Name="Break Lock" Command="{Binding BreakLockCommand}"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
@@ -126,6 +133,14 @@
                     </StackPanel>
                 </Button>
                 <Separator />
+                <Button AutomationProperties.Name="Numbering" Command="{Binding NumberingCommand}"
+                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Admin: the vault's part-numbering convention (prefix, groups like 200 Turret). New parts get the next free number.">
+                    <StackPanel MinWidth="66">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8EF;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Numbering" />
+                    </StackPanel>
+                </Button>
                 <Button AutomationProperties.Name="Team" Command="{Binding TeamCommand}" ToolTip="Who has access to this vault. Admins add teammates (by GitHub username) or remove them here.">
                     <StackPanel MinWidth="56">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE716;" />

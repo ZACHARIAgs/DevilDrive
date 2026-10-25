@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Jarvis.Core.Errors;
 using Jarvis.Core.Git;
@@ -26,6 +27,8 @@ public partial class NewVaultWindow : Window
         for (var year = DateTime.Now.Year + 1; year >= 2020; year--) VersionBox.Items.Add(year.ToString(CultureInfo.InvariantCulture));
         VersionBox.Items.Add("No check");
         VersionBox.Text = VaultCreator.DefaultSolidWorksVersion.ToString(CultureInfo.InvariantCulture);
+        AddFolderRow("COTS", "Purchased parts: McMaster-Carr, bearings, fasteners (Jarvis puts McMaster parts in COTS/MCMASTER)");
+        AddFolderRow("Sandbox", "For trying things out without cluttering the real parts");
         Fill(() =>
         {
             NameBox.Text = "Team Vault";
@@ -54,6 +57,40 @@ public partial class NewVaultWindow : Window
             }
         };
     }
+
+    /// <summary>One starting folder: ticked by default, name editable.</summary>
+    private void AddFolderRow(string name, string hint)
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+        var box = new CheckBox { IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var nameBox = new TextBox { Text = name, Width = 140, VerticalContentAlignment = VerticalAlignment.Center };
+        nameBox.IsEnabled = true;
+        box.Checked += (_, _) => nameBox.IsEnabled = true;
+        box.Unchecked += (_, _) => nameBox.IsEnabled = false;
+        DockPanel.SetDock(box, Dock.Left);
+        DockPanel.SetDock(nameBox, Dock.Left);
+        row.Children.Add(box);
+        row.Children.Add(nameBox);
+        row.Children.Add(new TextBlock { Text = hint, Foreground = System.Windows.Media.Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Tag = (box, nameBox);
+        FoldersPanel.Children.Add(row);
+    }
+
+    private void OnAddFolder(object sender, RoutedEventArgs e)
+    {
+        AddFolderRow("New Folder", "");
+        if (FoldersPanel.Children[FoldersPanel.Children.Count - 1] is DockPanel { Tag: (CheckBox, TextBox nameBox) })
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
+        }
+    }
+
+    /// <summary>The ticked starting folders' names.</summary>
+    private System.Collections.Generic.List<string> ChosenFolders() =>
+        FoldersPanel.Children.OfType<DockPanel>()
+            .Select(r => r.Tag is (CheckBox box, TextBox name) && box.IsChecked == true ? name.Text.Trim() : "")
+            .Where(n => n.Length > 0).ToList();
 
     /// <summary>The new vault, once it's created.</summary>
     public NewVaultResult? Result { get; private set; }
@@ -120,6 +157,7 @@ public partial class NewVaultWindow : Window
             RepoName = RepoBox.Text.Trim(),
             SolidWorksVersion = version,
             LocalPath = FolderBox.Text.Trim(),
+            Folders = ChosenFolders(),
         };
     }
 
@@ -129,7 +167,7 @@ public partial class NewVaultWindow : Window
         StatusText.Text = status;
         Cursor = busy ? Cursors.Wait : null;
         CreateButton.IsEnabled = !busy;
-        NameBox.IsEnabled = OwnerBox.IsEnabled = RepoBox.IsEnabled = VersionBox.IsEnabled = FolderBox.IsEnabled = !busy;
+        NameBox.IsEnabled = OwnerBox.IsEnabled = RepoBox.IsEnabled = VersionBox.IsEnabled = FolderBox.IsEnabled = FoldersPanel.IsEnabled = !busy;
     }
 
     private async void OnCreate(object sender, RoutedEventArgs e)

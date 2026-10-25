@@ -367,6 +367,9 @@
         <Setter Property="RowDetailsVisibilityMode" Value="Collapsed" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+        <!-- Smooth scrolling by pixels instead of jumping whole rows; sideways scrolling: Views/WheelScrolling.cs. -->
+        <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
     </Style>
 
     <Style TargetType="DataGridColumnHeader">

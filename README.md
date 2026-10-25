@@ -25,6 +25,9 @@ Go to the **[latest release](https://github.com/aturne59-stack/jarvis/releases/l
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\Jarvis\Backups`.
+* **McMaster-Carr parts:** click **McMaster** in the toolbar, type the part number (e.g. 91251A540) and click **Get from McMaster**. Jarvis opens the part's page; click McMaster's **Download**, choose **SOLIDWORKS** and save. Jarvis picks the file up from your Downloads folder, puts it in `COTS\MCMASTER` and offers to check it in. (McMaster's own API needs an approved account, so Jarvis uses their normal download.)
+* **Part numbering:** if an admin has set it up (**Numbering** in the toolbar), checking in a new part from SolidWorks asks which group it belongs to (e.g. 200 Turret), gives it the next free number (TLT-203, saved in its PartNumber property) and offers to rename the file to match (TLT-203_Bearing_Housing.SLDPRT). The rename uses Rename / Move, so assemblies that use it are updated.
+* **Material** comes from the part's SolidWorks material (Edit Material), recorded at every check-in; there's nothing to type.
 * **Request Delete** (right-click): ask the admins to delete a file from the vault for everyone. Write why; they see the request in Jarvis (and Discord) and either delete the file or reject the request. Changed your mind? **Withdraw Delete Request**.
 * **Delete Local File** (right-click) removes a file you made in the vault folder but never checked in (it shows as *Not in vault*). Files that are in the vault can't be deleted this way. A copy is kept in the same backups folder.
 * **Folders**: the tree on the left shows the vault's folders; click one to see its files (and its subfolders' files). Right-click a folder for **New Folder…** (it reaches teammates once files are in it) or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: Jarvis starts SolidWorks (your team's version) in the background for that, so the first move takes a little longer. Files that are open in SolidWorks have to be closed first. Files you had checked out are still checked out to you afterwards. If an assembly or drawing that isn't downloaded on your PC might use the file (Jarvis can't tell because it was never indexed), the move is refused until you download it.
@@ -67,6 +70,7 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
   * **New files:** the first time a SolidWorks file is checked in, a window asks for its **description** (saved into the file's `Description` property, so it shows everywhere).
 * **Saving a part inside an assembly that isn't checked out:** press Save as usual. The add-in saves the checked-out parts you changed and leaves the read-only assembly alone, instead of SolidWorks asking to save the assembly as a new file.
 * **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
+* **Open a part from an assembly:** right-click a part or sub-assembly under Files in use and choose **Open**.
 * **Use an older version (this PC only):** right-click a row under Files in use and choose **Use an older version…**, then pick a version. Your PC loads that version (read-only) and reopens the assembly with it, while the rest of the assembly stays at the latest; the vault and your teammates are not affected. The row shows the version in purple (e.g. `3/5`). Get Latest keeps your choice. Right-click again and choose **Return to the latest version** to switch back (the app's right-click menu has **Return to Latest Version** too). A file on an older version can't be checked out or in until it's back on the latest. To make an old version the newest one for everyone, use **History → Restore This Version** in the app.
 * **Rename / Move**: the safe way to rename or move a file. It finds every assembly and drawing that uses the file, updates their references, and checks everything in together.
 * **Submit for review**, and for admins **Approve & release** / **Reject**: see *Review before release* below. Approving a drawing here also saves its PDF.
@@ -131,7 +135,7 @@ All in the app, no scripts or GitHub settings pages:
    - the **SolidWorks version** everyone saves in (the oldest one on the team; default 2024),
    - the **vault folder**, the same on every PC (e.g. `C:\ClubVault`; keep it outside OneDrive).
    
-   The app creates a **private** GitHub repo, puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
+   The app creates a **private** GitHub repo with the starting folders you tick (**COTS** for purchased parts and **Sandbox** for trying things out, both ticked by default; rename them or add more), puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
 3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. Then click **Copy welcome message** and send it on Discord or by email: one link to `Jarvis.exe` (with "Windows may warn you: More info → Run anyway"), then sign in and **Accept and download** on the welcome screen.
 
    The Team window also shows everyone who has access, invitations not accepted yet (**Cancel invite**; GitHub invitations expire after 7 days, so add them again if needed), and **Remove** for people who leave. Anyone on the team can see the list; only the repo's **Admin** role can add or remove people.
@@ -142,6 +146,10 @@ All in the app, no scripts or GitHub settings pages:
 Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do it). `scripts/Initialize-Vault.ps1` still works for a repo you created yourself.
 
 `pdm.json` lives in the vault, so you can change names or the webhook later. Edit it in `C:\CapstoneVault` and check it in. Everyone picks up the change on their next Get Latest.
+
+### Part numbering
+
+Click **Numbering** in the toolbar (admins; it may be under **…**). Set a prefix (e.g. TLT), the number of digits (3) and groups with a number and a name (200 Turret, 300 Tension test, 400 Bending fixture). A group owns the numbers after it, up to the next group: 201 to 299 for 200. It's saved in the vault (`.pdm/numbering.json`), so everyone gets it at their next Get Latest. New parts checked in from SolidWorks then get the next free number in the group the person picks; existing files aren't changed.
 
 ### Deleting files from the vault
 

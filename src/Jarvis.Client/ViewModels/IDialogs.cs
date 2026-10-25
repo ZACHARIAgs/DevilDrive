@@ -61,6 +61,10 @@ public interface IDialogs
     void Show3D(string title, System.Windows.Media.Media3D.Model3D model);
     /// <summary>Asks for a short text (e.g. a folder name); <paramref name="problem"/> says what's wrong with a value, or null. Null if cancelled.</summary>
     string? AskText(string title, string prompt, string initial, System.Func<string, string?> problem);
+    /// <summary>Gets a McMaster-Carr part (opens its page; waits for the download). Null if cancelled.</summary>
+    (string PartNumber, string DownloadedFile)? AskMcMasterPart();
+    /// <summary>Admin: edit the part-numbering convention. Null if cancelled; Removed when it's turned off.</summary>
+    (bool Removed, Jarvis.Core.Vault.NumberingScheme? Scheme)? AskNumbering(Jarvis.Core.Vault.NumberingScheme? current);
     /// <summary>
     /// Picks a folder (vault-relative, "" = top of the vault) from <paramref name="folders"/>; <paramref name="createFolder"/>
     /// makes a new one (parent, name) and returns its path. Null if cancelled.

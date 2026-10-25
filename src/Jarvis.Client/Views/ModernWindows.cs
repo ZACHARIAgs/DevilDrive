@@ -22,10 +22,12 @@ internal static class ModernWindows
         FrameworkElement.StyleProperty.OverrideMetadata(typeof(Window),
             new FrameworkPropertyMetadata { DefaultValue = app.FindResource("ModernWindow") });
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnLoaded));
+        WheelScrolling.Apply();
     }
 
     private static void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (sender is Window hooked) WheelScrolling.Attach(hooked);
         if (sender is not Window window || window.Background is not SolidColorBrush background) return;
         try
         {

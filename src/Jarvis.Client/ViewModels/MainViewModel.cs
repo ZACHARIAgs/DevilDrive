@@ -52,6 +52,7 @@ public sealed partial class MainViewModel : ViewModelBase
         DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
         InitializeFolderCommands();
         InitializeDeleteCommands();
+        InitializeNumberingCommands();
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);

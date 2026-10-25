@@ -24,6 +24,7 @@ public sealed partial class MainViewModel
     public ICommand DeleteFolderCommand { get; private set; } = null!;
     public ICommand ShowFolderInExplorerCommand { get; private set; } = null!;
     public ICommand MoveToFolderCommand { get; private set; } = null!;
+    public ICommand AddMcMasterCommand { get; private set; } = null!;
 
     /// <summary>The folder the list shows ("" = the whole vault). Files in subfolders are included.</summary>
     public string SelectedFolder
@@ -41,6 +42,7 @@ public sealed partial class MainViewModel
         DeleteFolderCommand = new RelayCommand(DeleteFolder, () => CanEdit && SelectedFolder.Length > 0);
         ShowFolderInExplorerCommand = new RelayCommand(ShowFolderInExplorer, () => _vault != null);
         MoveToFolderCommand = new RelayCommand(async () => await MoveToFolderAsync(), () => CanEdit && MoveTargets().Count > 0);
+        AddMcMasterCommand = new RelayCommand(async () => await AddMcMasterAsync(), () => CanEdit);
     }
 
     private bool InSelectedFolder(FileRowViewModel row) =>
@@ -143,6 +145,43 @@ public sealed partial class MainViewModel
         if (_vault == null) return;
         var full = SelectedFolder.Length == 0 ? _vault.VaultRoot : _vault.ToFullPath(SelectedFolder);
         if (Directory.Exists(full)) Process.Start(new ProcessStartInfo("explorer.exe", $"\"{full}\"") { UseShellExecute = true });
+    }
+
+    /// <summary>
+    /// Adds a McMaster-Carr part: the dialog opens its page and waits for the download; the file then goes into
+    /// COTS/MCMASTER (created if needed) and, if the user agrees, is checked in straight away.
+    /// </summary>
+    private async Task AddMcMasterAsync()
+    {
+        if (_vault == null || _dialogs.AskMcMasterPart() is not { } part) return;
+        var relative = McMaster.VaultPathFor(part.DownloadedFile);
+        var target = _vault.ToFullPath(relative);
+        if (File.Exists(target))
+        {
+            _dialogs.ShowMessage("McMaster", $"{relative} is already in the vault, so the download was left in your Downloads folder.", isWarning: true);
+            return;
+        }
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(part.DownloadedFile, target);
+            Jarvis.Core.Install.AppInstaller.RemoveDownloadMark(target); // so SolidWorks doesn't treat it as blocked
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.ShowError(new PdmException($"The download couldn't be moved into the vault: {ex.Message}"));
+            return;
+        }
+        _selectedFolder = McMaster.Folder;
+        OnPropertyChanged(nameof(SelectedFolder));
+        await RefreshAsync(quiet: true);
+        if (!_dialogs.Confirm("McMaster", $"Added {relative}.\n\nCheck it in now, so the whole team has it?"))
+        {
+            StatusText = $"Added {relative}. Check it in when you're ready.";
+            return;
+        }
+        await RunAsync("Checking in\u2026", async (vault, progress) =>
+            Report(await vault.CheckInAsync(new[] { relative }, $"Added McMaster-Carr part {part.PartNumber}", progress: progress), "Checked in"));
     }
 
     /// <summary>Files that can be picked up and moved: on this PC, in the vault or new.</summary>

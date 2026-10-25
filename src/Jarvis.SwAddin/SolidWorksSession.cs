@@ -369,7 +369,10 @@ internal sealed class SolidWorksSession
     /// document is only marked as changed (check-in saves it); a closed one is opened invisibly, saved
     /// and closed.
     /// </summary>
-    public void SetDescription(string path, string description)
+    public void SetDescription(string path, string description) => SetProperty(path, IndexEntry.DescriptionProperty, description);
+
+    /// <summary>Writes a file-level custom property (e.g. PartNumber), the same way as <see cref="SetDescription"/>.</summary>
+    public void SetProperty(string path, string name, string value)
     {
         var doc = FindOpen(path);
         var openedHere = false;
@@ -389,13 +392,13 @@ internal sealed class SolidWorksSession
             {
                 _sw.DocumentVisible(true, (int)type);
             }
-            if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(path)} to save its description.");
+            if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(path)} to save its {name} property.");
         }
 
         try
         {
             var manager = doc.Extension.get_CustomPropertyManager("");
-            manager.Add3(IndexEntry.DescriptionProperty, (int)swCustomInfoType_e.swCustomInfoText, description,
+            manager.Add3(name, (int)swCustomInfoType_e.swCustomInfoText, value,
                 (int)swCustomPropertyAddOption_e.swCustomPropertyReplaceValue);
             if (!openedHere)
             {
@@ -405,7 +408,7 @@ internal sealed class SolidWorksSession
             int saveErrors = 0, saveWarnings = 0;
             if (!doc.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref saveErrors, ref saveWarnings))
             {
-                throw new PdmException($"SolidWorks couldn't save the description into {Path.GetFileName(path)} (error {saveErrors}).");
+                throw new PdmException($"SolidWorks couldn't save the {name} property into {Path.GetFileName(path)} (error {saveErrors}).");
             }
         }
         finally

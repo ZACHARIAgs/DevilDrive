@@ -26,6 +26,11 @@ public sealed class NewVaultRequest
     public int? SolidWorksVersion { get; set; } = 2024;
     /// <summary>Folder every member keeps the vault in, e.g. C:\ClubVault.</summary>
     public string LocalPath { get; set; } = "";
+    /// <summary>Folders the vault starts with (top level), e.g. COTS for purchased parts and Sandbox for trying things out.</summary>
+    public List<string> Folders { get; set; } = new List<string>(DefaultFolders);
+
+    /// <summary>Suggested starting folders: COTS (commercial off-the-shelf: McMaster, bearings, fasteners) and Sandbox.</summary>
+    public static readonly IReadOnlyList<string> DefaultFolders = new[] { "COTS", "Sandbox" };
 }
 
 public sealed class NewVaultResult
@@ -76,6 +81,12 @@ public static class VaultCreator
         if (!Regex.IsMatch(path, @"^[A-Za-z]:\\[^<>:""/|?*]+$")) return @"Enter a full folder path on this PC, e.g. C:\ClubVault.";
         if (Path.GetPathRoot(path)?.TrimEnd('\\') is { } root && string.Equals(path.TrimEnd('\\'), root, StringComparison.OrdinalIgnoreCase)) return "Choose a folder, not a whole drive.";
         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any()) return $"{path} already exists and isn't empty. Choose a new folder.";
+        foreach (var folder in request.Folders ?? new List<string>())
+        {
+            if (VaultService.FolderNameProblem(folder) is { } folderProblem) return $"Starting folder \"{folder.Trim()}\": {folderProblem}";
+        }
+        var names = (request.Folders ?? new List<string>()).Select(f => f.Trim()).ToList();
+        if (names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Count) return "Two starting folders have the same name.";
         return null;
     }
 
@@ -92,8 +103,9 @@ public static class VaultCreator
     }
 
     /// <summary>Every file of a new vault, by path relative to the vault folder.</summary>
-    public static IReadOnlyDictionary<string, string> TemplateFiles(string vaultName, string localPath, int? solidWorksVersion) =>
-        new Dictionary<string, string>
+    public static IReadOnlyDictionary<string, string> TemplateFiles(string vaultName, string localPath, int? solidWorksVersion, IEnumerable<string>? folders = null)
+    {
+        var files = new Dictionary<string, string>
         {
             [VaultSetup.AttributesPath] = VaultSetup.TemplateAttributes,
             [".gitignore"] = VaultSetup.TemplateIgnore,
@@ -101,6 +113,17 @@ public static class VaultCreator
             [VaultSetup.GuardWorkflowPath] = VaultSetup.GuardWorkflow,
             [VaultSetup.GuardScriptPath] = VaultSetup.GuardScript,
         };
+        // Git doesn't keep empty folders: a hidden placeholder makes each starting folder reach every teammate.
+        foreach (var folder in (folders ?? Array.Empty<string>()).Select(f => f.Trim()).Where(f => f.Length > 0))
+        {
+            files[folder + "/" + KeepFile] = KeepFileText;
+        }
+        return files;
+    }
+
+    /// <summary>Hidden placeholder that keeps an empty folder in the vault (Jarvis doesn't list hidden files).</summary>
+    public const string KeepFile = ".keep";
+    public const string KeepFileText = "Keeps this folder in the vault for everyone (Git doesn't store empty folders). Jarvis doesn't show this file.\n";
 
     /// <summary>
     /// Creates the private repo, puts the vault files in it and sets up <see cref="NewVaultRequest.LocalPath"/>
@@ -143,7 +166,7 @@ public static class VaultCreator
         var createdFolder = !Directory.Exists(folder);
         try
         {
-            var files = TemplateFiles(request.VaultName, folder, request.SolidWorksVersion);
+            var files = TemplateFiles(request.VaultName, folder, request.SolidWorksVersion, request.Folders);
             await SeedAsync(gitExe, folder, repo.CloneUrl, files, user, configureLfs: true, progress, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is PdmException || ex is IOException || ex is UnauthorizedAccessException)

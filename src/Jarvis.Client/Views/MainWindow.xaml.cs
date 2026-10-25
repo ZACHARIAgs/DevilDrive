@@ -127,6 +127,18 @@ public partial class MainWindow : Window, IDialogs
     public bool Confirm(string title, string message) =>
         MessageBox.Show(this, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK;
 
+    public (bool Removed, Jarvis.Core.Vault.NumberingScheme? Scheme)? AskNumbering(Jarvis.Core.Vault.NumberingScheme? current)
+    {
+        var dialog = new NumberingWindow(current) { Owner = this };
+        return dialog.ShowDialog() == true ? (dialog.Removed, dialog.Result) : null;
+    }
+
+    public (string PartNumber, string DownloadedFile)? AskMcMasterPart()
+    {
+        var dialog = new McMasterWindow { Owner = this };
+        return dialog.ShowDialog() == true && dialog.DownloadedFile != null ? (dialog.PartNumber, dialog.DownloadedFile) : null;
+    }
+
     public string? AskText(string title, string prompt, string initial, Func<string, string?> problem)
     {
         var dialog = new TextPromptWindow(title, prompt, initial, problem) { Owner = this };

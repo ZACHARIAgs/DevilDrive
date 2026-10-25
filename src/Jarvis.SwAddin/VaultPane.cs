@@ -118,7 +118,7 @@ internal sealed class VaultPane : UserControl
             StatusOf = node => node.RelativePath != null && _vault != null ? FileAt(_vault.ToFullPath(node.RelativePath)) : null,
         };
         _tree.TickedChanged += (_, _) => UpdateView();
-        _tree.ExtraMenu = VersionMenu;
+        _tree.ExtraMenu = TreeMenu;
         _saveGuard = new AssemblySaveGuard(sw);
         _saveGuard.Saved += message => { SetStatus(message); _treeStamp = null; };
         _checkOut = new ModernButton("Check Out", "");
@@ -696,6 +696,21 @@ internal sealed class VaultPane : UserControl
     /// another version, live in the open assembly. Other instances, other assemblies and the part file
     /// itself are untouched.
     /// </summary>
+    /// <summary>Right-click menu of a row in the files-in-use tree: open that part or sub-assembly, then the version items.</summary>
+    private IEnumerable<ToolStripItem> TreeMenu(FileTreeNode node)
+    {
+        var isTop = string.Equals(node.FullPath, _currentPath, StringComparison.OrdinalIgnoreCase);
+        if (!isTop && File.Exists(node.FullPath) && FileAt(node.FullPath)?.NotDownloaded != true)
+        {
+            yield return new ToolStripMenuItem($"Open {Path.GetFileName(node.FullPath)}", null, (_, _) =>
+            {
+                EnsureUiContext();
+                _sw.Open(node.FullPath);
+            }) { Font = new Font(Theme.Body, FontStyle.Bold) };
+        }
+        foreach (var item in VersionMenu(node)) yield return item;
+    }
+
     private IEnumerable<ToolStripItem> VersionMenu(FileTreeNode node)
     {
         if (_vault == null || _busy || _snapshot?.ViewingMilestone != null || node.IsOutsideVault) yield break;
@@ -1006,12 +1021,18 @@ internal sealed class VaultPane : UserControl
 
         // First check-in of a SolidWorks file: ask what it is.
         var newDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var newPartNumbers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var renames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var newSolidWorks = targets.Where(p => FileAt(p)?.State == FileState.NotInVault && IsSolidWorksFile(p) && !VersionCopies.IsVersionCopy(p)).ToList();
         if (newSolidWorks.Count > 0)
         {
-            using var describe = new DescriptionForm(newSolidWorks.Select(p => (p, CurrentDescription(p))).ToList());
+            // With a part-numbering convention, each new file also gets a group, the next free number and (optionally) a matching name.
+            using var describe = new DescriptionForm(newSolidWorks.Select(p => (p, CurrentDescription(p))).ToList(),
+                _vault.LoadNumbering(), VaultService.UsedPartNumbers(_snapshot?.Files ?? Array.Empty<VaultFile>()));
             if (describe.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
             newDescriptions = describe.Descriptions;
+            newPartNumbers = describe.PartNumbers;
+            renames = describe.Renames;
         }
 
 
@@ -1044,11 +1065,17 @@ internal sealed class VaultPane : UserControl
                 progress.Report($"Saving the description of {Path.GetFileName(pair.Key)}\u2026");
                 _sw.SetDescription(pair.Key, pair.Value);
             }
+            foreach (var pair in newPartNumbers)
+            {
+                progress.Report($"Saving the part number of {Path.GetFileName(pair.Key)}\u2026");
+                _sw.SetProperty(pair.Key, IndexEntry.PartNumberProperty, pair.Value);
+            }
             progress.Report("Saving and closing files…");
-            // Properties can only be read while documents are open; references and saved-in version come from disk after saving.
+            // Properties (including the part's material) are read from open documents now; files that aren't loaded are
+            // opened in the background after saving, so their record is never left with an old material or description.
             var properties = targets.Where(IsSolidWorksFile).ToDictionary(
                 p => p,
-                p => WithDescription(p, _sw.FindOpen(p) is { } doc ? _sw.ReadProperties(doc) : FileAt(p)?.Index?.Properties, newDescriptions),
+                p => _sw.FindOpen(p) is { } doc ? WithDescription(p, _sw.ReadProperties(doc), newDescriptions) : null,
                 StringComparer.OrdinalIgnoreCase);
             // 3D previews for the app's viewer, from the open models (unopened ones get theirs from a later check-in's catch-up).
             progress.Report("Saving 3D previews…");
@@ -1060,7 +1087,14 @@ internal sealed class VaultPane : UserControl
                 if (doc != null && _sw.ExportPreview(doc, _vault.ToFullPath(preview))) previews.Add(preview);
             }
             _sw.SaveTargets(targets);
-            var index = properties.ToDictionary(p => p.Key, p => (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value), StringComparer.OrdinalIgnoreCase);
+            var index = properties.ToDictionary(p => p.Key, p =>
+            {
+                if (!File.Exists(p.Key)) return null; // deleted in this check-in: its record goes too
+                if (p.Value != null) return (IndexEntry?)_sw.BuildIndexEntry(p.Key, _vault.VaultRoot, p.Value);
+                var entry = _sw.IndexFile(p.Key, _vault.VaultRoot, previewPath: null, out _);
+                entry.Properties = WithDescription(p.Key, entry.Properties, newDescriptions) ?? entry.Properties;
+                return entry;
+            }, StringComparer.OrdinalIgnoreCase);
             var checkedIn = await _vault.CheckInAsync(targets, comment, keep, progress, indexUpdates: index, previews: previews);
             // Released files are read-only on disk again; show them read-only in SolidWorks too.
             if (!keep) _sw.MakeReadOnly(checkedIn.Succeeded.Select(_vault.ToFullPath));
@@ -1068,7 +1102,10 @@ internal sealed class VaultPane : UserControl
             var report = Report(checkedIn, "Checked in");
             // Keep the index complete: record a few files whose record is missing or out of date (checked in from the app).
             var alsoIndexed = checkedIn.Failures.Count == 0 ? await CatchUpIndexAsync(progress) : null;
-            return alsoIndexed == null ? report : report + " " + alsoIndexed;
+            if (alsoIndexed != null) report += " " + alsoIndexed;
+            // Rename new files to the part-numbering convention, now that they're in the vault (Rename / Move updates what uses them).
+            var renamed = checkedIn.Failures.Count == 0 ? await RenameToConventionAsync(renames, progress) : null;
+            return renamed == null ? report : report + " " + renamed;
         });
     }
 
@@ -1112,6 +1149,47 @@ internal sealed class VaultPane : UserControl
             AddinLog.Write("Index catch-up after check-in failed: " + ex);
             return null;
         }
+    }
+
+    /// <summary>
+    /// After a check-in: renames new files to the names the part-numbering convention gives them, with the same
+    /// move as Rename / Move (assemblies using them are updated and checked in too). Returns a line for the status.
+    /// </summary>
+    private async Task<string?> RenameToConventionAsync(Dictionary<string, string> renames, IProgress<string> progress)
+    {
+        if (_vault == null || renames.Count == 0) return null;
+        var done = new List<string>();
+        var problems = new List<string>();
+        var editor = new AddinReferenceEditor(_sw, this);
+        foreach (var pair in renames)
+        {
+            var from = _vault.ToRelativePath(pair.Key);
+            var slash = from.LastIndexOf('/');
+            var to = (slash < 0 ? "" : from.Substring(0, slash + 1)) + pair.Value;
+            progress.Report($"Renaming {Path.GetFileName(pair.Key)} to {pair.Value}\u2026");
+            try
+            {
+                var plan = await _vault.PlanMoveAsync(new[] { new FileMove(from, to) }, editor, progress);
+                if (!plan.CanMove)
+                {
+                    problems.Add($"{Path.GetFileName(pair.Key)}: {string.Join(" ", plan.Problems)}");
+                    continue;
+                }
+                var result = await _vault.MoveAsync(plan, editor, VaultService.MoveComment(plan.Moves), progress);
+                if (result.Failures.Count == 0) done.Add(pair.Value);
+                else problems.Add($"{Path.GetFileName(pair.Key)}: {result.Failures[0].Error.Message}");
+            }
+            catch (PdmException ex)
+            {
+                problems.Add($"{Path.GetFileName(pair.Key)}: {ex.Message}");
+            }
+        }
+        if (problems.Count > 0)
+        {
+            MessageBox.Show(_sw.MainWindow, "These weren't renamed (they're checked in under their old names; use Rename / Move later):\n\n" + string.Join("\n", problems),
+                "Jarvis \u2014 Rename to part number", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        return done.Count == 0 ? null : $"Renamed to {string.Join(", ", done)}.";
     }
 
     /// <summary>The Description property of a SolidWorks file (from the open document, or the vault index).</summary>

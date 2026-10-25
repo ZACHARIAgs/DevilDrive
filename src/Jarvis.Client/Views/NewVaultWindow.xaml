@@ -31,6 +31,12 @@
             <TextBox x:Name="FolderBox" VerticalContentAlignment="Center" TextChanged="OnFolderChanged" />
         </DockPanel>
 
+        <TextBlock FontWeight="SemiBold" Text="Starting folders" Margin="0,12,0,0" />
+        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+                   Text="Made in the vault for everyone. Untick the ones you don't want, or rename them. You can add more folders later in Jarvis." />
+        <StackPanel x:Name="FoldersPanel" />
+        <Button Content="Add a folder" HorizontalAlignment="Left" Padding="10,2" Margin="0,4,0,0" Click="OnAddFolder" />
+
         <TextBlock x:Name="StatusText" TextWrapping="Wrap" Margin="0,14,0,0" Foreground="#555" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="CreateButton" Style="{StaticResource DialogButton}" Content="Create vault" IsDefault="True" Click="OnCreate" />
