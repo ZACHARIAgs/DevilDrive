@@ -26,7 +26,7 @@ public sealed partial class MainViewModel
     public ICommand MoveToFolderCommand { get; private set; } = null!;
     public ICommand AddMcMasterCommand { get; private set; } = null!;
 
-    /// <summary>The folder the list shows ("" = the whole vault). Files in subfolders are included.</summary>
+    /// <summary>The folder the list shows ("" = the top of the vault): its own files, or everything below it while searching or filtering.</summary>
     public string SelectedFolder
     {
         get => _selectedFolder;
@@ -45,8 +45,18 @@ public sealed partial class MainViewModel
         AddMcMasterCommand = new RelayCommand(async () => await AddMcMasterAsync(), () => CanEdit);
     }
 
-    private bool InSelectedFolder(FileRowViewModel row) =>
-        SelectedFolder.Length == 0 || row.Path.StartsWith(SelectedFolder + "/", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Like File Explorer, a folder shows only its own files. While searching or filtering (e.g. "Checked out to me"),
+    /// its subfolders are included too, so nothing is hidden by where it's filed.
+    /// </summary>
+    private bool InSelectedFolder(FileRowViewModel row)
+    {
+        if (SearchText.Length > 0 || FilterIndex != 0)
+        {
+            return SelectedFolder.Length == 0 || row.Path.StartsWith(SelectedFolder + "/", StringComparison.OrdinalIgnoreCase);
+        }
+        return string.Equals(row.File.Folder, SelectedFolder, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Rebuilds the tree from the files and the folders on disk, keeping what was open and selected.</summary>
     private void RebuildFolders()
