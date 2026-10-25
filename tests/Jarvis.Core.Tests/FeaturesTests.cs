@@ -135,4 +135,26 @@ public class FeaturesTests
         request.Folders = new List<string> { "Bad:Name" };
         Assert.Contains("Starting folder \"Bad:Name\"", VaultCreator.Validate(request));
     }
+
+    [Theory]
+    [InlineData("Turret/plate.SLDPRT", "Clamp Plate", "Turret/Clamp Plate.SLDPRT")]
+    [InlineData("Turret/plate.SLDPRT", " Clamp Plate.sldprt ", "Turret/Clamp Plate.SLDPRT")]
+    [InlineData("plate.SLDPRT", "TLT-1.5 plate", "TLT-1.5 plate.SLDPRT")]
+    public void Rename_KeepsTheFolderAndExtension(string path, string typed, string expected)
+    {
+        Assert.Equal(expected, VaultService.RenamedPath(path, typed));
+        Assert.Null(VaultService.FileNameProblem(path, typed));
+    }
+
+    [Theory]
+    [InlineData("", "Type a new name")]
+    [InlineData(".SLDPRT", "Type a new name")]
+    [InlineData("a:b", "can't contain")]
+    [InlineData("sub/name", "can't contain")]
+    [InlineData("plate", "its name already")]
+    [InlineData("Plate", "capital letters")]
+    public void Rename_Problems(string typed, string expected)
+    {
+        Assert.Contains(expected, VaultService.FileNameProblem("Turret/plate.SLDPRT", typed));
+    }
 }

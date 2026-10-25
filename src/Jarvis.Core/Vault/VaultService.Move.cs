@@ -426,6 +426,36 @@ public sealed partial class VaultService
     }
 
     /// <summary>
+    /// Where a file goes when it's renamed in its own folder: the new name with the file's own extension, whether
+    /// or not it was typed ("Clamp Plate" or "Clamp Plate.SLDPRT" both give Turret/Clamp Plate.SLDPRT).
+    /// </summary>
+    public static string RenamedPath(string relativePath, string newName)
+    {
+        var extension = Path.GetExtension(relativePath);
+        var name = (newName ?? "").Trim();
+        if (extension.Length > 0 && name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - extension.Length).TrimEnd();
+        var slash = relativePath.LastIndexOf('/');
+        return (slash < 0 ? "" : relativePath.Substring(0, slash + 1)) + name + extension;
+    }
+
+    /// <summary>Checks a new name for a file (see <see cref="RenamedPath"/>); returns what's wrong with it, or null if it's fine.</summary>
+    public static string? FileNameProblem(string relativePath, string? newName)
+    {
+        var target = RenamedPath(relativePath, newName ?? "");
+        var name = Path.GetFileNameWithoutExtension(target);
+        if (name.Length == 0) return "Type a new name for the file.";
+        if ((newName ?? "").IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || (newName ?? "").IndexOfAny(new[] { '/', '\\' }) >= 0)
+        {
+            return "A file name can't contain any of these: \\ / : * ? \" < > |";
+        }
+        if (name.StartsWith(".", StringComparison.Ordinal) || name.EndsWith(".", StringComparison.Ordinal)) return "A file name can't start or end with a dot.";
+        if (string.Equals(target, relativePath, StringComparison.Ordinal)) return "That's its name already.";
+        // Windows treats the names as the same file, so Git and SolidWorks would get confused.
+        if (string.Equals(target, relativePath, StringComparison.OrdinalIgnoreCase)) return "Only capital letters would change, which Jarvis can't do. Change the name in another way too.";
+        return null;
+    }
+
+    /// <summary>
     /// Makes a folder inside <paramref name="parentFolder"/> ("" is the top of the vault) and returns its
     /// vault-relative path. It's only on this PC until files are moved into it: Git doesn't keep empty folders.
     /// </summary>

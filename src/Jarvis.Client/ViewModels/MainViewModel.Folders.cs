@@ -24,6 +24,7 @@ public sealed partial class MainViewModel
     public ICommand DeleteFolderCommand { get; private set; } = null!;
     public ICommand ShowFolderInExplorerCommand { get; private set; } = null!;
     public ICommand MoveToFolderCommand { get; private set; } = null!;
+    public ICommand RenameCommand { get; private set; } = null!;
     public ICommand AddMcMasterCommand { get; private set; } = null!;
 
     /// <summary>The folder the list shows ("" = the top of the vault): its own files, or everything below it while searching or filtering.</summary>
@@ -42,6 +43,7 @@ public sealed partial class MainViewModel
         DeleteFolderCommand = new RelayCommand(DeleteFolder, () => CanEdit && SelectedFolder.Length > 0);
         ShowFolderInExplorerCommand = new RelayCommand(ShowFolderInExplorer, () => _vault != null);
         MoveToFolderCommand = new RelayCommand(async () => await MoveToFolderAsync(), () => CanEdit && MoveTargets().Count > 0);
+        RenameCommand = new RelayCommand(async () => await RenameAsync(), () => CanEdit && MoveTargets().Count == 1 && _selected.Count == 1);
         AddMcMasterCommand = new RelayCommand(async () => await AddMcMasterAsync(), () => CanEdit);
     }
 
@@ -211,6 +213,17 @@ public sealed partial class MainViewModel
         await MoveFilesAsync(targets.Select(t => t.Path).ToList(), folder);
     }
 
+    /// <summary>Renames one file in its folder; assemblies and drawings that use it are updated, like Move to Folder.</summary>
+    private async Task RenameAsync()
+    {
+        if (_vault == null || MoveTargets() is not { Count: 1 } targets) return;
+        var path = targets[0].Path;
+        var name = _dialogs.AskText("Rename", $"New name for {targets[0].Name} (it stays a {Path.GetExtension(path)} file):",
+            Path.GetFileNameWithoutExtension(path), typed => VaultService.FileNameProblem(path, typed));
+        if (name == null) return;
+        await RunMovesAsync(new[] { new FileMove(path, VaultService.RenamedPath(path, name)) }, folder: null);
+    }
+
     /// <summary>
     /// Moves files into a folder (from the menu or by dragging onto the tree) and checks the move in. SolidWorks
     /// files need SolidWorks to update the assemblies and drawings that use them: it's started in the background.
@@ -224,8 +237,14 @@ public sealed partial class MainViewModel
             StatusText = $"Already in {FolderLabel(folder)}.";
             return;
         }
+        await RunMovesAsync(moves, folder);
+    }
 
-        await RunAsync("Getting ready to move\u2026", async (vault, progress) =>
+    /// <summary>Plans, confirms and carries out moves; <paramref name="folder"/> is where they go, or null for a rename.</summary>
+    private async Task RunMovesAsync(IReadOnlyList<FileMove> moves, string? folder)
+    {
+        var title = folder == null ? "Rename" : "Move to Folder";
+        await RunAsync(folder == null ? "Getting ready to rename\u2026" : "Getting ready to move\u2026", async (vault, progress) =>
         {
             SolidWorksAutomation? solidWorks = null;
             try
@@ -237,18 +256,23 @@ public sealed partial class MainViewModel
                 var plan = await Task.Run(() => vault.PlanMoveAsync(moves, solidWorks, progress));
                 if (!plan.CanMove)
                 {
-                    throw new PdmException("These can't be moved right now:\n\n" + string.Join("\n", plan.Problems.Select(p => "\u2022 " + p)) + "\n\nNothing was moved.");
+                    throw new PdmException(folder == null
+                        ? "It can't be renamed right now:\n\n" + string.Join("\n", plan.Problems.Select(p => "\u2022 " + p)) + "\n\nNothing was renamed."
+                        : "These can't be moved right now:\n\n" + string.Join("\n", plan.Problems.Select(p => "\u2022 " + p)) + "\n\nNothing was moved.");
                 }
 
-                var message = $"Move {PathList.Format(plan.Moves.Select(m => m.From).ToList())} to {FolderLabel(folder)}?";
+                var message = folder == null
+                    ? $"Rename {plan.Moves[0].From} to {PathList.Name(plan.Moves[0].To)}?"
+                    : $"Move {PathList.Format(plan.Moves.Select(m => m.From).ToList())} to {FolderLabel(folder)}?";
                 var users = plan.Parents.Where(p => !plan.Moves.Any(m => string.Equals(m.From, p, StringComparison.OrdinalIgnoreCase))).ToList();
                 message += users.Count > 0
                     ? $"\n\nThese {users.Count} file(s) use {(plan.Moves.Count == 1 ? "it" : "them")}. SolidWorks updates them, and they're checked in together with the move:\n" +
                       string.Join("\n", users.Select(u => "\u2022 " + u))
-                    : "\n\nThe move is checked in right away, so teammates get it at their next Get Latest.";
-                if (!_dialogs.Confirm("Move to Folder", message)) return "Move cancelled.";
+                    : $"\n\nNo other vault files use {(plan.Moves.Count == 1 ? "it" : "them")}. The change is checked in right away, so teammates get it at their next Get Latest.";
+                if (!_dialogs.Confirm(title, message)) return folder == null ? "Rename cancelled." : "Move cancelled.";
 
                 var result = await Task.Run(() => vault.MoveAsync(plan, solidWorks, VaultService.MoveComment(plan.Moves), progress));
+                if (folder == null) return Report(result, "Renamed");
                 _selectedFolder = folder;
                 OnPropertyChanged(nameof(SelectedFolder));
                 return Report(result, "Moved");
