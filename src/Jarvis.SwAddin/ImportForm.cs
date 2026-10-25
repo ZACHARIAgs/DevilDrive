@@ -91,11 +91,10 @@ internal sealed class ImportForm : Form
                 }
                 else
                 {
-                    // An identical file is always the vault's; a different one can still come in under another name.
+                    // Ticked by default; untick to import it as a separate file under another name (a different part that happens to share the name).
                     row.Cells["UseVault"].Value = true;
-                    row.Cells["UseVault"].ReadOnly = match.Value.Identical;
                     row.Cells["UseVault"].ToolTipText = match.Value.Identical
-                        ? $"Identical to the vault's {match.Value.RelativePath}: the imported files use that one."
+                        ? $"Identical to the vault's {match.Value.RelativePath}. Ticked: the imported files use that one. Unticked: it's imported as a separate file under another name."
                         : $"The vault's {match.Value.RelativePath} has the same name but isn't the same file. Ticked: the imported files use the vault's (this copy's changes aren't imported). Unticked: it's imported under another name.";
                 }
             }
