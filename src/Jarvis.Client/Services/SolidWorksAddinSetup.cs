@@ -29,6 +29,45 @@ internal static class SolidWorksAddinSetup
 
     public static bool IsSolidWorksRunning => Process.GetProcessesByName("SLDWORKS").Length > 0;
 
+    /// <summary>
+    /// SolidWorks is running, but only hidden (no window): left behind by a crash or started by another program.
+    /// The user can't close it themselves, so they're offered <see cref="EndHiddenSolidWorks"/>.
+    /// </summary>
+    public static bool OnlyHiddenSolidWorksRunning
+    {
+        get
+        {
+            var running = Process.GetProcessesByName("SLDWORKS");
+            try
+            {
+                return running.Length > 0 && running.All(p => p.MainWindowHandle == IntPtr.Zero);
+            }
+            finally
+            {
+                foreach (var p in running) p.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Ends SolidWorks processes that have no window (nothing the user can see is open in them).</summary>
+    public static void EndHiddenSolidWorks()
+    {
+        foreach (var process in Process.GetProcessesByName("SLDWORKS"))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (process.MainWindowHandle == IntPtr.Zero) process.Kill();
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // Already gone, or not ours to end.
+                }
+            }
+        }
+    }
+
     /// <summary>Any SolidWorks version is installed: SLDWORKS.exe in the SOLIDWORKS Corp folders or where the registry says.</summary>
     public static bool IsSolidWorksInstalled()
     {
@@ -64,6 +103,11 @@ internal static class SolidWorksAddinSetup
     /// </summary>
     public static async Task InstallLatestAsync()
     {
+        if (OnlyHiddenSolidWorksRunning)
+        {
+            throw new PdmException("SolidWorks is still running in the background, without a window (left over from a crash or started by another program). " +
+                                   "Open Task Manager (Ctrl+Shift+Esc), right-click SOLIDWORKS, choose End task, then try again.");
+        }
         if (IsSolidWorksRunning) throw new PdmException("Close SolidWorks first (save your work), then try again.");
         var repo = Updater.BuiltInRepo(Assembly.GetExecutingAssembly())
                    ?? throw new PdmException("This build of Jarvis doesn't know where to download the add-in from. Run scripts\\Install-SolidWorksAddin.ps1 instead.");

@@ -156,6 +156,20 @@ public partial class InstallWindow : Window
     {
         while (SolidWorksAddinSetup.IsSolidWorksRunning)
         {
+            if (SolidWorksAddinSetup.OnlyHiddenSolidWorksRunning)
+            {
+                // A SolidWorks with no window (left by a crash or another program): the user can't close it themselves.
+                if (MessageBox.Show(this, "SolidWorks is still running in the background, without a window (left over from a crash or started by another program).\n\n" +
+                                          "End it now, so the add-in can be installed? Nothing you can see is open in it.",
+                        "Install the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                {
+                    SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in Jarvis's Settings)");
+                    return true;
+                }
+                SolidWorksAddinSetup.EndHiddenSolidWorks();
+                await Task.Delay(2000);
+                continue;
+            }
             SetStep(AddinStep, Step.Working, "Waiting for SolidWorks to close\u2026");
             var answer = MessageBox.Show(this,
                 "To install the add-in, close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in; you can add it later in Jarvis's Settings.",

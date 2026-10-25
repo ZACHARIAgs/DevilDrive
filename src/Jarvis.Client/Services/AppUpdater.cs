@@ -133,6 +133,18 @@ public static class AppUpdater
 
         while (SolidWorksAddinSetup.IsSolidWorksRunning)
         {
+            if (SolidWorksAddinSetup.OnlyHiddenSolidWorksRunning)
+            {
+                // A SolidWorks with no window (left by a crash or another program): the user can't close it themselves.
+                var end = MessageBox.Show(owner,
+                    "SolidWorks is still running in the background, without a window (left over from a crash or started by another program), " +
+                    "so the add-in can't be updated.\n\nEnd it now? Nothing you can see is open in it.",
+                    "Update the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (end != MessageBoxResult.Yes) return;
+                SolidWorksAddinSetup.EndHiddenSolidWorks();
+                await Task.Delay(2000);
+                continue;
+            }
             var close = MessageBox.Show(owner,
                 "The SolidWorks add-in will be updated too. Close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in for now (Jarvis offers it again next time it starts).",
                 "Update the SolidWorks add-in", MessageBoxButton.OKCancel, MessageBoxImage.Information);
