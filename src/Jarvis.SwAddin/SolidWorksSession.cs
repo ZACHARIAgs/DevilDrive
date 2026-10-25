@@ -125,14 +125,16 @@ internal sealed class SolidWorksSession
     /// <summary>
     /// Files this document references (parts in an assembly, models in a drawing, base parts of a
     /// derived part). All levels down by default; <paramref name="allLevels"/> false gives direct references only.
+    /// Paths are where SolidWorks finds the files now; <paramref name="stored"/> gives the paths saved in the file
+    /// instead (for a Pack and Go copy, where the files were on the PC that made it).
     /// </summary>
-    public List<string> GetReferences(string path, bool allLevels = true, bool includeParts = false)
+    public List<string> GetReferences(string path, bool allLevels = true, bool includeParts = false, bool stored = false)
     {
         var result = new List<string>();
         if (!HasReferences(path) && !(includeParts && DocumentType(path) == swDocumentTypes_e.swDocPART)) return result;
 
         // Returns pairs: file name, full path.
-        if (_sw.GetDocumentDependencies2(path, allLevels, true, false) is Array pairs)
+        if (_sw.GetDocumentDependencies2(path, allLevels, !stored, false) is Array pairs)
         {
             for (var i = 1; i < pairs.Length; i += 2)
             {
@@ -515,15 +517,21 @@ internal sealed class SolidWorksSession
     /// Reads everything the vault index needs from one file, opening it invisibly once if it isn't
     /// open: properties, references, saved-in version, and (for parts/assemblies) the 3D preview.
     /// </summary>
-    public IndexEntry IndexFile(string path, string vaultRoot, string? previewPath, out bool previewSaved)
+    /// <remarks>
+    /// SolidWorks crashes (in its STL export) saving a preview of a document opened invisibly: it has no
+    /// display lists. So a file that isn't open only gets a preview when <paramref name="showForPreview"/> is
+    /// set, which opens it in a window for a moment; otherwise the record is made without one.
+    /// </remarks>
+    public IndexEntry IndexFile(string path, string vaultRoot, string? previewPath, out bool previewSaved, bool showForPreview = false)
     {
         previewSaved = false;
         var doc = FindOpen(path);
         var openedHere = false;
         var type = DocumentType(path);
+        var visible = previewPath != null && showForPreview;
         if (doc == null && type != swDocumentTypes_e.swDocNONE && File.Exists(path))
         {
-            _sw.DocumentVisible(false, (int)type);
+            if (!visible) _sw.DocumentVisible(false, (int)type);
             try
             {
                 int errors = 0, warnings = 0;
@@ -533,14 +541,14 @@ internal sealed class SolidWorksSession
             }
             finally
             {
-                _sw.DocumentVisible(true, (int)type);
+                if (!visible) _sw.DocumentVisible(true, (int)type);
             }
         }
 
         try
         {
             var properties = doc != null ? ReadProperties(doc) : null;
-            if (doc != null && previewPath != null) previewSaved = ExportPreview(doc, previewPath);
+            if (doc != null && previewPath != null && (!openedHere || visible)) previewSaved = ExportPreview(doc, previewPath);
             return BuildIndexEntry(path, vaultRoot, properties);
         }
         finally

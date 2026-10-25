@@ -15,16 +15,19 @@ internal sealed class AddinReferenceEditor : IReferenceEditor
 {
     private readonly SolidWorksSession _sw;
     private readonly Control _ui;
+    private readonly bool _stored;
     private ClosedDocuments? _closed;
 
-    public AddinReferenceEditor(SolidWorksSession sw, Control ui)
+    /// <param name="storedPaths">References as the paths saved in the files (Import: Pack and Go copies still name the PC they came from), not where SolidWorks finds them now.</param>
+    public AddinReferenceEditor(SolidWorksSession sw, Control ui, bool storedPaths = false)
     {
         _sw = sw;
         _ui = ui;
+        _stored = storedPaths;
     }
 
     public IReadOnlyList<string> GetReferences(string fullPath) =>
-        OnUi(() => _sw.GetReferences(fullPath, allLevels: false, includeParts: true));
+        OnUi(() => _sw.GetReferences(fullPath, allLevels: false, includeParts: true, stored: _stored));
 
     public bool ReplaceReference(string referencingFile, string oldReference, string newReference) =>
         OnUi(() => _sw.ReplaceReference(referencingFile, oldReference, newReference));

@@ -64,6 +64,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _watch;
     private List<string> _missingRefs = new List<string>();
     private readonly ModernButton _getLatest;
+    private readonly ModernButton _import;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
     private readonly CaptionLabel _status;
@@ -135,6 +136,7 @@ internal sealed class VaultPane : UserControl
         _rejectReview = new ModernButton("Reject (admin)", "");
         _watch = new ModernButton("Notify me when it's free", "\uEA8F");
         _getLatest = new ModernButton("Get Latest", "");
+        _import = new ModernButton("Import files\u2026", "\uE8B5");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open Jarvis", "");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
@@ -146,7 +148,7 @@ internal sealed class VaultPane : UserControl
             _header, _picker, _activity, _status, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
-            _getLatest, _refresh, _exportBom, _openApp,
+            _getLatest, _refresh, _import, _exportBom, _openApp,
             // Which add-in this is, so it can be compared with the app (it updates along with it).
             new CaptionLabel("Jarvis add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
         });
@@ -168,6 +170,7 @@ internal sealed class VaultPane : UserControl
         _watch.Click += (_, _) => ToggleWatch();
         _getLatest.Click += async (_, _) => { EnsureUiContext(); await GetLatestAsync(); };
         _refresh.Click += async (_, _) => { EnsureUiContext(); await RefreshAsync(contactVault: true); };
+        _import.Click += async (_, _) => { EnsureUiContext(); await ImportAsync(); };
         _openApp.Click += (_, _) => OpenDesktopApp();
         _exportBom.Click += (_, _) => ExportBom();
         _timer.Tick += async (_, _) => await OnTickAsync();
@@ -503,6 +506,7 @@ internal sealed class VaultPane : UserControl
         _undo.Enabled = _unfreeze.Enabled = _requestCheckIn.Enabled = ready && !viewingMilestone;
         _submitReview.Enabled = _withdrawReview.Enabled = _approveReview.Enabled = _rejectReview.Enabled = ready && !viewingMilestone;
         _getLatest.Enabled = ready && !viewingMilestone;
+        _import.Enabled = ready && !NewerThanTeam && !viewingMilestone;
         _getLatest.Primary = (_snapshot?.UpdatesAvailable ?? 0) > 0 && !canCheckIn && !canCheckOut;
         _refresh.Enabled = !_busy;
         _exportBom.Visible = _currentPath != null && Path.GetExtension(_currentPath).Equals(".sldasm", StringComparison.OrdinalIgnoreCase);
@@ -1124,7 +1128,8 @@ internal sealed class VaultPane : UserControl
         try
         {
             var snapshot = await _vault.GetSnapshotAsync(contactVault: false);
-            var files = IndexCatchUp.FilesToRecord(snapshot.Files, rel => File.Exists(_vault.ToFullPath(rel)), _recordAttempted)
+            // A missing 3D preview alone isn't a reason: previews of files that aren't open can't be made here (see IndexFile).
+            var files = IndexCatchUp.FilesToRecord(snapshot.Files, _ => true, _recordAttempted)
                 .Take(IndexCatchUp.PerCheckIn).ToList();
             if (files.Count == 0) return null;
 
@@ -1573,6 +1578,157 @@ internal sealed class VaultPane : UserControl
     /// Renames/moves the active file and repoints every assembly, drawing and derived part that uses
     /// it, then checks the renamed file and all of those in together.
     /// </summary>
+    /// <summary>
+    /// Brings someone's existing SolidWorks files into the vault (a new member's project, say): copies them in under
+    /// the vault's part numbers and names, points every assembly and drawing at the copies, writes the part numbers and
+    /// descriptions, and checks it all in as one change. The original files aren't changed.
+    /// </summary>
+    private async Task ImportAsync()
+    {
+        var vault = _vault;
+        if (vault == null || _busy) return;
+        string source;
+        using (var browse = new FolderBrowserDialog { Description = "Pick the folder with the SolidWorks files to import. Its subfolders are included.", ShowNewFolderButton = false })
+        {
+            if (browse.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+            source = Path.GetFullPath(browse.SelectedPath).TrimEnd('\\');
+        }
+        if (IsInVault(source + "\\") || string.Equals(source, vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(_sw.MainWindow, "That folder is already in the vault. Open the files and use Check In instead.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // The SolidWorks files in the folder, plus files they use from other folders (outside the vault), so nothing is left pointing outside.
+        SetStatus("Looking for SolidWorks files…");
+        Cursor = Cursors.WaitCursor;
+        var files = new List<(string Path, bool FromElsewhere)>();
+        var missing = new List<string>();
+        try
+        {
+            var found = Directory.EnumerateFiles(source, "*.*", SearchOption.AllDirectories)
+                .Where(p => IsSolidWorksFile(p) && !Path.GetFileName(p).StartsWith("~$", StringComparison.Ordinal))
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            var seen = new HashSet<string>(found, StringComparer.OrdinalIgnoreCase);
+            files.AddRange(found.Select(p => (p, false)));
+            foreach (var path in found)
+            {
+                foreach (var reference in _sw.GetReferences(path, allLevels: true, includeParts: true))
+                {
+                    if (IsInVault(reference) || !seen.Add(reference)) continue;
+                    if (File.Exists(reference)) files.Add((reference, true));
+                    else missing.Add($"{Path.GetFileName(path)} uses {reference}");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            MessageBox.Show(_sw.MainWindow, $"Couldn't read {source}: {ex.Message}", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            SetStatus("Ready");
+        }
+
+        if (files.Count == 0)
+        {
+            MessageBox.Show(_sw.MainWindow, $"There are no SolidWorks files (parts, assemblies, drawings) in {source}.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        // An open original would be used in place of its copy while the copies are repointed.
+        var open = files.Where(f => _sw.FindOpen(f.Path) != null).Select(f => Path.GetFileName(f.Path)).ToList();
+        if (open.Count > 0)
+        {
+            MessageBox.Show(_sw.MainWindow, $"Close {PathList.Format(open)} in SolidWorks first, then import again.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (TeamYear != null)
+        {
+            var tooNew = files.Where(f => SavedInYear(f.Path) > TeamYear).Select(f => Path.GetFileName(f.Path)).ToList();
+            if (tooNew.Count > 0)
+            {
+                MessageBox.Show(_sw.MainWindow,
+                    $"{PathList.Format(tooNew)} {(tooNew.Count == 1 ? "was" : "were")} last saved in a newer SolidWorks than the team's {TeamYear}, " +
+                    $"so teammates couldn't open {(tooNew.Count == 1 ? "it" : "them")}. Nothing was imported.",
+                    "Jarvis — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        if (missing.Count > 0 &&
+            MessageBox.Show(_sw.MainWindow,
+                "Some files use parts that aren't on this PC, so they'll be missing in the vault too:\n\n" + string.Join("\n", missing.Take(10).Select(m => "• " + m)) +
+                (missing.Count > 10 ? $"\n…and {missing.Count - 10} more." : "") + "\n\nImport anyway?",
+                "Jarvis — Import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var vaultFiles = _snapshot?.Files ?? Array.Empty<VaultFile>();
+        var inVault = new HashSet<string>(vaultFiles.Select(f => f.RelativePath), StringComparer.OrdinalIgnoreCase);
+        using var form = new ImportForm(files, source, vault.LoadNumbering(), VaultService.UsedPartNumbers(vaultFiles),
+            vault.ListFolders(vaultFiles.Select(f => f.RelativePath)), rel => inVault.Contains(rel) || File.Exists(vault.ToFullPath(rel)),
+            path => SameFileInVault(path, vaultFiles));
+        if (form.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
+        var plan = form.Result;
+
+        await RunAsync("Importing…", async progress =>
+        {
+            var editor = new AddinReferenceEditor(_sw, this, storedPaths: true);
+            AddinLog.Write($"Import from {source}: {plan.Count} file(s), e.g. {plan[0].Item.Target}");
+            // Copying and repointing run off the UI thread; the editor sends each SolidWorks call back to it.
+            var copies = await Task.Run(() => VaultImport.CopyAndRepoint(vault.VaultRoot, plan.Select(p => p.Item).ToList(), editor, progress));
+            var copyOf = plan.ToDictionary(p => p.Item.Source, p => vault.ToFullPath(p.Item.Target), StringComparer.OrdinalIgnoreCase);
+            foreach (var (item, partNumber, description) in plan.Where(p => !p.Item.UseExisting))
+            {
+                var copy = copyOf[item.Source];
+                if (!IsSolidWorksFile(copy) || (partNumber == null && description.Length == 0)) continue;
+                progress.Report($"Saving the part number and description of {Path.GetFileName(copy)}…");
+                await Task.Delay(1); // let the pane repaint between files
+                if (partNumber != null) _sw.SetProperty(copy, IndexEntry.PartNumberProperty, partNumber);
+                if (description.Length > 0) _sw.SetDescription(copy, description);
+            }
+
+            // Records and 3D previews, so teammates can find and look at them in Jarvis right away.
+            var index = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
+            var previews = new List<string>();
+            for (var i = 0; i < copies.Count; i++)
+            {
+                progress.Report($"Making records and 3D previews ({i + 1} of {copies.Count}): {Path.GetFileName(copies[i])}…");
+                await Task.Delay(1);
+                var preview = SolidWorksSession.CanHavePreview(copies[i]) ? VaultPaths.PreviewFor(vault.ToRelativePath(copies[i])) : null;
+                AddinLog.Write($"Import: recording {copies[i]}");
+                // Each model opens in a window for a moment: SolidWorks can't save a preview of one opened invisibly.
+                index[copies[i]] = _sw.IndexFile(copies[i], vault.VaultRoot, preview == null ? null : vault.ToFullPath(preview), out var previewSaved, showForPreview: true);
+                if (previewSaved) previews.Add(preview!);
+            }
+
+            AddinLog.Write("Import: checking in");
+            if (copies.Count == 0) return "Nothing to import: the vault already has every one of those files.";
+            var result = await vault.CheckInAsync(copies, $"Imported {copies.Count} file(s) from {Path.GetFileName(source)}", false, progress,
+                indexUpdates: index, previews: previews);
+            _sw.MakeReadOnly(result.Succeeded.Select(vault.ToFullPath));
+            if (result.Failures.Count > 0)
+            {
+                result.Notes.Add("The copies that weren't checked in are still in the vault folder. Fix the problem, then check them in.");
+            }
+            return Report(result, "Imported");
+        });
+    }
+
+    /// <summary>The vault file with the same name as a file being imported (the one at the top or in the fewest folders), and whether it's the same file.</summary>
+    private (string RelativePath, bool Identical)? SameFileInVault(string path, IReadOnlyList<VaultFile> vaultFiles)
+    {
+        var name = Path.GetFileName(path);
+        var match = vaultFiles.Where(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase) && !f.IsVersionCopy)
+            .OrderBy(f => f.RelativePath.Count(c => c == '/')).FirstOrDefault();
+        if (match == null) return null;
+        var full = _vault!.ToFullPath(match.RelativePath);
+        var identical = match.ExistsLocally && !match.NotDownloaded && FileUtil.SameContent(path, full);
+        return (match.RelativePath, identical);
+    }
+
     private async Task RenameAsync()
     {
         var oldPath = _currentPath;

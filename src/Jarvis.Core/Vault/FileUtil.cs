@@ -57,6 +57,25 @@ public static class FileUtil
         }
     }
 
+    /// <summary>True if both files exist and have exactly the same bytes (false if either can't be read).</summary>
+    public static bool SameContent(string a, string b)
+    {
+        try
+        {
+            var infoA = new FileInfo(a);
+            var infoB = new FileInfo(b);
+            if (!infoA.Exists || !infoB.Exists || infoA.Length != infoB.Length) return false;
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            using var streamA = new FileStream(a, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var streamB = new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return Convert.ToBase64String(sha.ComputeHash(streamA)) == Convert.ToBase64String(sha.ComputeHash(streamB));
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public static void SetReadOnly(string fullPath, bool readOnly)
     {
         if (!File.Exists(fullPath)) return;
