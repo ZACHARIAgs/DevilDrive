@@ -51,7 +51,7 @@ internal static class PaneIcon
 
     private static Image LoadMaster()
     {
-        using var stream = typeof(PaneIcon).Assembly.GetManifestResourceStream("Jarvis.SwAddin.vault.png")!;
+        using var stream = typeof(PaneIcon).Assembly.GetManifestResourceStream("DevilDrive.SwAddin.vault.png")!;
         // Copy so the image doesn't depend on the resource stream staying open.
         return new Bitmap(Image.FromStream(stream));
     }

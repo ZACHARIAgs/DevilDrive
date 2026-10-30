@@ -19,13 +19,16 @@ namespace Jarvis.Client.Services;
 internal static class SolidWorksAddinSetup
 {
     public static readonly string AddinDll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "DevilDrive", "SolidWorksAddin", "Jarvis.SwAddin.dll");
+        "DevilDrive", "SolidWorksAddin", "DevilDrive.SwAddin.dll");
 
-    public static bool IsAddinInstalled => File.Exists(AddinDll);
+    public static bool IsAddinInstalled => File.Exists(AddinDll) || File.Exists(LegacyAddinDll);
+
+    private static string LegacyAddinDll => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "DevilDrive", "SolidWorksAddin", "Jarvis.SwAddin.dll");
 
     /// <summary>Version of the installed add-in, or null if it isn't installed.</summary>
     public static Version? InstalledVersion =>
-        IsAddinInstalled ? Updater.ParseVersion(FileVersionInfo.GetVersionInfo(AddinDll).ProductVersion) ?? new Version(0, 0, 0, 0) : null;
+        IsAddinInstalled ? Updater.ParseVersion(FileVersionInfo.GetVersionInfo(File.Exists(AddinDll) ? AddinDll : LegacyAddinDll).ProductVersion) ?? new Version(0, 0, 0, 0) : null;
 
     public static bool IsSolidWorksRunning => Process.GetProcessesByName("SLDWORKS").Length > 0;
 
@@ -174,17 +177,19 @@ internal static class SolidWorksAddinSetup
             if (!Directory.Exists(dir)) continue;
 
             string? addinDir = null;
-            if (File.Exists(Path.Combine(dir, "Jarvis.SwAddin.dll")))
+            if (File.Exists(Path.Combine(dir, "DevilDrive.SwAddin.dll")) || File.Exists(Path.Combine(dir, "Jarvis.SwAddin.dll")))
             {
                 addinDir = dir;
             }
             else if (Directory.Exists(Path.Combine(dir, "SolidWorksAddin")) &&
-                     File.Exists(Path.Combine(dir, "SolidWorksAddin", "Jarvis.SwAddin.dll")))
+                     (File.Exists(Path.Combine(dir, "SolidWorksAddin", "DevilDrive.SwAddin.dll")) ||
+                      File.Exists(Path.Combine(dir, "SolidWorksAddin", "Jarvis.SwAddin.dll"))))
             {
                 addinDir = Path.Combine(dir, "SolidWorksAddin");
             }
             else if (Directory.Exists(Path.Combine(dir, "publish-addin")) &&
-                     File.Exists(Path.Combine(dir, "publish-addin", "Jarvis.SwAddin.dll")))
+                     (File.Exists(Path.Combine(dir, "publish-addin", "DevilDrive.SwAddin.dll")) ||
+                      File.Exists(Path.Combine(dir, "publish-addin", "Jarvis.SwAddin.dll"))))
             {
                 addinDir = Path.Combine(dir, "publish-addin");
             }

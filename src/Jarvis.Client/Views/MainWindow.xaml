@@ -227,7 +227,7 @@
                         <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                            <Setter Property="Padding" Value="2,3" />
+                            <Setter Property="Padding" Value="4,3" />
                         </Style>
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>
@@ -236,7 +236,7 @@
                                 <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="#D4A017"
                                            VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding CountText}" Foreground="{StaticResource FaintTextBrush}" FontSize="11"
+                                <TextBlock Text="{Binding CountText}" Opacity="0.65" FontSize="11"
                                            VerticalAlignment="Center" Margin="6,0,0,0" />
                             </StackPanel>
                         </HierarchicalDataTemplate>

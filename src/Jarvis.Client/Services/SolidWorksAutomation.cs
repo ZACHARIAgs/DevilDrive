@@ -111,7 +111,7 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
     }
 
     /// <summary>The Jarvis add-in's COM id: SolidWorks hands out the running add-in by it (GetAddInObject).</summary>
-    private const string AddinClsid = "{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}";
+    private const string AddinClsid = "{843995B8-683B-4864-9733-A8E3A87F5ABC}";
 
     /// <summary>
     /// Asks the Jarvis add-in inside SolidWorks to make index records (properties, references, saved-in version;

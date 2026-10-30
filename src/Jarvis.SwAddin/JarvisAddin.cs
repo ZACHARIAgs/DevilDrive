@@ -13,9 +13,9 @@ namespace Jarvis.SwAddin;
 /// Adds the "Jarvis" task pane; all PDM work happens in <see cref="VaultPane"/>.
 /// </summary>
 [ComVisible(true)]
-[Guid("9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78")]
-[ProgId("Jarvis.SwAddin")]
-public sealed class JarvisAddin : ISwAddin
+[Guid("843995B8-683B-4864-9733-A8E3A87F5ABC")]
+[ProgId("DevilDrive.SwAddin")]
+public sealed class DevilDriveAddin : ISwAddin
 {
     private const string Title = "DevilDrive";
     private const string Description = "Check SolidWorks files in and out of the Solar Devils vault";
@@ -24,7 +24,7 @@ public sealed class JarvisAddin : ISwAddin
     private ITaskpaneView? _taskPane;
     private VaultPane? _pane;
 
-    public JarvisAddin()
+    public DevilDriveAddin()
     {
         // Must run before any Core or System.Text.Json type is touched.
         AssemblyResolver.Install();

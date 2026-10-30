@@ -20,9 +20,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $InstallDir = Join-Path $env:ProgramData 'DevilDrive\SolidWorksAddin'
-$Dll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
+$Dll = Join-Path $InstallDir 'DevilDrive.SwAddin.dll'
 $RegAsm = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'
-$AddinGuid = '{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}'
+$AddinGuid = '{843995B8-683B-4864-9733-A8E3A87F5ABC}'
+$OldJarvisGuid = '{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}'
 $StartupKey = "HKCU:\Software\SolidWorks\AddInsStartup\$AddinGuid"
 
 function Test-Admin {
@@ -37,7 +38,7 @@ if (-not $Uninstall -and -not $Source) {
         (Join-Path $PSScriptRoot '..\src\Jarvis.SwAddin\bin\Release\net48'),
         (Join-Path $PSScriptRoot '..\src\Jarvis.SwAddin\bin\Debug\net48')
     )
-    $Source = $candidates | Where-Object { Test-Path (Join-Path $_ 'Jarvis.SwAddin.dll') } | Select-Object -First 1
+    $Source = $candidates | Where-Object { (Test-Path (Join-Path $_ 'DevilDrive.SwAddin.dll')) -or (Test-Path (Join-Path $_ 'Jarvis.SwAddin.dll')) } | Select-Object -First 1
     if (-not $Source) { throw 'Add-in files not found. Build src\Jarvis.SwAddin first, or pass -Source.' }
 }
 if ($Source) { $Source = (Resolve-Path $Source).Path }
@@ -81,6 +82,8 @@ try {
             & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
         }
         if (Test-Path $Dll) { & $RegAsm $Dll /unregister /nologo | Out-Host }
+        $legacyDll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
+        if (Test-Path $legacyDll) { & $RegAsm $legacyDll /unregister /nologo | Out-Host }
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host 'DevilDrive add-in removed.'
     }
@@ -98,9 +101,34 @@ try {
         $folderOk = $LASTEXITCODE -eq 0
         & icacls.exe (Join-Path $InstallDir '*') /reset /C /Q | Out-Null
         if (-not $folderOk -or $LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
+        $legacyDll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
+        if (Test-Path $legacyDll) {
+            & $RegAsm $legacyDll /unregister /nologo *>$null
+            Remove-Item $legacyDll -Force -ErrorAction SilentlyContinue
+        }
+
         & $RegAsm $Dll /codebase /nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "RegAsm failed (exit code $LASTEXITCODE)." }
         Write-Host "DevilDrive add-in installed to $InstallDir."
+
+        # If Jarvis was also installed on this PC, restore Jarvis's registration
+        $jarvisDll = Join-Path $env:ProgramData 'Jarvis\SolidWorksAddin\Jarvis.SwAddin.dll'
+        if (Test-Path $jarvisDll) {
+            Write-Host 'Detected Jarvis add-in on this PC. Restoring Jarvis registration for side-by-side use...' -ForegroundColor Cyan
+            & $RegAsm $jarvisDll /codebase /nologo *>$null
+            $jarvisStartup = "HKCU:\Software\SolidWorks\AddInsStartup\$OldJarvisGuid"
+            New-Item $jarvisStartup -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty $jarvisStartup -Name '(default)' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            Write-Host 'Jarvis add-in registration restored.' -ForegroundColor Green
+        }
+        else {
+            try {
+                $oldKey = Get-ItemProperty "HKLM:\SOFTWARE\SolidWorks\Addins\$OldJarvisGuid" -ErrorAction SilentlyContinue
+                if ($oldKey -and $oldKey.Title -eq 'DevilDrive') {
+                    Remove-Item "HKLM:\SOFTWARE\SolidWorks\Addins\$OldJarvisGuid" -Force -ErrorAction SilentlyContinue
+                }
+            } catch {}
+        }
     }
     if ($Elevated) { Start-Sleep -Seconds 2 }
     exit 0

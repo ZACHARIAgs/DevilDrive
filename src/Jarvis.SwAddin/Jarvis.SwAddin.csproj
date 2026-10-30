@@ -12,7 +12,7 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <RootNamespace>Jarvis.SwAddin</RootNamespace>
-    <AssemblyName>Jarvis.SwAddin</AssemblyName>
+    <AssemblyName>DevilDrive.SwAddin</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <SolidWorksDir Condition="'$(SolidWorksDir)' == ''">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\</SolidWorksDir>
@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\assets\vault.png" LogicalName="Jarvis.SwAddin.vault.png" />
+    <EmbeddedResource Include="..\..\assets\vault.png" LogicalName="DevilDrive.SwAddin.vault.png" />
   </ItemGroup>
 
   <ItemGroup>
