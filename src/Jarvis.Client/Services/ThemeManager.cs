@@ -135,3 +135,4 @@ public static class ThemeManager
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
     }
 }
+
