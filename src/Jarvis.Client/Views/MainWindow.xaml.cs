@@ -145,6 +145,12 @@ public partial class MainWindow : Window, IDialogs
         return dialog.ShowDialog() == true ? dialog.Value : null;
     }
 
+    public ExportOptions? AskExport(string what, string defaultName)
+    {
+        var dialog = new ExportWindow(what, defaultName) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
     public string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, Func<string, string, string> createFolder)
     {
         var dialog = new FolderPickerWindow(title, vaultName, folders, current, createFolder) { Owner = this };

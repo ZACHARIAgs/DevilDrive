@@ -75,7 +75,7 @@ $install = "## To install: download **DevilDrive.exe** below and open it`n`n" +
 $body = @{
     tag_name         = $tag
     target_commitish = $head
-    name             = "Jarvis $version"
+    name             = "DevilDrive $version"
     body             = ($install + "`n`n" + $Notes.Trim() + "`n`n**SHA-256 checksums**`n``````n$sums``````").Trim()
 } | ConvertTo-Json
 $release = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Body $body `

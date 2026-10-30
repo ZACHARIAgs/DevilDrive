@@ -38,9 +38,14 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
     public static string ProgIdFor(int? year) => year is int y ? $"SldWorks.Application.{y - 1992}" : "SldWorks.Application";
 
     /// <summary>Connects to (or starts) the team's SolidWorks. Throws a <see cref="PdmException"/> saying what to do if it can't.</summary>
-    public static SolidWorksAutomation Connect(int? teamYear, IProgress<string>? progress)
+    /// <param name="purpose">What it's for, for the message when SolidWorks isn't there (e.g. "Exporting SolidWorks files"); moving by default.</param>
+    public static SolidWorksAutomation Connect(int? teamYear, IProgress<string>? progress, string? purpose = null)
     {
         var type = Type.GetTypeFromProgID(ProgIdFor(teamYear));
+        if (type == null && purpose != null)
+        {
+            throw new PdmException($"{purpose} needs SolidWorks{(teamYear != null ? $" {teamYear} (your team's version)" : "")} on this PC, to point the copied assemblies and drawings at each other.");
+        }
         if (type == null)
         {
             throw new PdmException(teamYear != null
@@ -83,11 +88,18 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
     private void Set(string property, object value) =>
         _sw!.GetType().InvokeMember(property, BindingFlags.SetProperty, null, _sw, new[] { value });
 
+    /// <summary>
+    /// <see cref="GetReferences"/> gives the paths saved in the files instead of where SolidWorks finds them now. Export
+    /// needs that: SolidWorks finds a copied part next to the copied assembly first, so the saved vault path, which is
+    /// what gets rewritten, wouldn't show.
+    /// </summary>
+    public bool StoredPaths { get; set; }
+
     public IReadOnlyList<string> GetReferences(string fullPath)
     {
         var result = new List<string>();
         // Returns pairs: file name, full path.
-        if (Call("GetDocumentDependencies2", fullPath, false, true, false) is Array pairs)
+        if (Call("GetDocumentDependencies2", fullPath, false, !StoredPaths, false) is Array pairs)
         {
             for (var i = 1; i < pairs.Length; i += 2)
             {

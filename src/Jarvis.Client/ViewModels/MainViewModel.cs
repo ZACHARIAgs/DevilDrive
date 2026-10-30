@@ -62,6 +62,7 @@ public sealed partial class MainViewModel : ViewModelBase
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
         DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
         InitializeFolderCommands();
+        InitializeExportCommands();
         InitializeDeleteCommands();
         InitializeNumberingCommands();
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));

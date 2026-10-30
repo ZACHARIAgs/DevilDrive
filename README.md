@@ -25,15 +25,16 @@ Go to the **[latest release](https://github.com/ZACHARIAgs/DevilDrive/releases/l
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\DevilDrive\Backups`.
-* **Theme / Dark Mode:** click the **Theme** button in the toolbar to toggle between Light and Dark mode anytime (or configure it in **Settings**). The accent color is locked to Solar Devils Gold (`#FFC627`).
+* **Theme / Dark Mode:** DevilDrive defaults to Dark mode; switch between Light and Dark mode anytime in **Settings**.
 * **McMaster-Carr parts:** click **McMaster** in the toolbar, type the part number (e.g. 91251A540) and click **Get from McMaster**. DevilDrive opens the part's page; click McMaster's **Download**, choose **SOLIDWORKS** and save. DevilDrive picks the file up from your Downloads folder, puts it in `COTS\MCMASTER` and offers to check it in.
 * **Part numbering:** if an admin has set it up (**Numbering** in the toolbar), checking in a new part from SolidWorks asks which group it belongs to (e.g. 200 Chassis), gives it the next free number, and offers to rename the file to match. The rename uses Rename / Move, so assemblies that use it are updated.
 * **Material** comes from the part's SolidWorks material (Edit Material), recorded at every check-in; there's nothing to type.
 * **Request Delete** (right-click): ask the admins to delete a file from the vault for everyone. Write why; they see the request in DevilDrive (and Discord) and either delete the file or reject the request. Changed your mind? **Withdraw Delete Request**.
 * **Delete Local File** (right-click) removes a file you made in the vault folder but never checked in (it shows as *Not in vault*). Files that are in the vault can't be deleted this way. A copy is kept in the same backups folder.
-* **Folders**: the tree on the left shows the vault's folders; click one to see the files in it, like File Explorer (a search or filter looks in its subfolders too). Right-click a folder for **New Folder…** or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: DevilDrive starts SolidWorks in the background to update references so nothing breaks.
-* **Rename**: right-click a file and choose **Rename…**, then type the new name (the .SLDPRT/.SLDASM/.SLDDRW ending stays). Assemblies and drawings that use the file are updated automatically in the background.
-* The version you're on is shown at the bottom right of DevilDrive and at the bottom of the SolidWorks pane.
+* **Folders**: the tree on the left shows the vault's folders; click one to see the files in it, like File Explorer (a search or filter looks in its subfolders too). Right-click a folder for **New Folder…** (it reaches teammates once files are in it) or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: DevilDrive starts SolidWorks (your team's version) in the background for that, so the first move takes a little longer. Files that are open in SolidWorks have to be closed first. Files you had checked out are still checked out to you afterwards. If an assembly or drawing that isn't downloaded on your PC might use the file (DevilDrive can't tell because it was never indexed), the move is refused until you download it.
+* **Rename**: right-click a file and choose **Rename…**, then type the new name (the .SLDPRT/.SLDASM/.SLDDRW ending stays). It works like Move to Folder: assemblies and drawings that use the file are updated by SolidWorks in the background and checked in with the rename, so nothing breaks for anyone.
+* **Export** (like Pack and Go): select files, right-click, **Export…**. DevilDrive copies them and every part and sub-assembly they use (all levels), and their drawings if you want, to a folder or a .zip file, and points the copies' assemblies and drawings at each other, so they open on any PC without the vault (to send to a sponsor, a machine shop or a teammate). Files that are only placeholders on your PC are downloaded first. SolidWorks is used in the background, as for Move to Folder. Nothing in the vault changes, and the copies aren't linked to it.
+* The version you're on is shown at the bottom right of DevilDrive and at the bottom of the SolidWorks pane. The add-in updates along with the app: if its update was skipped (SolidWorks was open), DevilDrive offers it again at the next start.
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material), what it **contains**, and **where it's used**. Check where-used before changing a part so you know which assemblies it affects.
 * **Search** finds files by name, part number, description or any other SolidWorks property.
@@ -226,11 +227,24 @@ Outputs generated in `dist/`:
 
 | Command | Action |
 |---|---|
-| Get Latest | `git fetch`, verify no conflicts/open files, `git merge --ff` |
-| Check Out | Get Latest, `git lfs lock <file>`, clear read-only flag |
-| Check In | Verify lock ownership, stage index & previews, `git commit`, `git push`, `git lfs unlock` |
-| Undo Check Out | Local backup, `git checkout HEAD -- <file>`, `git lfs unlock` |
-| Break Lock | `git lfs unlock --force --id <id>` |
-| Milestones | Annotated Git tags `milestone/<name>` |
+| Get Latest | `fetch`, refuse if an incoming file has local edits or is open in SolidWorks, then `merge --ff` (never rebase or stash) |
+| Check Out | Get Latest, `lfs lock`, clear read-only, re-fetch to close the lock race |
+| Check In | verify locks are ours, `add` + `commit` only the chosen files, Get Latest, `push` (merge and retry up to 3× if the vault moved), `lfs unlock` |
+| Undo Check Out | back up, `checkout HEAD -- file`, `lfs unlock` |
+| History / Restore | `log -- file` / `checkout <commit> -- file`, then Check In |
+| Break Lock | `lfs unlock --force --id` |
+| Version `7/10` | check-ins touching the file in `HEAD` / plus those in `HEAD..origin/main` (`git log --name-only`) |
+| Version guard | add-in reads `ISldWorks.VersionHistory` (file version 17000 = 2024, 19000 = 2026) and compares with `pdm.json` `solidWorksVersion` |
+| Vault index | add-in writes `.pdm/index/<path>.json` (saved-in, direct references, custom properties) in the same commit as the check-in (from the app: the app asks the add-in through SolidWorks' `GetAddInObject` and `JarvisAddin.RecordFiles`); after each SolidWorks check-in `IndexCatchUp` picks up to 10 files with a missing or outdated record or no preview |
+| Milestones | annotated tag `milestone/<name>` on the vault's latest commit; viewing = `checkout --detach <tag>`, Return to Latest = `checkout main` + Get Latest |
+| Export | `VaultExport.Collect` (Core): the chosen files plus their references, all levels, read by SolidWorks (`GetDocumentDependencies2`; the index is used first to download placeholders) and drawings from the index's where-used; then `VaultImport.CopyAndRepoint` into the export folder (zipped from a temp folder for a .zip) |
+| Rename / Move, Rename, Move to Folder | `VaultService.PlanMoveAsync` / `MoveAsync` (Core): find referencing files with an `IReferenceEditor` (the add-in's SolidWorks, or the app's `SolidWorksAutomation`, which drives the team's SolidWorks over COM, started hidden if needed), check out, move, `ReplaceReferencedDocument` on each, move index entries and previews, check in old paths + new paths + referencing files; everything is put back if a reference can't be updated |
+| Import files | `VaultImport.CopyAndRepoint` (Core): copy into the vault under new names, `ReplaceReferencedDocument` on each copy so it uses the other copies (copies are deleted again if one fails); then the add-in writes PartNumber/Description, makes records and previews, and checks the copies in as one commit |
+| Identity | `git credential fill` (no prompt) → GitHub API `/user` + repo permissions; admin = verified login in `pdm.json` admins, or repo admin/maintainer |
+| Vault guard | GitHub Actions on push; guard script read from the commit before the push; undoes a rule-breaking push by restoring the touched files in one new commit |
+| 3D previews | add-in exports coarse binary STL to `.pdm/preview/<path>.stl` (LFS) at check-in (and the catch-up); over 12,000 triangles (usually assemblies with detailed hardware) `PreviewSimplifier` merges nearby points until it fits (about 600 KB at most); app renders with HelixToolkit |
+| Freeze / Unfreeze | admin keeps (or releases) the `lfs lock`; `.pdm/frozen.json` committed and pushed |
+| Request Check-In | admin adds an entry to `.pdm/checkin-requests.json`; the owner's client sees it on its next vault check, commits the saved file plus the updated list, pushes and unlocks |
+| Vault view | `fetch`, `lfs locks --verify --json`, `status`, `ls-files`, `log --name-only` |
 
 </details>
