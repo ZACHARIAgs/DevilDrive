@@ -17,8 +17,8 @@ namespace Jarvis.SwAddin;
 [ProgId("Jarvis.SwAddin")]
 public sealed class JarvisAddin : ISwAddin
 {
-    private const string Title = "Jarvis";
-    private const string Description = "Check SolidWorks files in and out of your team's vault";
+    private const string Title = "DevilDrive";
+    private const string Description = "Check SolidWorks files in and out of the Solar Devils vault";
 
     private ISldWorks? _sw;
     private ITaskpaneView? _taskPane;

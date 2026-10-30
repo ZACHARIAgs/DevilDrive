@@ -33,7 +33,7 @@ public class OnboardingTests : IDisposable
     }
 
     private InstallLayout Layout() =>
-        new InstallLayout(Path.Combine(_root, "Programs", "Jarvis"), new[] { Path.Combine(_root, "Desktop"), Path.Combine(_root, "Start Menu") }, isTest: true);
+        new InstallLayout(Path.Combine(_root, "Programs", "DevilDrive"), new[] { Path.Combine(_root, "Desktop"), Path.Combine(_root, "Start Menu") }, isTest: true);
 
     // ------------------------------------------------------------ install
 
@@ -41,8 +41,8 @@ public class OnboardingTests : IDisposable
     public void Install_KnowsWhetherItRunsFromTheInstallFolder()
     {
         var layout = Layout();
-        Assert.True(AppInstaller.IsInstalled(Path.Combine(_root, "programs", "JARVIS", "jarvis.exe"), layout));
-        Assert.False(AppInstaller.IsInstalled(Path.Combine(_root, "Downloads", "Jarvis.exe"), layout));
+        Assert.True(AppInstaller.IsInstalled(Path.Combine(_root, "programs", "DEVILDRIVE", "devildrive.exe"), layout));
+        Assert.False(AppInstaller.IsInstalled(Path.Combine(_root, "Downloads", "DevilDrive.exe"), layout));
         Assert.Null(AppInstaller.InstalledVersion(layout));
     }
 
@@ -55,7 +55,7 @@ public class OnboardingTests : IDisposable
             Environment.SetEnvironmentVariable(InstallLayout.TestRootVariable, _root);
             var layout = InstallLayout.ForThisUser();
             Assert.True(layout.IsTest);
-            Assert.Equal(Path.Combine(_root, "Programs", "Jarvis", "Jarvis.exe"), layout.ExePath);
+            Assert.Equal(Path.Combine(_root, "Programs", "DevilDrive", "DevilDrive.exe"), layout.ExePath);
             Assert.All(layout.ShortcutFolders, f => Assert.StartsWith(_root, f));
         }
         finally
@@ -63,14 +63,14 @@ public class OnboardingTests : IDisposable
             Environment.SetEnvironmentVariable(InstallLayout.TestRootVariable, before);
         }
         Assert.False(InstallLayout.ForThisUser().IsTest);
-        Assert.EndsWith(Path.Combine("Programs", "Jarvis", "Jarvis.exe"), InstallLayout.ForThisUser().ExePath);
+        Assert.EndsWith(Path.Combine("Programs", "DevilDrive", "DevilDrive.exe"), InstallLayout.ForThisUser().ExePath);
     }
 
     [Fact]
     public void Install_CopiesTheExeAndClearsTheDownloadMark()
     {
         var layout = Layout();
-        var download = Path.Combine(_root, "Downloads", "Jarvis.exe");
+        var download = Path.Combine(_root, "Downloads", "DevilDrive.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(download)!);
         File.WriteAllText(download, "new");
         File.WriteAllText(download + ":Zone.Identifier", "[ZoneTransfer]" + Environment.NewLine + "ZoneId=3");
@@ -88,7 +88,7 @@ public class OnboardingTests : IDisposable
         var layout = Layout();
         Directory.CreateDirectory(layout.InstallFolder);
         File.WriteAllText(layout.ExePath, "old");
-        var download = Path.Combine(_root, "Jarvis.exe");
+        var download = Path.Combine(_root, "DevilDrive.exe");
         File.WriteAllText(download, "new");
 
         // A running exe can't be deleted or overwritten, only renamed: a shared-delete handle behaves the same.
@@ -110,7 +110,7 @@ public class OnboardingTests : IDisposable
         var shortcuts = AppInstaller.CreateShortcuts(layout);
         AppInstaller.CreateShortcuts(layout); // again: replaced, not duplicated
 
-        Assert.Equal(new[] { Path.Combine(_root, "Desktop", "Jarvis.lnk"), Path.Combine(_root, "Start Menu", "Jarvis.lnk") }, shortcuts);
+        Assert.Equal(new[] { Path.Combine(_root, "Desktop", "DevilDrive.lnk"), Path.Combine(_root, "Start Menu", "DevilDrive.lnk") }, shortcuts);
         Assert.All(shortcuts, s => Assert.True(File.Exists(s)));
         Assert.Single(Directory.GetFiles(Path.Combine(_root, "Desktop")));
     }
@@ -203,11 +203,11 @@ public class OnboardingTests : IDisposable
     public void UpdatePrompt_ShowsOnlyWhatsNew()
     {
         var nl = Environment.NewLine;
-        var notes = "## To install: download **Jarvis.exe** below and open it" + nl + nl +
+        var notes = "## To install: download **DevilDrive.exe** below and open it" + nl + nl +
                     "Windows may warn you: click **More info**, then **Run anyway**." + nl + nl +
                     "You don't need the other files: Jarvis uses them for updates." + nl + nl +
                     "What's new: version numbers in the app." + nl + nl +
-                    "**SHA-256 checksums**" + nl + "```" + nl + "abc  Jarvis.exe" + nl + "```";
+                    "**SHA-256 checksums**" + nl + "```" + nl + "abc  DevilDrive.exe" + nl + "```";
 
         Assert.Equal("What's new: version numbers in the app.", Jarvis.Core.Updates.Updater.WhatsNew(notes));
         Assert.Equal("Older notes", Jarvis.Core.Updates.Updater.WhatsNew("Older notes" + nl + nl + "**SHA-256 checksums**" + nl + "x"));

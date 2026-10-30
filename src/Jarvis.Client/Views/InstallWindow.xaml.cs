@@ -15,8 +15,8 @@ using Jarvis.Core.Updates;
 namespace Jarvis.Client.Views;
 
 /// <summary>
-/// Shown when Jarvis.exe runs from outside the install folder (e.g. straight from Downloads): copies
-/// itself to %LocalAppData%\Programs\Jarvis, installs Git if it's missing, adds shortcuts (and the
+/// Shown when DevilDrive.exe runs from outside the install folder (e.g. straight from Downloads): copies
+/// itself to %LocalAppData%\Programs\DevilDrive, installs Git if it's missing, adds shortcuts (and the
 /// SolidWorks add-in if chosen), then starts the installed copy. What Setup.cmd does, without the console.
 /// There's no "run without installing": a copy outside the install folder doesn't update itself, has no
 /// shortcuts, and the SolidWorks add-in can't find it. Closing the window quits.
@@ -40,21 +40,21 @@ public partial class InstallWindow : Window
         _alreadyInstalled = installed != null && installed >= current;
         if (_alreadyInstalled)
         {
-            IntroText.Text = $"Jarvis {installed!.ToString(3)} is already installed on this PC, so you don't need this copy. " +
+            IntroText.Text = $"DevilDrive {installed!.ToString(3)} is already installed on this PC, so you don't need this copy. " +
                              "Open the installed one (it's also on your Desktop and in the Start menu). You can delete this download.";
             StepsPanel.Visibility = Visibility.Collapsed;
-            InstallButton.Content = "Open Jarvis";
+            InstallButton.Content = "Open DevilDrive";
         }
         else if (installed != null)
         {
-            IntroText.Text = $"Jarvis {installed.ToString(3)} is installed on this PC. Update it to {current.ToString(3)}? Your vaults and settings stay as they are.";
-            InstallButton.Content = "Update Jarvis";
+            IntroText.Text = $"DevilDrive {installed.ToString(3)} is installed on this PC. Update it to {current.ToString(3)}? Your vaults and settings stay as they are.";
+            InstallButton.Content = "Update DevilDrive";
         }
 
-        SetStep(CopyStep, Step.Pending, $"Copy Jarvis to {layout.InstallFolder}");
+        SetStep(CopyStep, Step.Pending, $"Copy DevilDrive to {layout.InstallFolder}");
         SetStep(GitStep, Step.Pending, "Install Git and Git LFS, if they're missing (Windows may ask for permission)");
-        SetStep(ShortcutStep, Step.Pending, "Add Jarvis to the Desktop and the Start menu");
-        // Offer the add-in when SolidWorks is here and the add-in is missing, or older than this Jarvis (it updates along with it).
+        SetStep(ShortcutStep, Step.Pending, "Add DevilDrive to the Desktop and the Start menu");
+        // Offer the add-in when SolidWorks is here and the add-in is missing, or older than this DevilDrive (it updates along with it).
         var addin = SolidWorksAddinSetup.InstalledVersion;
         var addinUpdate = addin != null && addin < current;
         SetStep(AddinStep, Step.Pending, (addinUpdate ? "Update" : "Install") + " the SolidWorks add-in (Windows asks for permission)");
@@ -63,7 +63,7 @@ public partial class InstallWindow : Window
             if (addinUpdate)
             {
                 AddinBox.Content = $"Also update the SolidWorks add-in ({addin!.ToString(3)} to {current.ToString(3)})";
-                AddinNote.Text = "So the add-in matches this version of Jarvis. SolidWorks must be closed, and Windows asks for permission once.";
+                AddinNote.Text = "So the add-in matches this version of DevilDrive. SolidWorks must be closed, and Windows asks for permission once.";
             }
             AddinChoice.Visibility = Visibility.Visible;
             OnAddinChoice(this, new RoutedEventArgs());
@@ -111,14 +111,14 @@ public partial class InstallWindow : Window
         StatusText.Text = "";
         try
         {
-            SetStep(CopyStep, Step.Working, $"Copying Jarvis to {_layout.InstallFolder}\u2026");
+            SetStep(CopyStep, Step.Working, $"Copying DevilDrive to {_layout.InstallFolder}\u2026");
             await Task.Run(() => AppInstaller.CopyApp(_sourceExe, _layout));
             SetStep(CopyStep, Step.Done, $"Copied to {_layout.InstallFolder}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            SetStep(CopyStep, Step.Problem, "Jarvis couldn't be copied: " + ex.Message);
-            StatusText.Text = "If Jarvis is open, close it (also check the system tray), then click Install Jarvis again.";
+            SetStep(CopyStep, Step.Problem, "DevilDrive couldn't be copied: " + ex.Message);
+            StatusText.Text = "If DevilDrive is open, close it (also check the system tray), then click Install DevilDrive again.";
             SetBusy(false);
             return;
         }
@@ -133,7 +133,7 @@ public partial class InstallWindow : Window
         }
         catch (Exception ex)
         {
-            SetStep(ShortcutStep, Step.Problem, "The shortcuts couldn't be added (" + ex.Message + "). Start Jarvis from " + _layout.ExePath);
+            SetStep(ShortcutStep, Step.Problem, "The shortcuts couldn't be added (" + ex.Message + "). Start DevilDrive from " + _layout.ExePath);
         }
 
 
@@ -145,10 +145,10 @@ public partial class InstallWindow : Window
             StartInstalled();
             return;
         }
-        // Leave the problem on screen; Jarvis is installed either way.
+        // Leave the problem on screen; DevilDrive is installed either way.
         _finished = true;
-        InstallButton.Content = "Open Jarvis";
-        StatusText.Text = "Jarvis is installed. Add the SolidWorks add-in later in Jarvis's Settings.";
+        InstallButton.Content = "Open DevilDrive";
+        StatusText.Text = "DevilDrive is installed. Add the SolidWorks add-in later in DevilDrive's Settings.";
     }
 
     /// <summary>The add-in from the latest release (SolidWorks has to be closed). False if it wasn't installed.</summary>
@@ -163,7 +163,7 @@ public partial class InstallWindow : Window
                                           "End it now, so the add-in can be installed? Nothing you can see is open in it.",
                         "Install the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
-                    SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in Jarvis's Settings)");
+                    SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in DevilDrive's Settings)");
                     return true;
                 }
                 SolidWorksAddinSetup.EndHiddenSolidWorks();
@@ -172,11 +172,11 @@ public partial class InstallWindow : Window
             }
             SetStep(AddinStep, Step.Working, "Waiting for SolidWorks to close\u2026");
             var answer = MessageBox.Show(this,
-                "To install the add-in, close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in; you can add it later in Jarvis's Settings.",
+                "To install the add-in, close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in; you can add it later in DevilDrive's Settings.",
                 "Install the SolidWorks add-in", MessageBoxButton.OKCancel, MessageBoxImage.Information);
             if (answer != MessageBoxResult.OK)
             {
-                SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in Jarvis's Settings)");
+                SetStep(AddinStep, Step.Done, "SolidWorks add-in skipped (add it later in DevilDrive's Settings)");
                 return true;
             }
         }
@@ -184,7 +184,7 @@ public partial class InstallWindow : Window
         try
         {
             await SolidWorksAddinSetup.InstallLatestAsync();
-            SetStep(AddinStep, Step.Done, "SolidWorks add-in installed (Jarvis is in SolidWorks' Task Pane)");
+            SetStep(AddinStep, Step.Done, "SolidWorks add-in installed (DevilDrive is in SolidWorks' Task Pane)");
             return true;
         }
         catch (Jarvis.Core.Errors.PdmException ex)
@@ -215,7 +215,7 @@ public partial class InstallWindow : Window
             tools = await GitHubSignIn.CheckToolsAsync();
             if (!tools.Ready)
             {
-                SetStep(GitStep, Step.Problem, instead ?? "Git didn't install. Jarvis's welcome screen will help you try again.");
+                SetStep(GitStep, Step.Problem, instead ?? "Git didn't install. DevilDrive's welcome screen will help you try again.");
                 return;
             }
         }
@@ -231,7 +231,7 @@ public partial class InstallWindow : Window
         }
         catch (Win32Exception ex)
         {
-            StatusText.Text = $"The installed Jarvis didn't start ({ex.Message}). Start it from {_layout.ExePath}.";
+            StatusText.Text = $"The installed DevilDrive didn't start ({ex.Message}). Start it from {_layout.ExePath}.";
         }
     }
 

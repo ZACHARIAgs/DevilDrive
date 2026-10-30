@@ -106,6 +106,7 @@ public sealed class GitHubRepoInvitation
     /// be read before the invitation is accepted, so this is the best guess until then.
     /// </summary>
     public bool LooksLikeVault =>
+        (Description ?? "").IndexOf("DevilDrive vault", StringComparison.OrdinalIgnoreCase) >= 0 ||
         (Description ?? "").IndexOf("Jarvis vault", StringComparison.OrdinalIgnoreCase) >= 0 ||
         RepoFullName.IndexOf("vault", StringComparison.OrdinalIgnoreCase) >= 0 ||
         (Description ?? "").IndexOf("vault", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -425,7 +426,7 @@ public sealed class GitHubApi
     {
         using var request = new HttpRequestMessage(method, ApiRoot + path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
-        request.Headers.UserAgent.ParseAdd("Jarvis");
+        request.Headers.UserAgent.ParseAdd("DevilDrive");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         if (jsonBody != null) request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");

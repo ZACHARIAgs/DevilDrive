@@ -1,5 +1,5 @@
-# Capstone PDM vault guard: checks every push against the vault rules on GitHub's side and
-# undoes pushes that break them (see .github/vault-guard/guard.py). Managed by Capstone PDM:
+# DevilDrive vault guard: checks every push against the vault rules on GitHub's side and
+# undoes pushes that break them (see .github/vault-guard/guard.py). Managed by DevilDrive:
 # admins can reinstall it with "Update Vault Setup" if it's changed or removed.
 name: Vault Guard
 

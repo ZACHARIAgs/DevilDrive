@@ -18,7 +18,7 @@
         <ListBox x:Name="LocalList" DockPanel.Dock="Top" Height="150" ItemTemplate="{StaticResource VaultItem}"
                  SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnOpen" />
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,6,0,16">
-            <Button x:Name="OpenButton" Content="Open in Jarvis" Padding="10,3" Click="OnOpen" />
+            <Button x:Name="OpenButton" Content="Open in DevilDrive" Padding="10,3" Click="OnOpen" />
             <Button Content="Add a folder on this PC&#x2026;" Padding="10,3" Margin="6,0,0,0" Click="OnAddFolder" />
             <Button x:Name="RemoveButton" Content="Remove from list" Padding="10,3" Margin="6,0,0,0" Click="OnRemove" />
             <Button x:Name="InviteButton" Content="Team&#x2026;" Padding="10,3" Margin="6,0,0,0" Click="OnInvite"

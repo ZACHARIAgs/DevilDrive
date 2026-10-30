@@ -87,7 +87,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public ICommand DeleteLocalCommand { get; }
 
     /// <summary>"Jarvis 0.6.4" for the status bar.</summary>
-    public string VersionText { get; } = "Jarvis " + Jarvis.Core.Updates.Updater.CurrentVersion(System.Reflection.Assembly.GetExecutingAssembly()).ToString(3);
+    public string VersionText { get; } = "DevilDrive " + Jarvis.Core.Updates.Updater.CurrentVersion(System.Reflection.Assembly.GetExecutingAssembly()).ToString(3);
     public ICommand HistoryCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand BreakLockCommand { get; }

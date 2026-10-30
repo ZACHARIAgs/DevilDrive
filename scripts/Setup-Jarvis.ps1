@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
-    One-time Jarvis setup for a teammate's PC. Optional: Jarvis.exe installs itself when you open it
+    One-time Jarvis setup for a teammate's PC. Optional: DevilDrive.exe installs itself when you open it
     (Install Jarvis); this script does the same from a console, for the setup zip.
 
 .DESCRIPTION
     1. Installs Git for Windows (includes Git LFS) with winget if it's missing.
     2. Turns on Git LFS.
     3. Asks for your name and email.
-    4. Installs Jarvis.exe, adds Desktop and Start menu shortcuts, and opens it.
+    4. Installs DevilDrive.exe, adds Desktop and Start menu shortcuts, and opens it.
     5. Optionally installs the SolidWorks add-in.
 
-    The app does the rest: it signs you in to GitHub and finds your team's vault (Vaults, Find my
+    The app does the rest: it signs you in to GitHub and finds the Solar Devils vault (Vaults, Find my
     vaults), or creates a new one for a team lead. So the same setup zip works for every team.
 
     Run it by double-clicking Setup.cmd. It's safe to run again: finished steps are skipped.
@@ -19,7 +19,7 @@
     Optional: also download this vault now (to -VaultPath). Normally you leave it out and pick the vault in the app.
 
 .NOTES
-    Optionally set $DefaultClientUrl below (a download link for Jarvis.exe) if the exe isn't in the zip.
+    Optionally set $DefaultClientUrl below (a download link for DevilDrive.exe) if the exe isn't in the zip.
 #>
 [CmdletBinding()]
 param(
@@ -28,14 +28,14 @@ param(
     [string]$ClientUrl
 )
 
-# Optional: where to download Jarvis.exe when it isn't next to this script.
-$DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/jarvis/releases/latest/download/Jarvis.exe
-$DefaultVaultPath = 'C:\CapstoneVault'   # only used with -RepoUrl
+# Optional: where to download DevilDrive.exe when it isn't next to this script.
+$DefaultClientUrl = ''   # e.g. https://github.com/YOUR-TEAM/jarvis/releases/latest/download/DevilDrive.exe
+$DefaultVaultPath = 'C:\SolarDevilsVault'   # only used with -RepoUrl
 
 $ErrorActionPreference = 'Stop'
 if (-not $VaultPath) { $VaultPath = $DefaultVaultPath }
-$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\Jarvis'
-$ExePath    = Join-Path $InstallDir 'Jarvis.exe'
+$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\DevilDrive'
+$ExePath    = Join-Path $InstallDir 'DevilDrive.exe'
 
 function Write-Step([string]$text) { Write-Host ''; Write-Host "==> $text" -ForegroundColor Cyan }
 function Write-Ok([string]$text)   { Write-Host "    $text" -ForegroundColor Green }
@@ -138,10 +138,10 @@ if ($RepoUrl) {
 }
 
 # 5. The Jarvis app ---------------------------------------------------
-Write-Step 'Installing the Jarvis app'
+Write-Step 'Installing DevilDrive'
 New-Item -ItemType Directory -Force $InstallDir | Out-Null
 if (-not $ClientUrl) { $ClientUrl = $DefaultClientUrl }
-$besideScript = Join-Path $PSScriptRoot 'Jarvis.exe'
+$besideScript = Join-Path $PSScriptRoot 'DevilDrive.exe'
 if (Test-Path $besideScript) {
     Copy-Item $besideScript $ExePath -Force
     Write-Ok "Copied to $ExePath"
@@ -152,11 +152,11 @@ elseif ($ClientUrl) {
     Write-Ok "Downloaded to $ExePath"
 }
 else {
-    Write-Warn 'Jarvis.exe was not found next to this script and no download link is set.'
-    Write-Warn "Put Jarvis.exe in $InstallDir yourself, then run Setup again for the shortcuts."
+    Write-Warn 'DevilDrive.exe was not found next to this script and no download link is set.'
+    Write-Warn "Put DevilDrive.exe in $InstallDir yourself, then run Setup again for the shortcuts."
 }
 
-$settingsDir  = Join-Path $env:APPDATA 'Jarvis'
+$settingsDir  = Join-Path $env:APPDATA 'DevilDrive'
 $settingsFile = Join-Path $settingsDir 'settings.json'
 if ($clonedVault -and -not (Test-Path $settingsFile)) {
     # Only for -RepoUrl, and never over existing settings (they list the user's vaults).
@@ -166,10 +166,10 @@ if ($clonedVault -and -not (Test-Path $settingsFile)) {
 
 if (Test-Path $ExePath) {
     # Compare with SHA256SUMS on the release page to be sure this is the real file.
-    Write-Ok ('Jarvis.exe SHA-256: ' + (Get-FileHash $ExePath -Algorithm SHA256).Hash.ToLowerInvariant())
+    Write-Ok ('DevilDrive.exe SHA-256: ' + (Get-FileHash $ExePath -Algorithm SHA256).Hash.ToLowerInvariant())
     $shell = New-Object -ComObject WScript.Shell
     foreach ($folder in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
-        $shortcut = $shell.CreateShortcut((Join-Path $folder 'Jarvis.lnk'))
+        $shortcut = $shell.CreateShortcut((Join-Path $folder 'DevilDrive.lnk'))
         $shortcut.TargetPath = $ExePath
         $shortcut.IconLocation = "$ExePath,0"
         $shortcut.WorkingDirectory = $InstallDir
@@ -183,7 +183,7 @@ if (Test-Path $ExePath) {
 $addinInstaller = Join-Path $PSScriptRoot 'Install-SolidWorksAddin.ps1'
 if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidWorksAddin'))) {
     Write-Step 'SolidWorks add-in'
-    $answer = Read-Default 'Install the Jarvis add-in for SolidWorks? (needs admin permission) [Y/n]' 'Y'
+    $answer = Read-Default 'Install the DevilDrive add-in for SolidWorks? (needs admin permission) [Y/n]' 'Y'
     if ($answer -match '^[Yy]') {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $addinInstaller
         if ($LASTEXITCODE -ne 0) { Write-Warn 'The add-in was not installed. Run "Install SolidWorks Add-in.cmd" later to try again.' }
@@ -194,7 +194,7 @@ if ((Test-Path $addinInstaller) -and (Test-Path (Join-Path $PSScriptRoot 'SolidW
 }
 
 Write-Host ''
-Write-Host 'All done! Jarvis is opening (it''s also on your Desktop).' -ForegroundColor Green
+Write-Host 'All done! DevilDrive is opening (it''s also on your Desktop).' -ForegroundColor Green
 Write-Host 'In the app: sign in to GitHub, then click Accept and download next to your team''s vault'
 Write-Host '(or Find my vaults), or New team vault if you''re setting up a team. Always check out before editing.'
 if (Test-Path $ExePath) { Start-Process -FilePath $ExePath }

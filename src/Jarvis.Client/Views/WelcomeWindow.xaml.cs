@@ -40,13 +40,13 @@ public partial class WelcomeWindow : Window
         public InvitationItem(GitHubRepoInvitation invitation)
         {
             Invitation = invitation;
-            const string prefix = "Jarvis vault: ";
+            const string prefix = "DevilDrive vault: ";
             var description = invitation.Description ?? "";
             Title = description.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && description.Length > prefix.Length
                 ? description.Substring(prefix.Length)
                 : invitation.RepoFullName;
             var from = invitation.Inviter.Length > 0 ? $"{invitation.RepoFullName}, invited by {invitation.Inviter}" : invitation.RepoFullName;
-            Detail = invitation.LooksLikeVault ? from : from + " (may not be a Jarvis vault)";
+            Detail = invitation.LooksLikeVault ? from : from + " (may not be a DevilDrive vault)";
         }
 
         public GitHubRepoInvitation Invitation { get; }
@@ -131,7 +131,7 @@ public partial class WelcomeWindow : Window
             InvitationList.ItemsSource = items;
             InvitationList.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             VaultText.Text = items.Count > 0
-                ? (items.Count == 1 ? "You've been invited to a vault. Accept the invitation and Jarvis downloads it:" : "You've been invited to these repos. Accept your team's vault and Jarvis downloads it:")
+                ? (items.Count == 1 ? "You've been invited to a vault. Accept the invitation and DevilDrive downloads it:" : "You've been invited to these repos. Accept your team's vault and DevilDrive downloads it:")
                 : "Joining a team? Ask your team lead to invite your GitHub account (" + _user.Login + "), then click Find my vaults. Starting a team? Create its vault and invite your teammates.";
         }
         catch (PdmException)
@@ -211,7 +211,7 @@ public partial class WelcomeWindow : Window
         await CheckAsync();
         if (!_tools.Ready && StatusText.Text.Length == 0)
         {
-            StatusText.Text = "Git still isn't ready. If it just finished installing, restart your PC and open Jarvis again.";
+            StatusText.Text = "Git still isn't ready. If it just finished installing, restart your PC and open DevilDrive again.";
         }
     }
 
@@ -263,7 +263,7 @@ public partial class WelcomeWindow : Window
             {
                 SetBusy(false);
                 await ShowSignedInAsync();
-                StatusText.Text = $"You've joined {item.Invitation.RepoFullName}, but it isn't a Jarvis vault (it has no pdm.json), so nothing was downloaded.";
+                StatusText.Text = $"You've joined {item.Invitation.RepoFullName}, but it isn't a DevilDrive vault (it has no pdm.json), so nothing was downloaded.";
                 return;
             }
             OpenFolder = await VaultCatalog.DownloadAsync(vault, progress);
@@ -308,7 +308,7 @@ public partial class WelcomeWindow : Window
         try
         {
             await SolidWorksAddinSetup.InstallLatestAsync();
-            AddinText.Text = "\u2713 Installed. Start SolidWorks and look for Jarvis in the Task Pane on the right.";
+            AddinText.Text = "\u2713 Installed. Start SolidWorks and look for DevilDrive in the Task Pane on the right.";
             AddinButton.Visibility = Visibility.Collapsed;
         }
         catch (PdmException ex)

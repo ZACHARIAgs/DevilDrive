@@ -67,7 +67,7 @@
         <DockPanel Grid.Row="5" Margin="0,14,0,0">
             <Button DockPanel.Dock="Right" Style="{StaticResource DialogButton}" Content="Close" IsCancel="True" />
             <Button x:Name="CopyButton" DockPanel.Dock="Left" Content="Copy welcome message" Click="OnCopy"
-                    ToolTip="What new teammates need to do: accept the invite, install Jarvis, find the vault. Paste it into Discord, email or a text." />
+                    ToolTip="What new teammates need to do: accept the invite, install DevilDrive, find the vault. Paste it into Discord, email or a text." />
             <TextBlock />
         </DockPanel>
     </Grid>

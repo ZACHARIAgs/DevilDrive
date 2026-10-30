@@ -6,7 +6,7 @@
 .DESCRIPTION
     1. Bump <Version> in Directory.Build.props, commit and push.
     2. Run this script. It builds everything (Publish-Client.ps1), then creates release v<Version> on
-       the code repo with Jarvis.exe, Jarvis-SolidWorksAddin.zip and SHA256SUMS attached,
+       the code repo with DevilDrive.exe, DevilDrive-SolidWorksAddin.zip and SHA256SUMS attached,
        and notes that start with how to install.
 
     Uses the GitHub sign-in Git already saved on this PC; you need write access to the code repo.
@@ -41,7 +41,7 @@ if (& git -C $root status --porcelain --untracked-files=no) { throw 'There are u
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Publish-Client.ps1')
 }
-$files = @('Jarvis.exe', 'Jarvis-SolidWorksAddin.zip', 'SHA256SUMS') |
+$files = @('DevilDrive.exe', 'DevilDrive-SolidWorksAddin.zip', 'SHA256SUMS') |
     ForEach-Object { Join-Path $dist $_ } | Where-Object { Test-Path $_ }
 if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 
@@ -57,7 +57,7 @@ finally {
 }
 $token = ($fill | Where-Object { $_ -like 'password=*' } | Select-Object -First 1) -replace '^password=', ''
 if (-not $token) { throw 'No saved GitHub sign-in found. Run "git fetch" in the repo once to sign in, then try again.' }
-$headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'Jarvis-release' }
+$headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'DevilDrive-release' }
 
 try {
     Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag" | Out-Null
@@ -69,9 +69,9 @@ catch [System.Net.WebException] {
 
 $sums = Get-Content (Join-Path $dist 'SHA256SUMS') -Raw
 # Every release starts by saying which file to download.
-$install = "## To install: download **Jarvis.exe** below and open it`n`n" +
-    "Windows may warn you: click **More info**, then **Run anyway**. Choose whether you also want the SolidWorks add-in, click **Install Jarvis**, then follow the welcome screen.`n`n" +
-    "You don't need the other files: Jarvis uses them for updates and to install the SolidWorks add-in (during setup, or later in Settings)."
+$install = "## To install: download **DevilDrive.exe** below and open it`n`n" +
+    "Windows may warn you: click **More info**, then **Run anyway**. Choose whether you also want the SolidWorks add-in, click **Install DevilDrive**, then follow the welcome screen.`n`n" +
+    "You don't need the other files: DevilDrive uses them for updates and to install the SolidWorks add-in (during setup, or later in Settings)."
 $body = @{
     tag_name         = $tag
     target_commitish = $head

@@ -60,7 +60,7 @@ public sealed class VaultConfig
             var actual = Normalize(vaultRoot);
             if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase)) return null;
             return $"This vault is in {actual}, but your team keeps it in {expected}. Assemblies store the full path to each part, " +
-                   $"so files saved here can open with missing parts on teammates' PCs (and theirs here). Check in your work, close SolidWorks and Jarvis, " +
+                   $"so files saved here can open with missing parts on teammates' PCs (and theirs here). Check in your work, close SolidWorks and DevilDrive, " +
                    $"move the folder to {expected}, then open it from there (Vaults, Add a folder on this PC).";
         }
         catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)

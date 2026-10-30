@@ -152,7 +152,7 @@ public class NewTeamTests
         var link = VaultInvites.InstallLink("team/jarvis");
         var message = VaultInvites.Message("Club Vault", "team/club-vault", @"C:\ClubVault", link);
 
-        Assert.Equal("https://github.com/team/jarvis/releases/latest/download/Jarvis.exe", link);
+        Assert.Equal("https://github.com/team/jarvis/releases/latest/download/DevilDrive.exe", link);
         Assert.Contains(link!, message);
         Assert.Contains("More info, then Run anyway", message);
         Assert.Contains("Accept and download", message);
@@ -162,7 +162,7 @@ public class NewTeamTests
         Assert.DoesNotContain("Setup.cmd", message);
         Assert.StartsWith("You're invited to our Club Vault (", message);
         Assert.StartsWith("You're invited to our Robotics vault (", VaultInvites.Message("Robotics", "t/v", @"C:\V", null));
-        Assert.Contains("Get Jarvis.exe from me", VaultInvites.Message("V", "t/v", @"C:\V", null));
+        Assert.Contains("Get DevilDrive.exe from me", VaultInvites.Message("V", "t/v", @"C:\V", null));
     }
 
     // ------------------------------------------------------------ GitHub API (fake GitHub)
@@ -378,7 +378,7 @@ public sealed class NewVaultIntegrationTests : IDisposable
         Assert.Equal("Club Vault", config.VaultName);
         Assert.Equal(folder, config.LocalPath);
         Assert.Equal(2024, config.SolidWorksVersion);
-        Assert.Equal("Create the vault (Jarvis rules, vault guard, team settings)", Git(teammate, "log", "-1", "--format=%s"));
+        Assert.Equal("Create the vault (DevilDrive rules, vault guard, team settings)", Git(teammate, "log", "-1", "--format=%s"));
     }
 
     public void Dispose()

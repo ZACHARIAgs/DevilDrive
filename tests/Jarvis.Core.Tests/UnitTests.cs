@@ -251,8 +251,8 @@ public class UpdaterTests
     public void ParseChecksums_ReadsSha256sumFormat()
     {
         var hash = new string('a', 64);
-        var sums = Jarvis.Core.Updates.Updater.ParseChecksums($"{hash}  Jarvis.exe\r\n{new string('b', 64)} *Setup.zip\njunk line\n");
-        Assert.Equal(hash, sums["jarvis.exe"]);
+        var sums = Jarvis.Core.Updates.Updater.ParseChecksums($"{hash}  DevilDrive.exe\r\n{new string('b', 64)} *Setup.zip\njunk line\n");
+        Assert.Equal(hash, sums["devildrive.exe"]);
         Assert.Equal(new string('b', 64), sums["Setup.zip"]);
         Assert.Equal(2, sums.Count);
     }

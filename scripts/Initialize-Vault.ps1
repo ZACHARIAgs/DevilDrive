@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    ADMIN ONLY, run once: seeds an empty GitHub repo as your team's Jarvis vault.
+    ADMIN ONLY, run once: seeds an empty GitHub repo as your team's DevilDrive vault.
     Easier: in the app, Vaults > New team vault does all of this (and creates the repo for you).
 
 .DESCRIPTION
-    Clones the empty repo to C:\CapstoneVault, adds the vault rules from vault-template
+    Clones the empty repo to C:\SolarDevilsVault, adds the vault rules from vault-template
     (.gitattributes for LFS + locking, .gitignore for SolidWorks temp files, pdm.json for
     team settings) and pushes the first commit to 'main'.
 
@@ -12,7 +12,7 @@
       1. Create a PRIVATE, EMPTY repo on GitHub (no README, no .gitignore).
       2. Add each teammate as a collaborator with Write access.
       3. Edit vault-template\pdm.json: admins, team names and the Discord webhook URL.
-         (You can also edit it later and check it in from Jarvis.)
+         (You can also edit it later and check it in from DevilDrive.)
 
 .EXAMPLE
     .\Initialize-Vault.ps1 -RepoUrl https://github.com/your-team/capstone-vault.git
@@ -20,7 +20,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$RepoUrl,
-    [string]$VaultPath = 'C:\CapstoneVault'
+    [string]$VaultPath = 'C:\SolarDevilsVault'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,4 +86,4 @@ finally {
 
 Write-Host ''
 Write-Host "Vault initialized at $VaultPath and pushed to $RepoUrl." -ForegroundColor Green
-Write-Host 'Next: in Jarvis, Vaults > Invite teammates, and send them the message it gives you (see README).'
+Write-Host 'Next: in DevilDrive, Vaults > Invite teammates, and send them the message it gives you (see README).'

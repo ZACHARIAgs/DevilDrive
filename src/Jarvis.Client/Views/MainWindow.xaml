@@ -153,6 +153,12 @@
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Settings" />
                     </StackPanel>
                 </Button>
+                <Button AutomationProperties.Name="Theme" Click="OnToggleTheme" ToolTip="Toggle between Light and Dark mode.">
+                    <StackPanel MinWidth="56">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE708;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Theme" />
+                    </StackPanel>
+                </Button>
             </ToolBar>
         </ToolBarTray>
 
@@ -199,7 +205,7 @@
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
                 <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource FaintTextBrush}" Margin="10,0,0,0"
-                           ToolTip="Jarvis checks for a newer version each time it starts" />
+                           ToolTip="DevilDrive checks for a newer version each time it starts" />
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
                 <TextBlock Text="{Binding InfoText}" Foreground="{StaticResource MutedTextBrush}" />

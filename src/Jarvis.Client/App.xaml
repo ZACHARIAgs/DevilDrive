@@ -17,7 +17,7 @@
             <Style x:Key="SectionHeader" TargetType="TextBlock">
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="12" />
-                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                 <Setter Property="Margin" Value="0,18,0,6" />
             </Style>
 
@@ -27,7 +27,7 @@
                         <ColumnDefinition Width="110" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,0,8,0" />
                     <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
                 </Grid>
             </DataTemplate>
@@ -35,13 +35,13 @@
             <Style x:Key="ToolGlyph" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
                 <Setter Property="FontSize" Value="18" />
-                <Setter Property="Foreground" Value="#374151" />
+                <Setter Property="Foreground" Value="{DynamicResource ToolGlyphBrush}" />
                 <Setter Property="HorizontalAlignment" Value="Center" />
             </Style>
 
             <!-- The everyday commands (Get Latest, Check Out, Check In) stand out in the accent color. -->
             <Style x:Key="PrimaryToolGlyph" TargetType="TextBlock" BasedOn="{StaticResource ToolGlyph}">
-                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Style>
 
             <Style x:Key="ToolLabel" TargetType="TextBlock">

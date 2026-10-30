@@ -58,12 +58,12 @@ public static class AppUpdater
 
         var notes = Updater.WhatsNew(release.Notes);
         var answer = MessageBox.Show(owner,
-            $"Jarvis {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
+            $"DevilDrive {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
             (notes.Length > 0 ? notes + "\n\n" : "") + "Update now? It takes about a minute and the app restarts.",
             "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (answer != MessageBoxResult.Yes) return;
 
-        var folder = Path.Combine(Path.GetTempPath(), "Jarvis-update-" + release.Version);
+        var folder = Path.Combine(Path.GetTempPath(), "DevilDrive-update-" + release.Version);
         try
         {
             owner.Cursor = System.Windows.Input.Cursors.Wait;
@@ -82,7 +82,7 @@ public static class AppUpdater
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(owner, "The update couldn't be installed: " + ex.Message + "\n\nJarvis keeps working on the current version.",
+            MessageBox.Show(owner, "The update couldn't be installed: " + ex.Message + "\n\nDevilDrive keeps working on the current version.",
                 "Update failed", MessageBoxButton.OK, MessageBoxImage.Warning);
             if (!File.Exists(exe) && File.Exists(exe + ".old")) File.Move(exe + ".old", exe);
             return;
@@ -105,18 +105,18 @@ public static class AppUpdater
         var installed = SolidWorksAddinSetup.InstalledVersion;
         if (installed == null || installed >= current || installed >= release.Version || release.Find(Updater.AddinAsset) == null) return;
         var answer = MessageBox.Show(owner,
-            $"The SolidWorks add-in is version {installed.ToString(3)}, but Jarvis is {current.ToString(3)}. Update the add-in now so they match?\n\n" +
+            $"The SolidWorks add-in is version {installed.ToString(3)}, but DevilDrive is {current.ToString(3)}. Update the add-in now so they match?\n\n" +
             "Windows asks for permission once. SolidWorks has to be closed.",
             "Update the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (answer != MessageBoxResult.Yes) return;
         try
         {
             owner.Cursor = System.Windows.Input.Cursors.Wait;
-            await UpdateAddinAsync(owner, updater, release, Path.Combine(Path.GetTempPath(), "Jarvis-addin-" + release.Version));
+            await UpdateAddinAsync(owner, updater, release, Path.Combine(Path.GetTempPath(), "DevilDrive-addin-" + release.Version));
         }
         catch (Exception ex) when (ex is PdmException or IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(owner, "The add-in wasn't updated: " + ex.Message + "\n\nJarvis offers it again next time it starts.",
+            MessageBox.Show(owner, "The add-in wasn't updated: " + ex.Message + "\n\nDevilDrive offers it again next time it starts.",
                 "Update the SolidWorks add-in", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally

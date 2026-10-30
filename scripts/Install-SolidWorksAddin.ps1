@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs (or removes) the Jarvis add-in for SolidWorks 2020 and newer.
+    Installs (or removes) the DevilDrive add-in for SolidWorks 2020 and newer.
 
 .DESCRIPTION
     Copies the add-in to C:\ProgramData\Jarvis\SolidWorksAddin and registers it with
@@ -19,7 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallDir = Join-Path $env:ProgramData 'Jarvis\SolidWorksAddin'
+$InstallDir = Join-Path $env:ProgramData 'DevilDrive\SolidWorksAddin'
 $Dll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
 $RegAsm = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe'
 $AddinGuid = '{9BD312D2-4FE8-4BEF-AB6C-91F6EA2CFB78}'
@@ -67,8 +67,8 @@ if (-not $Elevated) {
             Write-Host 'Add-in registration failed or was cancelled.' -ForegroundColor Red
             exit $process.ExitCode
         }
-        if ($Uninstall) { Write-Host 'Jarvis add-in removed.' -ForegroundColor Green }
-        else { Write-Host 'Jarvis add-in installed. Start SolidWorks and look for the safe icon in the Task Pane.' -ForegroundColor Green }
+        if ($Uninstall) { Write-Host 'DevilDrive add-in removed.' -ForegroundColor Green }
+        else { Write-Host 'DevilDrive add-in installed. Start SolidWorks and look for the safe icon in the Task Pane.' -ForegroundColor Green }
         exit 0
     }
 }
@@ -82,7 +82,7 @@ try {
         }
         if (Test-Path $Dll) { & $RegAsm $Dll /unregister /nologo | Out-Host }
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host 'Jarvis add-in removed.'
+        Write-Host 'DevilDrive add-in removed.'
     }
     else {
         New-Item -ItemType Directory -Force $InstallDir | Out-Null
@@ -100,7 +100,7 @@ try {
         if (-not $folderOk -or $LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
         & $RegAsm $Dll /codebase /nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "RegAsm failed (exit code $LASTEXITCODE)." }
-        Write-Host "Jarvis add-in installed to $InstallDir."
+        Write-Host "DevilDrive add-in installed to $InstallDir."
     }
     if ($Elevated) { Start-Sleep -Seconds 2 }
     exit 0

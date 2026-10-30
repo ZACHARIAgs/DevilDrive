@@ -123,7 +123,7 @@ public static class VaultCreator
 
     /// <summary>Hidden placeholder that keeps an empty folder in the vault (Jarvis doesn't list hidden files).</summary>
     public const string KeepFile = ".keep";
-    public const string KeepFileText = "Keeps this folder in the vault for everyone (Git doesn't store empty folders). Jarvis doesn't show this file.\n";
+    public const string KeepFileText = "Keeps this folder in the vault for everyone (Git doesn't store empty folders). DevilDrive doesn't show this file.\n";
 
     /// <summary>
     /// Creates the private repo, puts the vault files in it and sets up <see cref="NewVaultRequest.LocalPath"/>
@@ -152,7 +152,7 @@ public static class VaultCreator
         GitHubRepo repo;
         try
         {
-            repo = await api.CreatePrivateRepoAsync(owner, ownerIsUser, name, $"Jarvis vault: {request.VaultName.Trim()}", ct).ConfigureAwait(false);
+            repo = await api.CreatePrivateRepoAsync(owner, ownerIsUser, name, $"DevilDrive vault: {request.VaultName.Trim()}", ct).ConfigureAwait(false);
         }
         catch (RepoNameTakenException)
         {
@@ -174,7 +174,7 @@ public static class VaultCreator
             TryDelete(folder, createdFolder);
             var detail = ex is PdmException pdm ? pdm.Detail : ex.ToString();
             throw new PdmException($"The repo {repo.FullName} was created on GitHub, but the vault files couldn't be uploaded: {ex.Message}\n\n" +
-                                   "Fix that and click Create again: Jarvis reuses the empty repo.", detail, ex);
+                                   "Fix that and click Create again: DevilDrive reuses the empty repo.", detail, ex);
         }
 
         progress?.Report("Vault ready.");
@@ -219,7 +219,7 @@ public static class VaultCreator
         var message = Path.Combine(Path.GetTempPath(), "capstone-pdm-commit-" + Guid.NewGuid().ToString("N") + ".txt");
         try
         {
-            File.WriteAllText(message, "Create the vault (Jarvis rules, vault guard, team settings)\n", new UTF8Encoding(false));
+            File.WriteAllText(message, "Create the vault (DevilDrive rules, vault guard, team settings)\n", new UTF8Encoding(false));
             await Run("add the vault files", "commit", "-F", message).ConfigureAwait(false);
         }
         finally

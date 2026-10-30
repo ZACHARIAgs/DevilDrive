@@ -24,6 +24,13 @@
             <TextBlock x:Name="AddinText" Foreground="#666" TextWrapping="Wrap" VerticalAlignment="Center" />
         </DockPanel>
 
+        <TextBlock FontWeight="SemiBold" Text="Appearance" Margin="0,16,0,0" />
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4" Text="Choose your interface theme. The accent color is locked to Solar Devils Gold (#FFC627)." />
+        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+            <RadioButton x:Name="LightThemeRadio" GroupName="Theme" Content="Light" Margin="0,0,16,0" />
+            <RadioButton x:Name="DarkThemeRadio" GroupName="Theme" Content="Dark" />
+        </StackPanel>
+
         <TextBlock FontWeight="SemiBold" Text="What to download" Margin="0,16,0,0" />
         <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,6"
                    Text="Downloading only the folders you work on saves the team's monthly download allowance. Files in other folders show as &quot;not downloaded&quot; (their 3D previews still work); right-click one and choose Download to get it. Assemblies that use parts you haven't downloaded show those parts as missing until you download them." />

@@ -4,19 +4,19 @@ using System.IO;
 namespace Jarvis.Core.Config;
 
 /// <summary>
-/// Where Jarvis keeps its per-user files: %AppData%\Jarvis (settings, shared by the app and the
-/// add-in), %LocalAppData%\Jarvis (backups, logs) and %LocalAppData%\Programs\Jarvis (the app).
+/// Where DevilDrive keeps its per-user files: %AppData%\DevilDrive (settings, shared by the app and the
+/// add-in), %LocalAppData%\DevilDrive (backups, logs) and %LocalAppData%\Programs\DevilDrive (the app).
 /// </summary>
 public static class AppFolders
 {
-    public const string Name = "Jarvis";
+    public const string Name = "DevilDrive";
 
-    /// <summary>%AppData%\Jarvis</summary>
+    /// <summary>%AppData%\DevilDrive</summary>
     public static string Roaming => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Name);
 
-    /// <summary>%LocalAppData%\Jarvis</summary>
+    /// <summary>%LocalAppData%\DevilDrive</summary>
     public static string Local => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Name);
 
-    /// <summary>%LocalAppData%\Programs\Jarvis: where Setup installs the app.</summary>
+    /// <summary>%LocalAppData%\Programs\DevilDrive: where Setup installs the app.</summary>
     public static string InstallFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", Name);
 }

@@ -19,7 +19,7 @@ namespace Jarvis.Client.Services;
 internal static class SolidWorksAddinSetup
 {
     public static readonly string AddinDll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "Jarvis", "SolidWorksAddin", "Jarvis.SwAddin.dll");
+        "DevilDrive", "SolidWorksAddin", "Jarvis.SwAddin.dll");
 
     public static bool IsAddinInstalled => File.Exists(AddinDll);
 
@@ -110,13 +110,13 @@ internal static class SolidWorksAddinSetup
         }
         if (IsSolidWorksRunning) throw new PdmException("Close SolidWorks first (save your work), then try again.");
         var repo = Updater.BuiltInRepo(Assembly.GetExecutingAssembly())
-                   ?? throw new PdmException("This build of Jarvis doesn't know where to download the add-in from. Run scripts\\Install-SolidWorksAddin.ps1 instead.");
+                   ?? throw new PdmException("This build of DevilDrive doesn't know where to download the add-in from. Run scripts\\Install-SolidWorksAddin.ps1 instead.");
         var updater = new Updater(repo);
         var release = await updater.GetLatestAsync()
                       ?? throw new PdmException("Couldn't get the add-in from GitHub. Check your internet connection and try again.");
         try
         {
-            await InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "Jarvis-addin-" + release.Version), showConsole: false);
+            await InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "DevilDrive-addin-" + release.Version), showConsole: false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -134,7 +134,7 @@ internal static class SolidWorksAddinSetup
     {
         if (release.Find(Updater.AddinAsset) == null)
         {
-            throw new PdmException($"Release {release.Tag} doesn't include the SolidWorks add-in ({Updater.AddinAsset}). Ask whoever maintains Jarvis.");
+            throw new PdmException($"Release {release.Tag} doesn't include the SolidWorks add-in ({Updater.AddinAsset}). Ask whoever maintains DevilDrive.");
         }
         var zip = await updater.DownloadVerifiedAsync(release, Updater.AddinAsset, folder);
         var extracted = Path.Combine(folder, "addin");

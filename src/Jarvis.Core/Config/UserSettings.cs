@@ -9,7 +9,9 @@ namespace Jarvis.Core.Config;
 /// <summary>Per-PC settings in %AppData%\Jarvis\settings.json.</summary>
 public sealed class UserSettings
 {
-    public const string DefaultVaultPath = @"C:\CapstoneVault";
+    public const string DefaultVaultPath = @"C:\SolarDevilsVault";
+
+    public bool DarkMode { get; set; } = false;
 
     /// <summary>The vault the desktop app shows (one of <see cref="Vaults"/>).</summary>
     public string VaultPath { get; set; } = DefaultVaultPath;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capstone PDM vault guard.
+"""DevilDrive vault guard.
 
 Runs on GitHub after every push to the vault branch, so it sees who really pushed
 (GitHub's record, not the name typed into a commit) and can't be skipped by using Git
@@ -126,7 +126,7 @@ def is_repo_admin(actor):
         return False
     request = urllib.request.Request(
         f"https://api.github.com/repos/{repo}/collaborators/{actor}/permission",
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "User-Agent": "CapstonePDM-VaultGuard"},
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "User-Agent": "DevilDrive-VaultGuard"},
     )
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
@@ -201,7 +201,7 @@ def notify(config, actor, violations, warnings, undone):
         lines.append(f"⚠️ **Vault Guard** warnings for {actor}'s push:")
         lines += [f"• {w}" for w in warnings]
     body = json.dumps({"username": "Vault Guard", "content": "\n".join(lines)[:1990], "allowed_mentions": {"parse": []}}).encode()
-    request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "User-Agent": "CapstonePDM-VaultGuard"})
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "User-Agent": "DevilDrive-VaultGuard"})
     try:
         urllib.request.urlopen(request, timeout=15).close()
     except Exception as error:

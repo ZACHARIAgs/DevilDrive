@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Controls;
 using System.Windows;
 using Jarvis.Client.Services;
+using Jarvis.Core.Config;
 using Jarvis.Core.Errors;
 using Microsoft.Win32;
 
@@ -12,11 +13,20 @@ namespace Jarvis.Client.Views;
 
 public partial class SettingsWindow : Window
 {
+    private readonly bool _initialDarkMode;
+
     public SettingsWindow(string vaultPath, string signedInAs, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders)
     {
         InitializeComponent();
         VaultPathBox.Text = vaultPath;
         SignedInText.Text = signedInAs;
+
+        _initialDarkMode = ThemeManager.IsDark;
+        DarkThemeRadio.IsChecked = _initialDarkMode;
+        LightThemeRadio.IsChecked = !_initialDarkMode;
+
+        DarkThemeRadio.Checked += OnThemeRadioChanged;
+        LightThemeRadio.Checked += OnThemeRadioChanged;
 
         var chosen = new HashSet<string>(downloadFolders ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         foreach (var folder in folders.Union(chosen, StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
@@ -29,12 +39,20 @@ public partial class SettingsWindow : Window
         ShowAddin();
     }
 
+    private void OnThemeRadioChanged(object sender, RoutedEventArgs e)
+    {
+        if (DarkThemeRadio != null && LightThemeRadio != null)
+        {
+            ThemeManager.ApplyTheme(DarkThemeRadio.IsChecked == true);
+        }
+    }
+
     private void ShowAddin()
     {
         var installed = SolidWorksAddinSetup.IsAddinInstalled;
         var solidWorks = SolidWorksAddinSetup.IsSolidWorksInstalled();
         AddinText.Text = installed
-            ? "\u2713 Installed. In SolidWorks, Jarvis is in the Task Pane on the right."
+            ? "\u2713 Installed. In SolidWorks, DevilDrive is in the Task Pane on the right."
             : solidWorks
                 ? "Not installed. It lets you check files out and in from SolidWorks. Close SolidWorks first; Windows asks for permission once."
                 : "SolidWorks isn't installed on this PC.";
@@ -64,6 +82,7 @@ public partial class SettingsWindow : Window
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();
+    public bool DarkMode => DarkThemeRadio.IsChecked == true;
 
     /// <summary>Folders to download, or null for everything (also when "only these" is picked with none ticked).</summary>
     public IReadOnlyList<string>? DownloadFolders
@@ -92,6 +111,21 @@ public partial class SettingsWindow : Window
                 "Settings", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (answer != MessageBoxResult.Yes) return;
         }
+
+        var settings = UserSettings.Load();
+        settings.DarkMode = DarkMode;
+        settings.Save();
+        ThemeManager.ApplyTheme(DarkMode);
+
         DialogResult = true;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        if (DialogResult != true && ThemeManager.IsDark != _initialDarkMode)
+        {
+            ThemeManager.ApplyTheme(_initialDarkMode);
+        }
     }
 }

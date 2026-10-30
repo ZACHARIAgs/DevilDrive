@@ -33,7 +33,7 @@
 
         <TextBlock FontWeight="SemiBold" Text="Starting folders" Margin="0,12,0,0" />
         <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
-                   Text="Made in the vault for everyone. Untick the ones you don't want, or rename them. You can add more folders later in Jarvis." />
+                   Text="Made in the vault for everyone. Untick the ones you don't want, or rename them. You can add more folders later in DevilDrive." />
         <StackPanel x:Name="FoldersPanel" />
         <Button Content="Add a folder" HorizontalAlignment="Left" Padding="10,2" Margin="0,4,0,0" Click="OnAddFolder" />
 

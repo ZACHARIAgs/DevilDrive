@@ -108,7 +108,7 @@ internal sealed class VaultPane : UserControl
             Padding = new Padding(Theme.Px(14), Theme.Px(12), Theme.Px(14), Theme.Px(12)),
             BackColor = Theme.Background,
         };
-        _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "Jarvis");
+        _header = new PaneHeader(PaneIcon.LoadLogo(Theme.Px(44)), "DevilDrive");
         _picker = new VaultPicker { Text = "Choose a vault" };
         _picker.Opening += ShowVaultMenu;
         _banner = new NoticeBox();
@@ -138,7 +138,7 @@ internal sealed class VaultPane : UserControl
         _getLatest = new ModernButton("Get Latest", "");
         _import = new ModernButton("Import files\u2026", "\uE8B5");
         _refresh = new ModernButton("Refresh", "");
-        _openApp = new ModernButton("Open Jarvis", "");
+        _openApp = new ModernButton("Open DevilDrive", "");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
         _activity = new ActivityBar();
@@ -150,7 +150,7 @@ internal sealed class VaultPane : UserControl
             new Divider(),
             _getLatest, _refresh, _import, _exportBom, _openApp,
             // Which add-in this is, so it can be compared with the app (it updates along with it).
-            new CaptionLabel("Jarvis add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
+            new CaptionLabel("DevilDrive add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
         });
         Controls.Add(_layout);
         Resize += (_, _) => FitWidths();
@@ -332,7 +332,7 @@ internal sealed class VaultPane : UserControl
                 if (nowFree.Count > 0)
                 {
                     MessageBox.Show(_sw.MainWindow, $"{PathList.Format(nowFree.Select(f => f.RelativePath))} {(nowFree.Count == 1 ? "is" : "are")} free now. You can check {(nowFree.Count == 1 ? "it" : "them")} out.",
-                        "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        "DevilDrive", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             _missingRefs = _snapshot.DownloadFolders != null && _currentPath != null && SolidWorksSession.HasReferences(_currentPath)
@@ -397,7 +397,7 @@ internal sealed class VaultPane : UserControl
             message = $"{file.Name} is checked out by {file.CheckedOutBy}{since}.\n\n" +
                       "It's open read-only: you can look at it, but you can't check in changes until they check it in.";
         }
-        MessageBox.Show(_sw.MainWindow, message, "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show(_sw.MainWindow, message, "DevilDrive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     // ------------------------------------------------------------ view
@@ -624,7 +624,7 @@ internal sealed class VaultPane : UserControl
         if (_snapshot?.ViewingMilestone != null)
         {
             lines.Insert(0, $"Viewing the milestone \u201C{_snapshot.ViewingMilestone.Name}\u201D: files show how they were then (read-only). " +
-                            "Use Return to Latest in Jarvis to keep working.");
+                            "Use Return to Latest in DevilDrive to keep working.");
             if (kind != NoticeKind.Error) kind = NoticeKind.Warning;
         }
         if (_vault?.Config.FolderWarning(_vault.VaultRoot) is { } wrongFolder)
@@ -809,7 +809,7 @@ internal sealed class VaultPane : UserControl
         return MessageBox.Show(_sw.MainWindow,
             $"{PathList.Format(unsaved.Select(Path.GetFileName))} {(unsaved.Count == 1 ? "is" : "are")} marked as changed, but {(unsaved.Count == 1 ? "isn't" : "aren't")} checked out, " +
             "so the changes can't be saved anyway (often it's just a rebuild).\n\nClose without saving and reopen with the other version?",
-            "Jarvis", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+            "DevilDrive", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
     }
 
     private async Task ReturnToLatestAsync(string path)
@@ -1057,7 +1057,7 @@ internal sealed class VaultPane : UserControl
 
         var exportWarning = await _vault.GetExportWarningAsync(targets);
         if (exportWarning != null &&
-            MessageBox.Show(_sw.MainWindow, exportWarning, "Jarvis \u2014 Check in exports?", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            MessageBox.Show(_sw.MainWindow, exportWarning, "DevilDrive \u2014 Check in exports?", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
         {
             return;
         }
@@ -1192,7 +1192,7 @@ internal sealed class VaultPane : UserControl
         if (problems.Count > 0)
         {
             MessageBox.Show(_sw.MainWindow, "These weren't renamed (they're checked in under their old names; use Rename / Move later):\n\n" + string.Join("\n", problems),
-                "Jarvis \u2014 Rename to part number", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "DevilDrive \u2014 Rename to part number", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         return done.Count == 0 ? null : $"Renamed to {string.Join(", ", done)}.";
     }
@@ -1396,7 +1396,7 @@ internal sealed class VaultPane : UserControl
         var quantity = lines.Sum(l => l.Quantity);
         SetStatus($"Saved the BOM: {lines.Count} different part(s), {quantity} in total.");
         if (MessageBox.Show(_sw.MainWindow, $"Saved {Path.GetFileName(dialog.FileName)} ({lines.Count} different parts, {quantity} in total). Open it now?",
-                "Jarvis", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                "DevilDrive", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
         {
             try
             {
@@ -1549,7 +1549,7 @@ internal sealed class VaultPane : UserControl
         if (top == null || _vault == null || file == null) return;
 
         using var picker = new FilePickerForm("Request Check-In (admin)",
-            $"{file.CheckedOutBy}'s PC will check in their last saved version of this file and release it, the next time Jarvis or SolidWorks " +
+            $"{file.CheckedOutBy}'s PC will check in their last saved version of this file and release it, the next time DevilDrive or SolidWorks " +
             "is running there. Unsaved changes in their SolidWorks aren't included.",
             new[] { new PickItem(top, Path.GetFileName(top), true, isLocked: false) }, "Request",
             askComment: true, askKeep: false, commentLabel: $"Note to {file.CheckedOutBy} (required): why do you need it?",
@@ -1690,7 +1690,7 @@ internal sealed class VaultPane : UserControl
                 if (description.Length > 0) _sw.SetDescription(copy, description);
             }
 
-            // Records and 3D previews, so teammates can find and look at them in Jarvis right away.
+            // Records and 3D previews, so teammates can find and look at them in DevilDrive right away.
             var index = new Dictionary<string, IndexEntry?>(StringComparer.OrdinalIgnoreCase);
             var previews = new List<string>();
             for (var i = 0; i < copies.Count; i++)
@@ -1905,10 +1905,10 @@ internal sealed class VaultPane : UserControl
 
     private void OpenDesktopApp(string? arguments = null)
     {
-        var exe = Path.Combine(Jarvis.Core.Config.AppFolders.InstallFolder, "Jarvis.exe");
+        var exe = Path.Combine(Jarvis.Core.Config.AppFolders.InstallFolder, Jarvis.Core.Install.InstallLayout.ExeName);
         if (!File.Exists(exe))
         {
-            MessageBox.Show(_sw.MainWindow, $"Jarvis isn't installed at {exe}. Run Setup.cmd.", "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_sw.MainWindow, $"DevilDrive isn't installed at {exe}. Run Setup.cmd.", "DevilDrive", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         Process.Start(new ProcessStartInfo(exe, arguments ?? "") { UseShellExecute = true });
@@ -1941,7 +1941,7 @@ internal sealed class VaultPane : UserControl
             AddinLog.Write("Command failed: " + ex);
             MessageBox.Show(_sw.MainWindow,
                 "Something unexpected went wrong: " + ex.Message + $"\n\nDetails were written to {AddinLog.FilePath}.",
-                "Jarvis", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                "DevilDrive", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -1966,7 +1966,7 @@ internal sealed class VaultPane : UserControl
         if (sections.Count > 0)
         {
             var header = result.Succeeded.Count > 0 ? status + "\n\n" : "";
-            MessageBox.Show(_sw.MainWindow, header + string.Join("\n\n", sections), "Jarvis", MessageBoxButtons.OK,
+            MessageBox.Show(_sw.MainWindow, header + string.Join("\n\n", sections), "DevilDrive", MessageBoxButtons.OK,
                 result.Failures.Count > 0 || result.Warnings.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
         return status;

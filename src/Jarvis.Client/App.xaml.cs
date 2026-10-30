@@ -21,6 +21,7 @@ public partial class App : Application
         base.OnStartup(e);
         var args = e.Args;
         ModernWindows.Apply(this);
+        ThemeManager.ApplyTheme(UserSettings.Load().DarkMode);
 
         if (args.Length >= 1 && args[0] == "--register-explorer")
         {
@@ -89,8 +90,8 @@ public partial class App : Application
     {
         MessageBox.Show(
             "Something unexpected went wrong:\n\n" + e.Exception.Message +
-            "\n\nYour files are safe. If this keeps happening, send a screenshot of this message to whoever maintains Jarvis.",
-            "Jarvis", MessageBoxButton.OK, MessageBoxImage.Error);
+            "\n\nYour files are safe. If this keeps happening, send a screenshot of this message to whoever maintains DevilDrive.",
+            "DevilDrive", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 }

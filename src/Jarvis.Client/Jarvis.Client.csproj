@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <AssemblyName>Jarvis</AssemblyName>
+    <AssemblyName>DevilDrive</AssemblyName>
     <RootNamespace>Jarvis.Client</RootNamespace>
     <ApplicationIcon>..\..\assets\vault.ico</ApplicationIcon>
   </PropertyGroup>

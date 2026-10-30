@@ -1,11 +1,11 @@
-# Jarvis
+# DevilDrive
 
-A free, lightweight PDM for SolidWorks: a private GitHub repo with Git LFS file locking is the vault,
-cloned to the same folder on every PC (the capstone team's is `C:\CapstoneVault`). Users never type Git
+A free, lightweight SolidWorks PDM for the Solar Devils team at ASU: a private GitHub repo with Git LFS file locking is the vault,
+cloned to the same folder on every PC (the capstone team's is `C:\SolarDevilsVault`). Users never type Git
 commands; the desktop app and the SolidWorks add-in do. No paid services, no AI at runtime. See `README.md`
 (users, admins, developers) and `Capstone PDM Spec.md` (original spec).
 
-Jarvis was called "Capstone PDM" up to 0.4.0; only the developer had it installed, so there is no migration code.
+DevilDrive was previously based on Jarvis (which was called "Capstone PDM" up to 0.4.0; only the developer had it installed).
 The vault guard (`vault-template/.github`) still says Capstone PDM on purpose: every vault compares it byte
 for byte and would ask for Update Vault Setup.
 
@@ -35,7 +35,7 @@ dotnet run --project src/Jarvis.Client
 - The add-in builds against the **SolidWorks 2024** interop DLLs (`C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS`) with Embed Interop Types, and supports 2020+. Only use API calls that exist in 2020, or guard them with `RevisionNumber()`.
 - To try add-in changes: **SolidWorks must be closed**, then `scripts\Install-SolidWorksAddin.ps1 -Source .\src\Jarvis.SwAddin\bin\Debug\net48` (Windows admin prompt). It locks the install folder so only administrators can change it.
 - On this PC the user works in **SolidWorks 2026**: `C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS (2)\SLDWORKS.exe`. The folder without "(2)" is 2024.
-- Add-in log: `%LocalAppData%\Jarvis\addin.log`.
+- Add-in log: `%LocalAppData%\DevilDrive\addin.log`.
 
 ## Conventions
 

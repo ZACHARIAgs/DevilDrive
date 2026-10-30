@@ -211,7 +211,7 @@ public static class VaultCatalog
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.UserAgent.ParseAdd("Jarvis");
+        request.Headers.UserAgent.ParseAdd("DevilDrive");
         request.Headers.Accept.ParseAdd(accept);
         try
         {

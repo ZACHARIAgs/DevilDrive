@@ -16,10 +16,10 @@ namespace Jarvis.Core.Install;
 /// <summary>Where Jarvis installs itself for this Windows account.</summary>
 public sealed class InstallLayout
 {
-    public const string ExeName = "Jarvis.exe";
+    public const string ExeName = "DevilDrive.exe";
 
     /// <summary>Set to a folder to install there instead (Desktop and Start menu shortcuts go inside it too). For trying the installer.</summary>
-    public const string TestRootVariable = "JARVIS_INSTALL_ROOT";
+    public const string TestRootVariable = "DEVILDRIVE_INSTALL_ROOT";
 
     public InstallLayout(string installFolder, IReadOnlyList<string> shortcutFolders, bool isTest = false)
     {
@@ -140,14 +140,14 @@ public static class AppInstaller
         foreach (var folder in layout.ShortcutFolders)
         {
             Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, "Jarvis.lnk");
+            var path = Path.Combine(folder, "DevilDrive.lnk");
             var shortcut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path })!;
             var type = shortcut.GetType();
             void Set(string property, string value) => type.InvokeMember(property, BindingFlags.SetProperty, null, shortcut, new object[] { value });
             Set("TargetPath", layout.ExePath);
             Set("IconLocation", layout.ExePath + ",0");
             Set("WorkingDirectory", layout.InstallFolder);
-            Set("Description", "Check SolidWorks files in and out of your team's vault");
+            Set("Description", "Check SolidWorks files in and out of the Solar Devils vault");
             type.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
             created.Add(path);
         }

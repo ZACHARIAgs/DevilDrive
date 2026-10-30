@@ -55,18 +55,18 @@ public static class VaultInvites
 
     /// <summary>Direct download of Jarvis.exe from the latest release of the code repo this build updates from.</summary>
     public static string? InstallLink(string? updateRepo) =>
-        string.IsNullOrWhiteSpace(updateRepo) ? null : $"https://github.com/{updateRepo}/releases/latest/download/Jarvis.exe";
+        string.IsNullOrWhiteSpace(updateRepo) ? null : $"https://github.com/{updateRepo}/releases/latest/download/DevilDrive.exe";
 
     /// <summary>What an admin sends new teammates (Discord, email, ...).</summary>
     public static string Message(string vaultName, string repoFullName, string localPath, string? installLink)
     {
         var download = installLink == null
-            ? "Get Jarvis.exe from me"
-            : $"Download Jarvis: {installLink}";
+            ? "Get DevilDrive.exe from me"
+            : $"Download DevilDrive: {installLink}";
         return
-            $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (Jarvis, for our SolidWorks files).\n\n" +
-            $"1. {download} and open it. Windows may warn you: click More info, then Run anyway. Then click Install Jarvis. (Already have Jarvis? Skip this.)\n" +
-            "2. In Jarvis, sign in to GitHub (no account? make a free one at github.com and send me your username).\n" +
+            $"You're invited to our {vaultName}{(vaultName.EndsWith("vault", StringComparison.OrdinalIgnoreCase) ? "" : " vault")} (DevilDrive, for Solar Devils SolidWorks files).\n\n" +
+            $"1. {download} and open it. Windows may warn you: click More info, then Run anyway. Then click Install DevilDrive. (Already have DevilDrive? Skip this.)\n" +
+            "2. In DevilDrive, sign in to GitHub (no account? make a free one at github.com and send me your username).\n" +
             $"3. Next to {vaultName}, click \"Accept and download\". (Or accept the invite on https://github.com/{repoFullName}/invitations , then click \"Find my vaults\".)\n\n" +
             $"The vault goes to {localPath} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.";
     }

@@ -55,8 +55,8 @@ public sealed class ReleaseInfo
 public sealed class Updater
 {
     public const string ChecksumsFile = "SHA256SUMS";
-    public const string AppAsset = "Jarvis.exe";
-    public const string AddinAsset = "Jarvis-SolidWorksAddin.zip";
+    public const string AppAsset = "DevilDrive.exe";
+    public const string AddinAsset = "DevilDrive-SolidWorksAddin.zip";
 
     private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     private readonly string _repo;
@@ -201,7 +201,7 @@ public sealed class Updater
         _token ??= await GitHubCredentials.GetTokenAsync(ct).ConfigureAwait(false) ?? "";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (_token.Length > 0) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
-        request.Headers.UserAgent.ParseAdd("Jarvis");
+        request.Headers.UserAgent.ParseAdd("DevilDrive");
         request.Headers.Accept.ParseAdd(accept);
         try
         {

@@ -53,7 +53,7 @@ internal sealed class AssemblySaveGuard
                 var answer = MessageBox.Show(_sw.MainWindow,
                     $"Saved {PathList.Format(saved.Select(Path.GetFileName))}.\n\n{name} isn't checked out, so it can't be saved over. " +
                     "Do you also want to save the assembly as a NEW file?",
-                    "Jarvis", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                    "DevilDrive", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
                 Saved?.Invoke($"Saved {PathList.Format(saved.Select(Path.GetFileName))}.");
                 return answer == DialogResult.Yes ? 0 : 1;
             }

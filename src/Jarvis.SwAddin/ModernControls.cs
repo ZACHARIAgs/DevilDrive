@@ -13,9 +13,9 @@ internal static class Theme
     public static readonly Color Border = Color.FromArgb(0xE1, 0xE4, 0xE9);
     public static readonly Color Text = Color.FromArgb(0x1F, 0x29, 0x37);
     public static readonly Color Muted = Color.FromArgb(0x6B, 0x72, 0x80);
-    public static readonly Color Accent = Color.FromArgb(0x25, 0x63, 0xEB);
-    public static readonly Color AccentHover = Color.FromArgb(0x1D, 0x4E, 0xD8);
-    public static readonly Color AccentPressed = Color.FromArgb(0x1E, 0x40, 0xAF);
+    public static readonly Color Accent = Color.FromArgb(0xFF, 0xC6, 0x27);
+    public static readonly Color AccentHover = Color.FromArgb(0xE5, 0xB2, 0x19);
+    public static readonly Color AccentPressed = Color.FromArgb(0xCC, 0x9E, 0x12);
     public static readonly Color SecondaryHover = Color.FromArgb(0xF1, 0xF3, 0xF6);
     public static readonly Color SecondaryPressed = Color.FromArgb(0xE5, 0xE7, 0xEB);
     public static readonly Color DisabledBack = Color.FromArgb(0xF3, 0xF4, 0xF6);
@@ -123,7 +123,7 @@ internal sealed class ModernButton : PaneControl
         else if (Primary)
         {
             back = _pressed ? Theme.AccentPressed : _hover ? Theme.AccentHover : Theme.Accent;
-            fore = Color.White;
+            fore = Color.FromArgb(0x1F, 0x29, 0x37);
             border = back;
         }
         else
@@ -301,7 +301,7 @@ internal sealed class NoticeBox : PaneControl, IFitWidth
                 break;
             default:
                 back = Color.FromArgb(0xE8, 0xF0, 0xFE);
-                fore = Color.FromArgb(0x1E, 0x40, 0xAF);
+                fore = Color.FromArgb(0xCC, 0x9E, 0x12);
                 break;
         }
         using (var path = Theme.RoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), Theme.Px(7)))
