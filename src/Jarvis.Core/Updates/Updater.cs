@@ -78,6 +78,13 @@ public sealed class Updater
         return ParseVersion(informational) ?? assembly.GetName().Version ?? new Version(0, 0);
     }
 
+    /// <summary>Formats a version as "1.2.3" or "1.2.3.4" (if Revision > 0).</summary>
+    public static string Format(Version? version)
+    {
+        if (version == null) return "";
+        return version.Revision > 0 ? version.ToString(4) : version.ToString(3);
+    }
+
     /// <summary>"v1.2.3", "1.2.3+commit" or "1.2" as a Version; null if it isn't one.</summary>
     public static Version? ParseVersion(string? text)
     {

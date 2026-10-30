@@ -58,7 +58,7 @@ public static class AppUpdater
 
         var notes = Updater.WhatsNew(release.Notes);
         var answer = MessageBox.Show(owner,
-            $"DevilDrive {release.Version.ToString(3)} is available (you have {current.ToString(3)}).\n\n" +
+            $"DevilDrive {Updater.Format(release.Version)} is available (you have {Updater.Format(current)}).\n\n" +
             (notes.Length > 0 ? notes + "\n\n" : "") + "Update now? It takes about a minute and the app restarts.",
             "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (answer != MessageBoxResult.Yes) return;
@@ -105,7 +105,7 @@ public static class AppUpdater
         var installed = SolidWorksAddinSetup.InstalledVersion;
         if (installed == null || installed >= current || installed >= release.Version || release.Find(Updater.AddinAsset) == null) return;
         var answer = MessageBox.Show(owner,
-            $"The SolidWorks add-in is version {installed.ToString(3)}, but DevilDrive is {current.ToString(3)}. Update the add-in now so they match?\n\n" +
+            $"The SolidWorks add-in is version {Updater.Format(installed)}, but DevilDrive is {Updater.Format(current)}. Update the add-in now so they match?\n\n" +
             "Windows asks for permission once. SolidWorks has to be closed.",
             "Update the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Information);
         if (answer != MessageBoxResult.Yes) return;

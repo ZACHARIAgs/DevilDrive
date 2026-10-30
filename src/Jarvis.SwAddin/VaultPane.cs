@@ -150,7 +150,7 @@ internal sealed class VaultPane : UserControl
             new Divider(),
             _getLatest, _refresh, _import, _exportBom, _openApp,
             // Which add-in this is, so it can be compared with the app (it updates along with it).
-            new CaptionLabel("DevilDrive add-in " + Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly).ToString(3)),
+            new CaptionLabel("DevilDrive add-in " + Jarvis.Core.Updates.Updater.Format(Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly))),
         });
         Controls.Add(_layout);
         Resize += (_, _) => FitWidths();

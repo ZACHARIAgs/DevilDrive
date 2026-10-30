@@ -40,14 +40,14 @@ public partial class InstallWindow : Window
         _alreadyInstalled = installed != null && installed >= current;
         if (_alreadyInstalled)
         {
-            IntroText.Text = $"DevilDrive {installed!.ToString(3)} is already installed on this PC, so you don't need this copy. " +
+            IntroText.Text = $"DevilDrive {Updater.Format(installed)} is already installed on this PC, so you don't need this copy. " +
                              "Open the installed one (it's also on your Desktop and in the Start menu). You can delete this download.";
             StepsPanel.Visibility = Visibility.Collapsed;
             InstallButton.Content = "Open DevilDrive";
         }
         else if (installed != null)
         {
-            IntroText.Text = $"DevilDrive {installed.ToString(3)} is installed on this PC. Update it to {current.ToString(3)}? Your vaults and settings stay as they are.";
+            IntroText.Text = $"DevilDrive {Updater.Format(installed)} is installed on this PC. Update it to {Updater.Format(current)}? Your vaults and settings stay as they are.";
             InstallButton.Content = "Update DevilDrive";
         }
 
@@ -62,7 +62,7 @@ public partial class InstallWindow : Window
         {
             if (addinUpdate)
             {
-                AddinBox.Content = $"Also update the SolidWorks add-in ({addin!.ToString(3)} to {current.ToString(3)})";
+                AddinBox.Content = $"Also update the SolidWorks add-in ({Updater.Format(addin)} to {Updater.Format(current)})";
                 AddinNote.Text = "So the add-in matches this version of DevilDrive. SolidWorks must be closed, and Windows asks for permission once.";
             }
             AddinChoice.Visibility = Visibility.Visible;
