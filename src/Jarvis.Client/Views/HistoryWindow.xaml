@@ -7,7 +7,7 @@
         <TextBlock x:Name="HeaderText" DockPanel.Dock="Top" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
 
         <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" LastChildFill="False">
-            <TextBlock x:Name="StatusText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="#666" />
+            <TextBlock x:Name="StatusText" DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
             <Button DockPanel.Dock="Right" Style="{StaticResource DialogButton}" Content="Close" IsCancel="True" Click="OnClose" />
             <Button x:Name="RestoreButton" DockPanel.Dock="Right" Style="{StaticResource DialogButton}"
                     Content="Restore This Version&#x2026;" IsEnabled="False" Click="OnRestore"
@@ -16,7 +16,7 @@
 
         <DataGrid x:Name="VersionsGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                   SelectionMode="Single" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  HorizontalGridLinesBrush="#EEEEEE" SelectionChanged="OnSelectionChanged">
+                  HorizontalGridLinesBrush="{DynamicResource DividerBrush}" SelectionChanged="OnSelectionChanged">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="60" />
                 <DataGridTextColumn Header="Checked In" Binding="{Binding Date.LocalDateTime, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="120" />

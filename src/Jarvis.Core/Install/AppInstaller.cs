@@ -116,6 +116,22 @@ public static class AppInstaller
         }
         File.Copy(sourceExe, target);
         RemoveDownloadMark(target);
+
+        var sourceDir = Path.GetDirectoryName(sourceExe);
+        if (sourceDir != null)
+        {
+            var addinZip = Path.Combine(sourceDir, "DevilDrive-SolidWorksAddin.zip");
+            if (File.Exists(addinZip))
+            {
+                try
+                {
+                    var targetZip = Path.Combine(layout.InstallFolder, "DevilDrive-SolidWorksAddin.zip");
+                    File.Copy(addinZip, targetZip, overwrite: true);
+                    RemoveDownloadMark(targetZip);
+                }
+                catch { }
+            }
+        }
     }
 
     /// <summary>Deletes the Zone.Identifier stream Windows adds to downloads (what Unblock-File does).</summary>

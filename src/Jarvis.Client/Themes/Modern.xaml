@@ -6,14 +6,14 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ============================================================ palette -->
-    <Color x:Key="AccentColor">#FFC627</Color>
-    <SolidColorBrush x:Key="AccentBrush" Color="#FFC627" />
-    <SolidColorBrush x:Key="AccentForegroundBrush" Color="#18181B" />
+    <Color x:Key="AccentColor">#2563EB</Color>
+    <SolidColorBrush x:Key="AccentBrush" Color="#2563EB" />
+    <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="ToolGlyphBrush" Color="#374151" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#E5B219" />
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#CC9E12" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFF8DC" />
-    <SolidColorBrush x:Key="SelectionBrush" Color="#FFE599" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1D4ED8" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#1E40AF" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#E8F0FE" />
+    <SolidColorBrush x:Key="SelectionBrush" Color="#DCE8FC" />
     <SolidColorBrush x:Key="WindowBrush" Color="#F3F4F6" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="SubtleSurfaceBrush" Color="#F8FAFC" />

@@ -3,19 +3,17 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Microsoft.Win32;
 
 namespace Jarvis.Client.Services;
 
 /// <summary>
-/// Manages application themes (Light and Dark mode) with the accent color locked to #FFC627 (Solar Devils / ASU Gold).
+/// Manages application themes (Light and Dark mode) following the Windows default or classic blue (#2563EB) accent.
 /// Updates dynamic WPF brushes and native Windows immersive dark mode window title bars.
 /// </summary>
 public static class ThemeManager
 {
-    public const string AccentHex = "#FFC627";
-    public const string AccentHoverHex = "#E5B219";
-    public const string AccentPressedHex = "#CC9E12";
-    public const string AccentForegroundHex = "#18181B";
+    public const string DefaultAccentHex = "#2563EB";
 
     public static bool IsDark { get; private set; }
 
@@ -29,11 +27,12 @@ public static class ThemeManager
 
         var res = app.Resources;
 
-        // Accent palette (LOCKED to #FFC627)
-        var accent = (Color)ColorConverter.ConvertFromString(AccentHex);
-        var accentHover = (Color)ColorConverter.ConvertFromString(AccentHoverHex);
-        var accentPressed = (Color)ColorConverter.ConvertFromString(AccentPressedHex);
-        var accentFore = (Color)ColorConverter.ConvertFromString(AccentForegroundHex);
+        // Accent palette: follow Windows system accent or default blue (#2563EB)
+        var accent = GetSystemAccentColor();
+        var accentHover = Darken(accent, 0.85f);
+        var accentPressed = Darken(accent, 0.72f);
+        var lum = 0.299 * accent.R + 0.587 * accent.G + 0.114 * accent.B;
+        var accentFore = lum > 145 ? Color.FromRgb(0x18, 0x18, 0x1B) : Colors.White;
 
         res["AccentColor"] = accent;
         res["AccentBrush"] = MakeFrozenBrush(accent);
@@ -57,8 +56,8 @@ public static class ThemeManager
             res["PressedBrush"] = MakeFrozenBrush("#52525B");
             res["RowHoverBrush"] = MakeFrozenBrush("#2E2E33");
             res["ToolGlyphBrush"] = MakeFrozenBrush("#E4E4E7");
-            res["AccentSoftBrush"] = MakeFrozenBrush("#362A04");
-            res["SelectionBrush"] = MakeFrozenBrush("#4A3B06");
+            res["AccentSoftBrush"] = MakeFrozenBrush("#1E293B");
+            res["SelectionBrush"] = MakeFrozenBrush("#1E3A5F");
         }
         else
         {
@@ -76,8 +75,8 @@ public static class ThemeManager
             res["PressedBrush"] = MakeFrozenBrush("#DDE2E8");
             res["RowHoverBrush"] = MakeFrozenBrush("#F3F6FA");
             res["ToolGlyphBrush"] = MakeFrozenBrush("#374151");
-            res["AccentSoftBrush"] = MakeFrozenBrush("#FFF8DC");
-            res["SelectionBrush"] = MakeFrozenBrush("#FFE599");
+            res["AccentSoftBrush"] = MakeFrozenBrush("#E8F0FE");
+            res["SelectionBrush"] = MakeFrozenBrush("#DCE8FC");
         }
 
         // Apply native Windows 10/11 dark title bar to all active windows
@@ -88,6 +87,34 @@ public static class ThemeManager
 
         ThemeChanged?.Invoke(isDark);
     }
+
+    public static Color GetSystemAccentColor()
+    {
+        try
+        {
+            var dword = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\DWM", "AccentColor", null);
+            if (dword is int val && val != 0)
+            {
+                byte r = (byte)(val & 0xFF);
+                byte g = (byte)((val >> 8) & 0xFF);
+                byte b = (byte)((val >> 16) & 0xFF);
+                var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                // Only use if reasonably visible (not pitch black or blindingly white)
+                if (lum > 40 && lum < 225)
+                {
+                    return Color.FromRgb(r, g, b);
+                }
+            }
+        }
+        catch
+        {
+            // Registry read failed, fall back to default blue
+        }
+        return (Color)ColorConverter.ConvertFromString(DefaultAccentHex);
+    }
+
+    private static Color Darken(Color c, float factor) =>
+        Color.FromRgb((byte)(c.R * factor), (byte)(c.G * factor), (byte)(c.B * factor));
 
     public static void SetWindowDarkMode(Window window, bool isDark)
     {
@@ -135,4 +162,3 @@ public static class ThemeManager
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
     }
 }
-

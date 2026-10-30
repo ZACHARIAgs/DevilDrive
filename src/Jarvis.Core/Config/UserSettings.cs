@@ -11,7 +11,7 @@ public sealed class UserSettings
 {
     public const string DefaultVaultPath = @"C:\SolarDevilsVault";
 
-    public bool DarkMode { get; set; } = false;
+    public bool DarkMode { get; set; } = true;
 
     /// <summary>The vault the desktop app shows (one of <see cref="Vaults"/>).</summary>
     public string VaultPath { get; set; } = DefaultVaultPath;

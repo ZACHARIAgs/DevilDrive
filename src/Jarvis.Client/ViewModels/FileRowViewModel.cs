@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Media;
+using Jarvis.Client.Services;
 using Jarvis.Core.Vault;
 
 namespace Jarvis.Client.ViewModels;
@@ -7,6 +8,7 @@ namespace Jarvis.Client.ViewModels;
 /// <summary>One row of the vault view. Updated in place on refresh so selection survives.</summary>
 public sealed class FileRowViewModel : ViewModelBase
 {
+    // Light mode brushes (standard dark-tinted colors on white)
     private static readonly Brush Green = Frozen(0x2E, 0x7D, 0x32);
     private static readonly Brush Blue = Frozen(0x15, 0x65, 0xC0);
     private static readonly Brush Red = Frozen(0xC6, 0x28, 0x28);
@@ -15,6 +17,16 @@ public sealed class FileRowViewModel : ViewModelBase
     private static readonly Brush Gray = Frozen(0x75, 0x75, 0x75);
     private static readonly Brush Slate = Frozen(0x33, 0x41, 0x55);
     private static readonly Brush Teal = Frozen(0x0F, 0x76, 0x6E);
+
+    // Dark mode brushes (high contrast bright colors on dark zinc)
+    private static readonly Brush DarkGreen = Frozen(0x4A, 0xDE, 0x80);
+    private static readonly Brush DarkBlue = Frozen(0x60, 0xA5, 0xFA);
+    private static readonly Brush DarkRed = Frozen(0xF8, 0x71, 0x71);
+    private static readonly Brush DarkOrange = Frozen(0xFB, 0x92, 0x3C);
+    private static readonly Brush DarkPurple = Frozen(0xC0, 0x84, 0xFC);
+    private static readonly Brush DarkGray = Frozen(0xA1, 0xA1, 0xAA);
+    private static readonly Brush DarkSlate = Frozen(0x94, 0xA3, 0xB8);
+    private static readonly Brush DarkTeal = Frozen(0x2D, 0xD4, 0xBF);
 
     public FileRowViewModel(VaultFile file)
     {
@@ -78,18 +90,31 @@ public sealed class FileRowViewModel : ViewModelBase
         }
     }
 
-    public Brush StateBrush => File.NotDownloaded ? Gray : File.State switch
+    public Brush StateBrush
     {
-        FileState.Available => File.IsOutdated ? Gray : Green,
-        FileState.CheckedOutByMe => Blue,
-        FileState.CheckedOutByOther => Red,
-        FileState.ModifiedWithoutCheckOut => Orange,
-        FileState.Modified => Orange,
-        FileState.NotInVault => Purple,
-        FileState.Frozen => Slate,
-        FileState.InReview => Teal,
-        _ => Gray,
-    };
+        get
+        {
+            var isDark = ThemeManager.IsDark;
+            var gray = isDark ? DarkGray : Gray;
+            if (File.NotDownloaded) return gray;
+            return File.State switch
+            {
+                FileState.Available => File.IsOutdated ? gray : (isDark ? DarkGreen : Green),
+                FileState.CheckedOutByMe => isDark ? DarkBlue : Blue,
+                FileState.CheckedOutByOther => isDark ? DarkRed : Red,
+                FileState.ModifiedWithoutCheckOut or FileState.Modified => isDark ? DarkOrange : Orange,
+                FileState.NotInVault => isDark ? DarkPurple : Purple,
+                FileState.Frozen => isDark ? DarkSlate : Slate,
+                FileState.InReview => isDark ? DarkTeal : Teal,
+                _ => gray,
+            };
+        }
+    }
+
+    public void OnThemeChanged()
+    {
+        OnPropertyChanged(nameof(StateBrush));
+    }
 
     public void Update(VaultFile file)
     {

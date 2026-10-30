@@ -58,6 +58,8 @@ if (Test-Path 'C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SolidWorks.Interop.sl
     $addinZip = Join-Path $dist 'DevilDrive-SolidWorksAddin.zip'
     if (Test-Path $addinZip) { Remove-Item -Force $addinZip }
     Compress-Archive -Path (Join-Path $addinZipStage '*') -DestinationPath $addinZip
+    Copy-Item $addinZip (Join-Path $dist 'publish') -Force
+    Copy-Item $addinZip $stage -Force
 }
 else {
     Write-Warning 'SolidWorks is not installed on this PC, so the add-in was left out of the zip.'

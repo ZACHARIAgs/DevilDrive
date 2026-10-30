@@ -5,7 +5,7 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
     <StackPanel Margin="14">
         <TextBlock FontWeight="SemiBold" Text="Vault folder" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Everyone on the team must use the same vault folder, or assembly references break. Pick a different vault here to switch projects (the SolidWorks add-in follows)." />
         <DockPanel>
             <Button DockPanel.Dock="Right" Content="Browse&#x2026;" Padding="10,2" Margin="6,0,0,0" Click="OnBrowse" />
@@ -13,7 +13,7 @@
         </DockPanel>
 
         <TextBlock FontWeight="SemiBold" Text="Signed in to GitHub as" Margin="0,14,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Checked with GitHub using your saved sign-in, so it can't be changed here. Admin rights come from this account." />
         <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
 
@@ -21,18 +21,18 @@
         <DockPanel Margin="0,2,0,0">
             <Button x:Name="AddinButton" DockPanel.Dock="Right" Content="Install the SolidWorks add-in" Padding="10,2" Margin="8,0,0,0"
                     VerticalAlignment="Center" Click="OnInstallAddin" />
-            <TextBlock x:Name="AddinText" Foreground="#666" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <TextBlock x:Name="AddinText" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
         </DockPanel>
 
         <TextBlock FontWeight="SemiBold" Text="Appearance" Margin="0,16,0,0" />
-        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4" Text="Choose your interface theme. The accent color is locked to Solar Devils Gold (#FFC627)." />
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4" Text="Choose your interface theme." />
         <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
             <RadioButton x:Name="LightThemeRadio" GroupName="Theme" Content="Light" Margin="0,0,16,0" />
             <RadioButton x:Name="DarkThemeRadio" GroupName="Theme" Content="Dark" />
         </StackPanel>
 
         <TextBlock FontWeight="SemiBold" Text="What to download" Margin="0,16,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,6"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,6"
                    Text="Downloading only the folders you work on saves the team's monthly download allowance. Files in other folders show as &quot;not downloaded&quot; (their 3D previews still work); right-click one and choose Download to get it. Assemblies that use parts you haven't downloaded show those parts as missing until you download them." />
         <RadioButton x:Name="DownloadAllRadio" GroupName="Download" Content="Everything" />
         <RadioButton x:Name="DownloadSomeRadio" GroupName="Download" Content="Only these folders:" Margin="0,4,0,0" />

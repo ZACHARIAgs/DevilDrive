@@ -21,7 +21,7 @@
     </Window.Resources>
     <StackPanel Margin="18">
         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Welcome to DevilDrive" />
-        <TextBlock Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,14"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,4,0,14"
                    Text="Let's get this PC ready. The Solar Devils SolidWorks files live in a private GitHub repo (the vault); DevilDrive checks them out and in for you." />
 
         <DockPanel Margin="0,6">
@@ -42,8 +42,8 @@
         </DockPanel>
 
         <!-- Git's user.name / user.email, filled in from the GitHub profile; only when they aren't set yet. -->
-        <Border x:Name="IdentityPanel" Visibility="Collapsed" Margin="14,2,0,6" Padding="10,8" Background="#F8FAFC"
-                BorderBrush="#E2E5EA" BorderThickness="1" CornerRadius="4">
+        <Border x:Name="IdentityPanel" Visibility="Collapsed" Margin="14,2,0,6" Padding="10,8" Background="{DynamicResource SubtleSurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
             <StackPanel>
                 <TextBlock Style="{StaticResource StepStatus}" Margin="0,0,0,6"
                            Text="Every check-in is signed with this name and email. Change them if you like:" />
@@ -74,13 +74,13 @@
             <ItemsControl x:Name="InvitationList" Margin="0,6,0,0" Visibility="Collapsed">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Margin="0,3" Padding="10,6" Background="#E8F0FE" CornerRadius="4">
+                        <Border Margin="0,3" Padding="10,6" Background="{DynamicResource AccentSoftBrush}" CornerRadius="4">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Accept and download" Padding="12,4"
                                         VerticalAlignment="Center" Tag="{Binding}" Click="OnAccept" />
                                 <StackPanel Margin="0,0,10,0">
                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding Detail}" Foreground="#555" FontSize="11" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" />
                                 </StackPanel>
                             </DockPanel>
                         </Border>

@@ -91,9 +91,9 @@ public partial class InstallWindow : Window
         block.FontWeight = step == Step.Working ? FontWeights.SemiBold : FontWeights.Normal;
         block.Foreground = step switch
         {
-            Step.Problem => System.Windows.Media.Brushes.Firebrick,
-            Step.Done => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D)),
-            _ => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1F, 0x29, 0x37)),
+            Step.Problem => ThemeManager.IsDark ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF8, 0x71, 0x71)) : System.Windows.Media.Brushes.Firebrick,
+            Step.Done => ThemeManager.IsDark ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4A, 0xDE, 0x80)) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D)),
+            _ => (System.Windows.Media.Brush?)Application.Current?.TryFindResource("TextBrush") ?? System.Windows.Media.Brushes.Black,
         };
     }
 
@@ -183,7 +183,7 @@ public partial class InstallWindow : Window
         SetStep(AddinStep, Step.Working, "Installing the SolidWorks add-in. Click Yes when Windows asks for permission\u2026");
         try
         {
-            await SolidWorksAddinSetup.InstallLatestAsync();
+            await SolidWorksAddinSetup.InstallLatestAsync(_sourceExe);
             SetStep(AddinStep, Step.Done, "SolidWorks add-in installed (DevilDrive is in SolidWorks' Task Pane)");
             return true;
         }

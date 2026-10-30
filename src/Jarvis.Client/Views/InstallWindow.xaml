@@ -11,7 +11,7 @@
     </Window.Resources>
     <StackPanel Margin="18">
         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Install DevilDrive" />
-        <TextBlock x:Name="IntroText" Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,12"
+        <TextBlock x:Name="IntroText" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,4,0,12"
                    Text="DevilDrive checks the Solar Devils SolidWorks files out and in. Installing takes a minute or two and only affects your Windows account. It will:" />
 
         <StackPanel x:Name="StepsPanel" Margin="4,0,0,0">
@@ -22,18 +22,18 @@
         </StackPanel>
 
         <!-- Only when SolidWorks is on this PC and the add-in isn't installed yet. -->
-        <Border x:Name="AddinChoice" Visibility="Collapsed" Margin="0,12,0,0" Padding="10,8" Background="#F8FAFC"
-                BorderBrush="#E2E5EA" BorderThickness="1" CornerRadius="4">
+        <Border x:Name="AddinChoice" Visibility="Collapsed" Margin="0,12,0,0" Padding="10,8" Background="{DynamicResource SubtleSurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
             <StackPanel>
                 <CheckBox x:Name="AddinBox" IsChecked="True" FontWeight="SemiBold" Content="Also install the SolidWorks add-in"
                           Checked="OnAddinChoice" Unchecked="OnAddinChoice" />
-                <TextBlock x:Name="AddinNote" Foreground="#555" TextWrapping="Wrap" Margin="20,3,0,0"
+                <TextBlock x:Name="AddinNote" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="20,3,0,0"
                            Text="Check files out and in from SolidWorks' task pane. SolidWorks must be closed, and Windows asks for permission once. You can add it later in DevilDrive's Settings." />
             </StackPanel>
         </Border>
 
         <ProgressBar x:Name="Progress" Height="8" Margin="0,12,0,0" Visibility="Collapsed" />
-        <TextBlock x:Name="StatusText" Foreground="#555" TextWrapping="Wrap" Margin="0,6,0,0" />
+        <TextBlock x:Name="StatusText" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="InstallButton" Style="{StaticResource AccentButton}" Content="Install DevilDrive" Padding="16,5"

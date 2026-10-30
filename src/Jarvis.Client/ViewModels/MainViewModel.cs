@@ -31,7 +31,12 @@ public sealed partial class MainViewModel : ViewModelBase
     private bool _isBusy;
     private string _statusText = "Starting…";
     private string _bannerText = "";
-    private Brush _bannerBrush = InfoBrush;
+    private BannerSeverity _bannerSeverity = BannerSeverity.Info;
+    private Brush _bannerBrush = Frozen(0xEF, 0xF6, 0xFF);
+    private Brush _bannerBorderBrush = Frozen(0xBF, 0xDB, 0xFE);
+    private Brush _bannerTextBrush = Frozen(0x1E, 0x3A, 0x8A);
+    private Brush _bannerIconBrush = Frozen(0x25, 0x63, 0xEB);
+    private string _bannerIcon = "\uE946";
     private string _searchText = "";
     private int _filterIndex;
     private string _infoText = "";
@@ -40,6 +45,12 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel(IDialogs dialogs)
     {
         _dialogs = dialogs;
+        Jarvis.Client.Services.ThemeManager.ThemeChanged += _ =>
+        {
+            UpdateBannerBrushes();
+            foreach (var row in _rows.Values) row.OnThemeChanged();
+        };
+        UpdateBannerBrushes();
         FilesView = CollectionViewSource.GetDefaultView(Files);
         FilesView.Filter = o => o is FileRowViewModel row && MatchesFilter(row);
         FilesView.SortDescriptions.Add(new SortDescription(nameof(FileRowViewModel.Path), ListSortDirection.Ascending));
@@ -444,9 +455,33 @@ public sealed partial class MainViewModel : ViewModelBase
         private set => Set(ref _bannerBrush, value);
     }
 
+    public Brush BannerBorderBrush
+    {
+        get => _bannerBorderBrush;
+        private set => Set(ref _bannerBorderBrush, value);
+    }
+
+    public Brush BannerTextBrush
+    {
+        get => _bannerTextBrush;
+        private set => Set(ref _bannerTextBrush, value);
+    }
+
+    public Brush BannerIconBrush
+    {
+        get => _bannerIconBrush;
+        private set => Set(ref _bannerIconBrush, value);
+    }
+
+    public string BannerIcon
+    {
+        get => _bannerIcon;
+        private set => Set(ref _bannerIcon, value);
+    }
+
     public bool IsAdmin => _vault?.IsAdmin == true;
 
-    public string WindowTitle => _vault == null ? "Jarvis" : $"Jarvis — {_vault.Config.VaultName} ({_vault.VaultRoot})";
+    public string WindowTitle => _vault == null ? "DevilDrive" : $"DevilDrive — {_vault.Config.VaultName} ({_vault.VaultRoot})";
 
     public string SearchText
     {
@@ -1131,7 +1166,78 @@ public sealed partial class MainViewModel : ViewModelBase
     private void SetBanner(string text, Brush brush)
     {
         BannerText = text;
-        BannerBrush = brush;
+        var severity = brush == ErrorBrush ? BannerSeverity.Error :
+                       brush == WarningBrush ? BannerSeverity.Warning :
+                       BannerSeverity.Info;
+        SetBanner(text, severity);
+    }
+
+    public enum BannerSeverity { Info, Warning, Error }
+
+    private void SetBanner(string text, BannerSeverity severity)
+    {
+        BannerText = text;
+        _bannerSeverity = severity;
+        UpdateBannerBrushes();
+    }
+
+    private void UpdateBannerBrushes()
+    {
+        var isDark = Jarvis.Client.Services.ThemeManager.IsDark;
+        if (isDark)
+        {
+            switch (_bannerSeverity)
+            {
+                case BannerSeverity.Error:
+                    BannerBrush = Frozen(0x45, 0x0A, 0x0A);
+                    BannerBorderBrush = Frozen(0xB9, 0x1C, 0x1C);
+                    BannerTextBrush = Frozen(0xFE, 0xE2, 0xE2);
+                    BannerIconBrush = Frozen(0xF8, 0x71, 0x71);
+                    BannerIcon = "\uEA39";
+                    break;
+                case BannerSeverity.Warning:
+                    BannerBrush = Frozen(0x45, 0x1A, 0x03);
+                    BannerBorderBrush = Frozen(0xB4, 0x53, 0x09);
+                    BannerTextBrush = Frozen(0xFE, 0xF3, 0xC7);
+                    BannerIconBrush = Frozen(0xFB, 0xBF, 0x24);
+                    BannerIcon = "\uE7BA";
+                    break;
+                default:
+                    BannerBrush = Frozen(0x17, 0x25, 0x54);
+                    BannerBorderBrush = Frozen(0x1D, 0x4E, 0xD8);
+                    BannerTextBrush = Frozen(0xDB, 0xEA, 0xFE);
+                    BannerIconBrush = Frozen(0x60, 0xA5, 0xFA);
+                    BannerIcon = "\uE946";
+                    break;
+            }
+        }
+        else
+        {
+            switch (_bannerSeverity)
+            {
+                case BannerSeverity.Error:
+                    BannerBrush = Frozen(0xFE, 0xF2, 0xF2);
+                    BannerBorderBrush = Frozen(0xFE, 0xCA, 0xCA);
+                    BannerTextBrush = Frozen(0x7F, 0x1D, 0x1D);
+                    BannerIconBrush = Frozen(0xDC, 0x26, 0x26);
+                    BannerIcon = "\uEA39";
+                    break;
+                case BannerSeverity.Warning:
+                    BannerBrush = Frozen(0xFF, 0xFB, 0xEB);
+                    BannerBorderBrush = Frozen(0xFD, 0xE6, 0x8A);
+                    BannerTextBrush = Frozen(0x78, 0x35, 0x0F);
+                    BannerIconBrush = Frozen(0xD9, 0x77, 0x06);
+                    BannerIcon = "\uE7BA";
+                    break;
+                default:
+                    BannerBrush = Frozen(0xEF, 0xF6, 0xFF);
+                    BannerBorderBrush = Frozen(0xBF, 0xDB, 0xFE);
+                    BannerTextBrush = Frozen(0x1E, 0x3A, 0x8A);
+                    BannerIconBrush = Frozen(0x25, 0x63, 0xEB);
+                    BannerIcon = "\uE946";
+                    break;
+            }
+        }
     }
 
     private static Brush Frozen(byte r, byte g, byte b)

@@ -4,14 +4,14 @@
         Title="New team vault" Width="540" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
     <StackPanel Margin="14">
-        <TextBlock TextWrapping="Wrap" Foreground="#555"
+        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"
                    Text="Creates a private GitHub repo for your team's SolidWorks files, with check-out locking and the vault guard set up, and downloads it to this PC. Afterwards you invite your teammates." />
 
         <TextBlock FontWeight="SemiBold" Text="Vault name" Margin="0,14,0,0" />
         <TextBox x:Name="NameBox" Margin="0,4,0,0" VerticalContentAlignment="Center" TextChanged="OnNameChanged" />
 
         <TextBlock FontWeight="SemiBold" Text="GitHub owner" Margin="0,12,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Your account, or an organization you can create repos in. With an organization, several people can be vault admins." />
         <ComboBox x:Name="OwnerBox" IsEditable="True" />
 
@@ -19,12 +19,12 @@
         <TextBox x:Name="RepoBox" Margin="0,4,0,0" VerticalContentAlignment="Center" TextChanged="OnRepoChanged" />
 
         <TextBlock FontWeight="SemiBold" Text="SolidWorks version everyone saves in" Margin="0,12,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Use the oldest version anyone on the team has: files saved in a newer version can't be opened in an older one." />
         <ComboBox x:Name="VersionBox" IsEditable="True" Width="140" HorizontalAlignment="Left" />
 
         <TextBlock FontWeight="SemiBold" Text="Vault folder" Margin="0,12,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Every teammate gets the vault in this same folder, so assemblies find their parts. Keep it short and outside OneDrive." />
         <DockPanel>
             <Button DockPanel.Dock="Right" Content="Browse&#x2026;" Padding="10,2" Margin="6,0,0,0" Click="OnBrowse" />
@@ -32,12 +32,12 @@
         </DockPanel>
 
         <TextBlock FontWeight="SemiBold" Text="Starting folders" Margin="0,12,0,0" />
-        <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,2,0,4"
+        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4"
                    Text="Made in the vault for everyone. Untick the ones you don't want, or rename them. You can add more folders later in DevilDrive." />
         <StackPanel x:Name="FoldersPanel" />
         <Button Content="Add a folder" HorizontalAlignment="Left" Padding="10,2" Margin="0,4,0,0" Click="OnAddFolder" />
 
-        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Margin="0,14,0,0" Foreground="#555" />
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Margin="0,14,0,0" Foreground="{DynamicResource MutedTextBrush}" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="CreateButton" Style="{StaticResource DialogButton}" Content="Create vault" IsDefault="True" Click="OnCreate" />
             <Button x:Name="CancelButton" Style="{StaticResource DialogButton}" Content="Cancel" IsCancel="True" />
