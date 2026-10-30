@@ -272,6 +272,8 @@
                         <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
                         <MenuItem Header="Delete Local File&#x2026;" Command="{Binding DeleteLocalCommand}"
                                   ToolTip="Delete files that were made on this PC and never checked in" />
+                        <MenuItem Header="Export&#x2026;" Command="{Binding ExportCommand}"
+                                  ToolTip="Copy the files and everything they use to a folder or .zip that opens on any PC (like Pack and Go)" />
                         <MenuItem Header="Rename&#x2026;" Command="{Binding RenameCommand}"
                                   ToolTip="Rename the file; assemblies and drawings that use it are updated and checked in with it" />
                         <MenuItem Header="Move to Folder&#x2026;" Command="{Binding MoveToFolderCommand}"

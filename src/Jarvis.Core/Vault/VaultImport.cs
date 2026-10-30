@@ -79,9 +79,10 @@ public static class VaultImport
     /// A reference matches an imported file by its full path or, failing that, by its file name when only one
     /// imported file has it: Pack and Go copies still store the paths on the PC that made them. References to
     /// files that aren't being imported are left as they are. If anything fails, the copies are removed again
-    /// and nothing is left behind. Returns the copies' full paths.
+    /// and nothing is left behind. Returns the copies' full paths. <paramref name="editor"/> may be null only when
+    /// there are no SolidWorks files. Export uses this too, with the export folder as <paramref name="vaultRoot"/>.
     /// </summary>
-    public static IReadOnlyList<string> CopyAndRepoint(string vaultRoot, IReadOnlyList<ImportItem> items, IReferenceEditor editor, IProgress<string>? progress = null)
+    public static IReadOnlyList<string> CopyAndRepoint(string vaultRoot, IReadOnlyList<ImportItem> items, IReferenceEditor? editor, IProgress<string>? progress = null)
     {
         var root = Path.GetFullPath(vaultRoot).TrimEnd('\\');
         string Full(string relative) => Path.Combine(root, relative.Replace('/', '\\'));
@@ -115,9 +116,9 @@ public static class VaultImport
             }
             for (var i = 0; i < copied.Count; i++)
             {
-                if (!HasReferences(copied[i])) continue;
+                if (editor == null || !HasReferences(copied[i])) continue;
                 progress?.Report($"Updating references ({i + 1} of {copied.Count}): {Path.GetFileName(copied[i])}\u2026");
-                foreach (var reference in editor.GetReferences(copied[i]))
+                foreach (var reference in editor.GetReferences(copied[i]).ToList())
                 {
                     var copy = CopyFor(reference);
                     if (copy == null || string.Equals(reference, copy, StringComparison.OrdinalIgnoreCase)) continue;

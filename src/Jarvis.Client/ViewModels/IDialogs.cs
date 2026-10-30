@@ -70,4 +70,6 @@ public interface IDialogs
     /// makes a new one (parent, name) and returns its path. Null if cancelled.
     /// </summary>
     string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, System.Func<string, string, string> createFolder);
+    /// <summary>Export: where to and how (<paramref name="what"/> names the chosen files). Null if cancelled.</summary>
+    ExportOptions? AskExport(string what, string defaultName);
 }
