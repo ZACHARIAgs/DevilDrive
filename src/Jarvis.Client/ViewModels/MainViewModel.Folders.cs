@@ -26,6 +26,7 @@ public sealed partial class MainViewModel
     public ICommand MoveToFolderCommand { get; private set; } = null!;
     public ICommand RenameCommand { get; private set; } = null!;
     public ICommand AddMcMasterCommand { get; private set; } = null!;
+    public ICommand AddPartCommand { get; private set; } = null!;
 
     /// <summary>The folder the list shows ("" = the top of the vault): its own files, or everything below it while searching or filtering.</summary>
     public string SelectedFolder
@@ -45,6 +46,7 @@ public sealed partial class MainViewModel
         MoveToFolderCommand = new RelayCommand(async () => await MoveToFolderAsync(), () => CanEdit && MoveTargets().Count > 0);
         RenameCommand = new RelayCommand(async () => await RenameAsync(), () => CanEdit && MoveTargets().Count == 1 && _selected.Count == 1);
         AddMcMasterCommand = new RelayCommand(async () => await AddMcMasterAsync(), () => CanEdit);
+        AddPartCommand = new RelayCommand(async () => await AddPartAsync(), () => CanEdit);
     }
 
     /// <summary>
@@ -163,6 +165,121 @@ public sealed partial class MainViewModel
     /// Adds a McMaster-Carr part: the dialog opens its page and waits for the download; the file then goes into
     /// COTS/MCMASTER (created if needed) and, if the user agrees, is checked in straight away.
     /// </summary>
+    private async Task AddPartAsync()
+    {
+        if (_vault == null) return;
+        const string filter = "SolidWorks Files (*.sldprt;*.sldasm;*.slddrw)|*.sldprt;*.sldasm;*.slddrw|All Files (*.*)|*.*";
+        var files = _dialogs.AskOpenFiles("Add Parts to Vault", filter);
+        if (files == null || files.Count == 0) return;
+        await AddFilesToFolderAsync(files, SelectedFolder);
+    }
+
+    /// <summary>
+    /// Copies external files into the specified vault folder, unblocks them, offers part numbering if configured,
+    /// and offers to check them in.
+    /// </summary>
+    public async Task AddFilesToFolderAsync(IReadOnlyList<string> sourceFiles, string? targetFolder)
+    {
+        if (_vault == null || sourceFiles == null || sourceFiles.Count == 0) return;
+
+        // 1. Resolve destination folder. If target is empty/root, ask the user to pick a folder.
+        var folder = string.IsNullOrWhiteSpace(targetFolder) ? null : targetFolder.Trim().Replace('/', '\\');
+        if (string.IsNullOrEmpty(folder))
+        {
+            var folders = _vault.ListFolders(Files.Select(f => f.Path));
+            folder = _dialogs.AskFolder("Select Destination Folder", _vault.Config.VaultName, folders, SelectedFolder,
+                (parent, name) => _vault.CreateFolder(parent, name));
+            if (string.IsNullOrEmpty(folder)) return;
+        }
+
+        var destinationDir = _vault.ToFullPath(folder);
+        Directory.CreateDirectory(destinationDir);
+
+        var numbering = _vault.LoadNumbering();
+        var allExistingNames = Files.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var addedRelatives = new List<string>();
+        foreach (var source in sourceFiles)
+        {
+            if (!File.Exists(source)) continue;
+            var fileName = Path.GetFileName(source);
+            var ext = Path.GetExtension(source);
+
+            // Part Numbering: if scheme is configured, offer to assign part number
+            if (numbering != null && numbering.Groups.Count > 0 && IsCadFile(source))
+            {
+                var defaultGroup = numbering.Groups.FirstOrDefault();
+                if (defaultGroup != null)
+                {
+                    var nextNum = numbering.NextNumber(defaultGroup, allExistingNames);
+                    var formatted = numbering.Format(nextNum);
+                    var suggestedName = $"{formatted}_{Path.GetFileNameWithoutExtension(source)}{ext}";
+                    var chosen = _dialogs.AskText("Part Numbering",
+                        $"Assign a part number for {fileName} (group: {defaultGroup.Name}):\nLeave unchanged to keep original name.",
+                        suggestedName,
+                        typed => VaultService.FileNameProblem(Path.Combine(folder, fileName), typed));
+                    if (!string.IsNullOrWhiteSpace(chosen))
+                    {
+                        fileName = chosen.EndsWith(ext, StringComparison.OrdinalIgnoreCase) ? chosen : chosen + ext;
+                    }
+                }
+            }
+
+            var destPath = Path.Combine(destinationDir, fileName);
+            var relativePath = Path.Combine(folder, fileName).Replace('\\', '/');
+
+            if (File.Exists(destPath))
+            {
+                if (!_dialogs.Confirm("File Already Exists", $"{fileName} already exists in {folder}.\n\nDo you want to overwrite it?"))
+                {
+                    continue;
+                }
+            }
+
+            try
+            {
+                File.Copy(source, destPath, overwrite: true);
+                FileUtil.SetReadOnly(destPath, false);
+                Jarvis.Core.Install.AppInstaller.RemoveDownloadMark(destPath);
+                addedRelatives.Add(relativePath);
+                allExistingNames.Add(fileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _dialogs.ShowError(new PdmException($"Could not copy {fileName} to {folder}: {ex.Message}"));
+            }
+        }
+
+        if (addedRelatives.Count == 0) return;
+
+        SelectedFolder = folder;
+        await RefreshAsync(quiet: true);
+
+        var fileList = string.Join("\n", addedRelatives.Select(r => "• " + Path.GetFileName(r)));
+        if (!_dialogs.Confirm("New Part", $"Added {(addedRelatives.Count == 1 ? Path.GetFileName(addedRelatives[0]) : $"{addedRelatives.Count} files")} to {folder}:\n\n{fileList}\n\nCheck in now so the whole team has it?"))
+        {
+            StatusText = $"Added {addedRelatives.Count} file(s) to {folder}. Check in when you're ready.";
+            return;
+        }
+
+        var footnote = _vault.Config.SolidWorksVersion != null
+            ? $"Only check in files saved in SolidWorks {_vault.Config.SolidWorksVersion}."
+            : null;
+        var request = _dialogs.AskCheckIn("Check In", "Check In", addedRelatives, "Added new part(s)", allowKeepCheckedOut: true, footnote: footnote);
+        if (request == null)
+        {
+            StatusText = $"Added {addedRelatives.Count} file(s) to {folder}. Check in when you're ready.";
+            return;
+        }
+
+        await RunAsync("Checking in…", async (vault, progress) =>
+        {
+            var (index, previews, note) = await RecordSolidWorksFilesAsync(vault, addedRelatives, progress);
+            var result = await vault.CheckInAsync(addedRelatives, request.Comment, request.KeepCheckedOut, progress, indexUpdates: index, previews: previews);
+            return Report(result, "Checked in");
+        });
+    }
+
     private async Task AddMcMasterAsync()
     {
         if (_vault == null || _dialogs.AskMcMasterPart() is not { } part) return;

@@ -72,4 +72,6 @@ public interface IDialogs
     string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, System.Func<string, string, string> createFolder);
     /// <summary>Export: where to and how (<paramref name="what"/> names the chosen files). Null if cancelled.</summary>
     ExportOptions? AskExport(string what, string defaultName);
+    /// <summary>Prompts to pick one or more files to import into the vault. Null if cancelled.</summary>
+    IReadOnlyList<string>? AskOpenFiles(string title, string filter);
 }

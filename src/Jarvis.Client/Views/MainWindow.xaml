@@ -167,6 +167,13 @@
         </Border>
 
         <DockPanel DockPanel.Dock="Top" Margin="12,4,12,10">
+            <Button AutomationProperties.Name="New Part" Command="{Binding AddPartCommand}" Margin="0,0,10,0"
+                    ToolTip="Add SolidWorks parts, assemblies, or drawings. Click to browse.">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Text="New Part" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{StaticResource MutedTextBrush}"
                        VerticalAlignment="Center" Margin="2,0,8,0" ToolTip="Vault" />
             <ComboBox Width="220" ItemsSource="{Binding Vaults}" SelectedItem="{Binding SelectedVault}" FontWeight="SemiBold"
@@ -264,7 +271,10 @@
                       MouseDoubleClick="OnGridDoubleClick"
                       PreviewMouseLeftButtonDown="OnGridMouseDown"
                       PreviewMouseLeftButtonUp="OnGridMouseUp"
-                      PreviewMouseMove="OnGridMouseMove">
+                      PreviewMouseMove="OnGridMouseMove"
+                      AllowDrop="True"
+                      DragOver="OnGridDragOver"
+                      Drop="OnGridDrop">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Check Out" Command="{Binding CheckOutCommand}" />

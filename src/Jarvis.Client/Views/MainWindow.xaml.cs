@@ -106,15 +106,60 @@ public partial class MainWindow : Window, IDialogs
     private void OnFolderDragOver(object sender, DragEventArgs e)
     {
         var target = ItemUnder(e.OriginalSource);
-        e.Effects = e.Data.GetDataPresent(DragFormat) && target?.DataContext is FolderNodeViewModel ? DragDropEffects.Move : DragDropEffects.None;
+        if (target?.DataContext is FolderNodeViewModel)
+        {
+            if (e.Data.GetDataPresent(DragFormat))
+            {
+                e.Effects = DragDropEffects.Move;
+                e.Handled = true;
+                return;
+            }
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+                return;
+            }
+        }
+        e.Effects = DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void OnFolderDrop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetData(DragFormat) is not string[] paths || ItemUnder(e.OriginalSource)?.DataContext is not FolderNodeViewModel folder) return;
-        e.Handled = true;
-        await _vm.MoveFilesAsync(paths, folder.Path);
+        if (ItemUnder(e.OriginalSource)?.DataContext is not FolderNodeViewModel folder) return;
+        if (e.Data.GetData(DragFormat) is string[] paths)
+        {
+            e.Handled = true;
+            await _vm.MoveFilesAsync(paths, folder.Path);
+        }
+        else if (e.Data.GetData(DataFormats.FileDrop) is string[] externalFiles && externalFiles.Length > 0)
+        {
+            e.Handled = true;
+            await _vm.AddFilesToFolderAsync(externalFiles, folder.Path);
+        }
+    }
+
+    private void OnGridDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+    }
+
+    private async void OnGridDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+        {
+            e.Handled = true;
+            await _vm.AddFilesToFolderAsync(files, _vm.SelectedFolder);
+        }
     }
 
     // ------------------------------------------------------------ IDialogs
@@ -149,6 +194,18 @@ public partial class MainWindow : Window, IDialogs
     {
         var dialog = new ExportWindow(what, defaultName) { Owner = this };
         return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public IReadOnlyList<string>? AskOpenFiles(string title, string filter)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            Multiselect = true,
+            CheckFileExists = true
+        };
+        return dialog.ShowDialog(this) == true && dialog.FileNames.Length > 0 ? dialog.FileNames : null;
     }
 
     public string? AskFolder(string title, string vaultName, IReadOnlyList<string> folders, string? current, Func<string, string, string> createFolder)
