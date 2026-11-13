@@ -131,7 +131,7 @@ public partial class VaultsWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         if (!Directory.Exists(Path.Combine(dialog.FolderName, ".git")))
         {
-            MessageBox.Show(this, $"{dialog.FolderName} isn't a vault (there's no .git folder in it). Use \"Find my vaults\" to download one.",
+            ModernMessageBox.Show(this, $"{dialog.FolderName} isn't a vault (there's no .git folder in it). Use \"Find my vaults\" to download one.",
                 "Vaults", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -143,7 +143,7 @@ public partial class VaultsWindow : Window
     private void OnRemove(object sender, RoutedEventArgs e)
     {
         if (!(LocalList.SelectedItem is Item item)) return;
-        var answer = MessageBox.Show(this,
+        var answer = ModernMessageBox.Show(this,
             $"Remove {NameOf(item.Folder)} from the list?\n\nThe files stay in {item.Folder}, and you can add the folder again later. " +
             "Check in anything you have checked out there first, or teammates stay locked out of it.",
             "Vaults", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
@@ -200,7 +200,7 @@ public partial class VaultsWindow : Window
             return;
         }
 
-        var answer = MessageBox.Show(this,
+        var answer = ModernMessageBox.Show(this,
             $"Download {vault.VaultName} to {folder}?\n\nEveryone in this group keeps the vault in this same folder, so assemblies find their parts. " +
             "It can take a while for a big vault.",
             "Download vault", MessageBoxButton.OKCancel, MessageBoxImage.Question);
@@ -219,7 +219,7 @@ public partial class VaultsWindow : Window
         catch (PdmException ex)
         {
             SetBusy(false, "");
-            MessageBox.Show(this, ex.Message, "Download vault", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ModernMessageBox.Show(this, ex.Message, "Download vault", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -232,7 +232,7 @@ public partial class VaultsWindow : Window
         _settings.AddVault(created.Folder);
         Save();
         ShowLocal();
-        var invite = MessageBox.Show(this,
+        var invite = ModernMessageBox.Show(this,
             $"{created.VaultName} is ready in {created.Folder} and on GitHub as {created.Repo.FullName} (private).\n\nInvite your teammates now?",
             "New team vault", MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.Yes);
         if (invite == MessageBoxResult.Yes)

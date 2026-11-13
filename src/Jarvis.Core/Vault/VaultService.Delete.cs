@@ -27,7 +27,7 @@ public sealed partial class VaultService
         {
             throw new PdmException("Write why it should be deleted (for example \"replaced by bracket v2, nothing uses it\"), so an admin can decide.");
         }
-        var login = GitHubLogin ?? throw new PdmException("Jarvis couldn't confirm your GitHub account, so the request can't be sent. Check that you're online and signed in to GitHub, then try again.");
+        var login = GitHubLogin ?? throw new PdmException("DevilDrive couldn't confirm your GitHub account, so the request can't be sent. Check that you're online and signed in to GitHub, then try again.");
         var snapshot = await GetSnapshotAsync(contactVault: false, ct).ConfigureAwait(false);
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -61,7 +61,7 @@ public sealed partial class VaultService
 
             WriteVaultText(DeleteRequestList.RelativePath, list.Serialize());
             await CommitAndPushAsync(new[] { DeleteRequestList.RelativePath }, $"Asked to delete {PathList.Format(result.Succeeded)}", progress, ct).ConfigureAwait(false);
-            result.Notes.Add("The admins see the request in Jarvis. The file stays in the vault until an admin deletes it.");
+            result.Notes.Add("The admins see the request in DevilDrive. The file stays in the vault until an admin deletes it.");
             await NotifyAsync(new VaultEvent(VaultEventKind.DeleteRequested, UserDisplayName, result.Succeeded) { Comment = reason }, result).ConfigureAwait(false);
             return result;
         }
@@ -97,8 +97,8 @@ public sealed partial class VaultService
         if (unindexed.Count > 0)
         {
             var listed = unindexed.Count <= 3 ? string.Join(", ", unindexed) : string.Join(", ", unindexed.Take(3)) + $" and {unindexed.Count - 3} more";
-            return $"Jarvis can't tell whether {name} is used: {listed} {(unindexed.Count == 1 ? "hasn't" : "haven't")} been indexed yet. " +
-                   "They're indexed the next time someone who has them checks in any file from SolidWorks' Jarvis pane; then try again.";
+            return $"DevilDrive can't tell whether {name} is used: {listed} {(unindexed.Count == 1 ? "hasn't" : "haven't")} been indexed yet. " +
+                   "They're indexed the next time someone who has them checks in any file from SolidWorks' DevilDrive pane; then try again.";
         }
         return null;
     }

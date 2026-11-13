@@ -451,7 +451,7 @@ public sealed partial class VaultService
         if (name.StartsWith(".", StringComparison.Ordinal) || name.EndsWith(".", StringComparison.Ordinal)) return "A file name can't start or end with a dot.";
         if (string.Equals(target, relativePath, StringComparison.Ordinal)) return "That's its name already.";
         // Windows treats the names as the same file, so Git and SolidWorks would get confused.
-        if (string.Equals(target, relativePath, StringComparison.OrdinalIgnoreCase)) return "Only capital letters would change, which Jarvis can't do. Change the name in another way too.";
+        if (string.Equals(target, relativePath, StringComparison.OrdinalIgnoreCase)) return "Only capital letters would change, which DevilDrive can't do. Change the name in another way too.";
         return null;
     }
 

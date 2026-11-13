@@ -57,6 +57,27 @@ public static class VaultInvites
     public static string? InstallLink(string? updateRepo) =>
         string.IsNullOrWhiteSpace(updateRepo) ? null : $"https://github.com/{updateRepo}/releases/latest/download/DevilDrive.exe";
 
+    /// <summary>
+    /// The vault's GitHub page (.github/README.md): the same steps as <see cref="Message"/>, for new teammates who
+    /// follow GitHub's invitation email there, so admins don't have to send them anything else.
+    /// </summary>
+    public static string Readme(string vaultName, string? localPath, string? installLink)
+    {
+        var download = installLink == null ? "Ask an admin for DevilDrive.exe" : $"Download [DevilDrive.exe]({installLink})";
+        var folder = string.IsNullOrWhiteSpace(localPath) ? "the same folder" : $"`{localPath}`";
+        return
+            $"# {vaultName}\n\n" +
+            "Our team's SolidWorks files, kept with DevilDrive (a free PDM). Don't download or edit files here on GitHub: DevilDrive checks files out and in " +
+            "and keeps everyone's copy up to date.\n\n" +
+            "## Joining the team\n\n" +
+            $"1. **Get DevilDrive.** {download} and open it. Windows may warn you: click **More info**, then **Run anyway**. Then click **Install DevilDrive**. " +
+            "(Already have DevilDrive? Skip this.)\n" +
+            "2. **Sign in.** DevilDrive asks you to sign in to GitHub: use the account this invitation went to. No account yet? Make a free one at github.com and send an admin your username.\n" +
+            $"3. **Get the vault.** Next to **{vaultName}**, click **Accept and download**. (Already accepted the invitation here on GitHub? Click **Find my vaults** instead.)\n\n" +
+            $"The vault goes to {folder} on every PC so assemblies find their parts. Always open SolidWorks files from there, and check out before editing.\n\n" +
+            "_Written by DevilDrive. An admin's **Update Vault Setup** writes it again._\n";
+    }
+
     /// <summary>What an admin sends new teammates (Discord, email, ...).</summary>
     public static string Message(string vaultName, string repoFullName, string localPath, string? installLink)
     {
@@ -119,7 +140,7 @@ public static class VaultInvites
     /// <summary>Checks the signed-in user may invite people to the vault at <paramref name="remoteUrl"/>.</summary>
     public static async Task<(GitHubApi Api, GitHubRepo Repo)> ConnectAsAdminAsync(string? remoteUrl, CancellationToken ct = default)
     {
-        var parsed = ParseRepoUrl(remoteUrl) ?? throw new PdmException("This vault isn't on github.com, so Jarvis can't invite people to it. Add them on the repo's page instead.");
+        var parsed = ParseRepoUrl(remoteUrl) ?? throw new PdmException("This vault isn't on github.com, so DevilDrive can't invite people to it. Add them on the repo's page instead.");
         var api = await GitHubApi.SignedInAsync(ct).ConfigureAwait(false);
         var repo = await api.GetRepoAsync(parsed.Owner, parsed.Name, ct).ConfigureAwait(false)
                    ?? throw new PdmException($"GitHub didn't find {parsed.Owner}/{parsed.Name} for your account. Make sure you're signed in to GitHub with the account that's an admin of this vault.");

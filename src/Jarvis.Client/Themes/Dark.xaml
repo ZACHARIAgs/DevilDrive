@@ -1,0 +1,40 @@
+<!--
+    Jarvis's dark colors. Themes/Modern.xaml holds the control styles and refers to these by name (DynamicResource),
+    so the app switches between Light.xaml and Dark.xaml without restarting (Views/ThemeManager.cs).
+    Both files must define the same names.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="AccentBrush" Color="#3B82F6" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#2F6FDE" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#BFDBFE" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#1E3A5F" />
+    <SolidColorBrush x:Key="SelectionBrush" Color="#2B3F63" />
+    <SolidColorBrush x:Key="WindowBrush" Color="#1B1D21" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#24272C" />
+    <SolidColorBrush x:Key="SubtleSurfaceBrush" Color="#2A2D33" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#363A41" />
+    <SolidColorBrush x:Key="StrongBorderBrush" Color="#4A4F58" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#30343A" />
+    <SolidColorBrush x:Key="TextBrush" Color="#E5E7EB" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="#A3A9B3" />
+    <SolidColorBrush x:Key="FaintTextBrush" Color="#7C838E" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#33373E" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#3D424A" />
+    <SolidColorBrush x:Key="RowHoverBrush" Color="#2C3036" />
+    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#2E3238" />
+    <SolidColorBrush x:Key="InputHoverBorderBrush" Color="#6B7280" />
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#4B5563" />
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#6B7280" />
+    <SolidColorBrush x:Key="ScrollThumbDragBrush" Color="#9CA3AF" />
+    <SolidColorBrush x:Key="ToolGlyphBrush" Color="#CBD5E1" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#45191B" />
+    <SolidColorBrush x:Key="WarningTextBrush" Color="#FBBF24" />
+    <SolidColorBrush x:Key="TealBrush" Color="#2DD4BF" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#4ADE80" />
+    <SolidColorBrush x:Key="BannerInfoBrush" Color="#1C2F4A" />
+    <SolidColorBrush x:Key="BannerWarningBrush" Color="#453214" />
+    <SolidColorBrush x:Key="BannerErrorBrush" Color="#4A1D1F" />
+</ResourceDictionary>

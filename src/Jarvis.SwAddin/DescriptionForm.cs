@@ -11,7 +11,10 @@ namespace Jarvis.SwAddin;
 /// <summary>
 /// Shown when files are checked into the vault for the first time: one Description box per new SolidWorks
 /// file. When the vault has a part-numbering convention, each file also gets a group: Jarvis gives it the next
-/// free number (saved in its PartNumber property) and offers to rename the file to match.
+/// free number (saved in its PartNumber property) and offers to rename the file to match. When the file name is
+/// just the number (<see cref="NumberingScheme.NameIsNumber"/>), each file is either ours (it gets the next number
+/// and is renamed to it, at the top of the vault) or bought (it keeps its name and goes in the COTS folder);
+/// drawings are named after their model.
 /// </summary>
 internal sealed class DescriptionForm : Form
 {
@@ -32,14 +35,20 @@ internal sealed class DescriptionForm : Form
     private readonly Panel _scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
     private readonly Label _intro = new Label { AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(0, 0, 0, 8) };
     private const string NoNumber = "(no number)";
+    private const string Bought = "COTS (bought; keeps its name)";
+    private readonly Func<string, string> _relative;
 
     /// <param name="files">New files with their current Description (may be empty).</param>
     /// <param name="scheme">The vault's part-numbering convention, or null.</param>
     /// <param name="used">Part numbers and file names already in the vault.</param>
-    public DescriptionForm(IReadOnlyList<(string Path, string Description)> files, NumberingScheme? scheme = null, IReadOnlyList<string>? used = null)
+    /// <param name="relative">Vault-relative path of a file (to tell COTS files and McMaster downloads).</param>
+    public DescriptionForm(IReadOnlyList<(string Path, string Description)> files, NumberingScheme? scheme = null, IReadOnlyList<string>? used = null,
+        Func<string, string>? relative = null)
     {
         _scheme = scheme;
         _used = used ?? Array.Empty<string>();
+        _relative = relative ?? (p => System.IO.Path.GetFileName(p));
+        var nameIsNumber = scheme?.NameIsNumber == true;
         Text = scheme == null ? "Describe new files" : "Describe and number new files";
         Font = SystemFonts.MessageBoxFont;
         StartPosition = FormStartPosition.CenterParent;
@@ -52,7 +61,9 @@ internal sealed class DescriptionForm : Form
         _intro.Text = (files.Count == 1
                           ? "This file is new to the vault. Describe it so teammates know what it is (e.g. \"Motor mount bracket, 1/4in aluminum\")."
                           : $"These {files.Count} files are new to the vault. Describe each one so teammates know what it is.") +
-                      (scheme == null ? "" : " Pick its group to give it the team's next part number.");
+                      (scheme == null ? "" : nameIsNumber
+                          ? $" Our parts and assemblies are named by the team's next part number ({scheme.Example()}), so the description is what says what each one is. Bought parts keep their names and go in {(scheme.CotsFolder.Length > 0 ? scheme.CotsFolder : "the vault")}."
+                          : " Pick its group to give it the team's next part number.");
 
         _rows.ColumnCount = scheme == null ? 2 : 3;
         _rows.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -62,14 +73,29 @@ internal sealed class DescriptionForm : Form
         {
             var row = new Row { Path = path };
             _rows.Controls.Add(new Label { Text = System.IO.Path.GetFileName(path), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 10, 6) });
-            if (scheme != null)
+            if (scheme != null && nameIsNumber && IsDrawing(path))
             {
-                row.Group = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(0, 3, 8, 3) };
-                row.Group.Items.Add(NoNumber);
-                foreach (var group in scheme.Groups.OrderBy(g => g.Number)) row.Group.Items.Add(group);
-                // A file already named by the convention keeps its number.
-                var existing = scheme.NumberIn(path) is { } n ? scheme.GroupOf(n) : null;
-                row.Group.SelectedItem = (object?)existing ?? NoNumber;
+                // A drawing takes its model's name (TLT-007.SLDDRW), after check-in.
+                _rows.Controls.Add(new Label { Text = "Named after its model", AutoSize = true, ForeColor = Color.DimGray, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 6) });
+            }
+            else if (scheme != null)
+            {
+                row.Group = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = nameIsNumber ? 210 : 170, Margin = new Padding(0, 3, 8, 3) };
+                if (nameIsNumber)
+                {
+                    row.Group.Items.Add(scheme.Groups[0]);
+                    row.Group.Items.Add(Bought);
+                    row.Group.Format += (_, e) => { if (e.ListItem is NumberGroup) e.Value = $"Ours ({scheme.Prefix}{scheme.Separator}{new string('X', scheme.Digits)})"; };
+                    row.Group.SelectedItem = scheme.LooksBought(_relative(path)) ? Bought : scheme.Groups[0];
+                }
+                else
+                {
+                    row.Group.Items.Add(NoNumber);
+                    foreach (var group in scheme.Groups.OrderBy(g => g.Number)) row.Group.Items.Add(group);
+                    // A file already named by the convention keeps its number.
+                    var existing = scheme.NumberIn(path) is { } n ? scheme.GroupOf(n) : null;
+                    row.Group.SelectedItem = (object?)existing ?? NoNumber;
+                }
                 row.Group.SelectedIndexChanged += (_, _) => Renumber();
                 _rows.Controls.Add(row.Group);
             }
@@ -102,6 +128,17 @@ internal sealed class DescriptionForm : Form
         Controls.Add(layout);
         AcceptButton = ok;
         CancelButton = cancel;
+        // With file names that are only numbers, the description is the only thing that says what a part is.
+        FormClosing += (_, e) =>
+        {
+            if (DialogResult != DialogResult.OK || !nameIsNumber) return;
+            var missing = _rowsData.FirstOrDefault(r => r.AssignedNumber != null && r.Description.Text.Trim().Length == 0);
+            if (missing == null) return;
+            e.Cancel = true;
+            MessageBox.Show(this, $"Describe {System.IO.Path.GetFileName(missing.Path)}: its file name will only be {_scheme!.Format(missing.AssignedNumber!.Value)}, so the description is what tells teammates what it is.",
+                "Describe new files", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            missing.Description.Focus();
+        };
         Shown += (_, _) => (_rowsData.Select(r => r.Description).FirstOrDefault(b => b.Text.Length == 0) ?? _rowsData.FirstOrDefault()?.Description)?.Focus();
         Renumber();
     }
@@ -117,8 +154,15 @@ internal sealed class DescriptionForm : Form
 
     /// <summary>Files to rename after check-in, by path: the new file name (with extension).</summary>
     public Dictionary<string, string> Renames =>
-        _rowsData.Where(r => r.AssignedNumber != null && r.Rename is { Visible: true, Checked: true } && _scheme != null)
+        _rowsData.Where(r => r.AssignedNumber != null && _scheme != null && (_scheme.NameIsNumber || r.Rename is { Visible: true, Checked: true }))
+            .Where(r => !string.Equals(NewName(r), System.IO.Path.GetFileName(r.Path), StringComparison.OrdinalIgnoreCase))
             .ToDictionary(r => r.Path, r => NewName(r)!, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>With file names that are numbers: the files marked as bought (COTS), which go in the COTS folder.</summary>
+    public HashSet<string> BoughtFiles =>
+        new HashSet<string>(_rowsData.Where(r => r.Group?.SelectedItem as string == Bought).Select(r => r.Path), StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsDrawing(string path) => path.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase);
 
     private string? NewName(Row row) =>
         row.AssignedNumber is int n && _scheme != null
@@ -135,7 +179,10 @@ internal sealed class DescriptionForm : Form
             row.AssignedNumber = null;
             if (row.Group?.SelectedItem is not NumberGroup group)
             {
-                row.Number!.Text = "No part number";
+                row.Number!.Text = !_scheme.NameIsNumber ? "No part number"
+                    : row.Group == null ? "Gets its model's name"
+                    : _scheme.IsCots(_relative(row.Path)) || _scheme.CotsFolder.Length == 0 ? "Keeps its name"
+                    : $"Keeps its name; goes in {_scheme.CotsFolder} (after check-in)";
                 row.Rename!.Visible = false;
                 continue;
             }
@@ -153,6 +200,12 @@ internal sealed class DescriptionForm : Form
             used.Add(_scheme.Format(row.AssignedNumber!.Value));
             row.Number!.Text = $"Part number {_scheme.Format(row.AssignedNumber.Value)}";
             var newName = NewName(row)!;
+            if (_scheme.NameIsNumber)
+            {
+                row.Number.Text = $"Becomes {newName} (part number {_scheme.Format(row.AssignedNumber.Value)}, at the top of the vault, after check-in)";
+                row.Rename!.Visible = false;
+                continue;
+            }
             row.Rename!.Visible = !string.Equals(newName, System.IO.Path.GetFileName(row.Path), StringComparison.OrdinalIgnoreCase);
             row.Rename.Text = $"Rename the file to {newName} (after check-in)";
         }

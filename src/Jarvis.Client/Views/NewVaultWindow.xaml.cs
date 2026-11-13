@@ -27,7 +27,7 @@ public partial class NewVaultWindow : Window
         for (var year = DateTime.Now.Year + 1; year >= 2020; year--) VersionBox.Items.Add(year.ToString(CultureInfo.InvariantCulture));
         VersionBox.Items.Add("No check");
         VersionBox.Text = VaultCreator.DefaultSolidWorksVersion.ToString(CultureInfo.InvariantCulture);
-        AddFolderRow("COTS", "Purchased parts: McMaster-Carr, bearings, fasteners (Jarvis puts McMaster parts in COTS/MCMASTER)");
+        AddFolderRow("COTS", "Purchased parts: McMaster-Carr, bearings, fasteners (DevilDrive puts McMaster parts in COTS/MCMASTER)");
         AddFolderRow("Sandbox", "For trying things out without cluttering the real parts");
         Fill(() =>
         {
@@ -71,7 +71,7 @@ public partial class NewVaultWindow : Window
         DockPanel.SetDock(nameBox, Dock.Left);
         row.Children.Add(box);
         row.Children.Add(nameBox);
-        row.Children.Add(new TextBlock { Text = hint, Foreground = System.Windows.Media.Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = hint, Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         row.Tag = (box, nameBox);
         FoldersPanel.Children.Add(row);
     }

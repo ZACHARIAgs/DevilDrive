@@ -351,6 +351,25 @@ public sealed partial class VaultService : IVaultService
     private static bool IsHidden(string path) =>
         path.Split('/').Any(segment => segment.StartsWith(".", StringComparison.Ordinal));
 
+    /// <summary>Files Jarvis writes itself (vault records and 3D previews), which it can always write again.</summary>
+    private static bool IsGenerated(string path) =>
+        path.StartsWith(VaultIndex.Folder, StringComparison.OrdinalIgnoreCase) || VaultPaths.IsPreview(path);
+
+    /// <summary>Puts a generated file back to the vault's version (or removes it if the vault doesn't have it yet).</summary>
+    private async Task DiscardGeneratedAsync(StatusEntry change, CancellationToken ct)
+    {
+        var full = ToFullPath(change.Path);
+        if (change.X is '?' or 'A')
+        {
+            await RunAsync(new[] { "rm", "--cached", "--quiet", "--ignore-unmatch", "--", change.Path }, ct).ConfigureAwait(false);
+            if (File.Exists(full)) File.Delete(full);
+            return;
+        }
+        FileUtil.SetReadOnly(full, false);
+        var restore = await RunAsync(new[] { "restore", "--source=HEAD", "--staged", "--worktree", "--", change.Path }, ct, TransferTimeout).ConfigureAwait(false);
+        if (!restore.Success) throw GitErrorClassifier.Classify(restore, "replace " + change.Path);
+    }
+
     // ---------------------------------------------------------------- Get Latest
 
     public async Task<GetLatestResult> GetLatestAsync(IProgress<string>? progress = null, CancellationToken ct = default)
@@ -389,6 +408,14 @@ public sealed partial class VaultService : IVaultService
         var pins = PinnedVersions.Load(VaultRoot);
         var local = (await GetLocalChangesAsync(ct).ConfigureAwait(false)).Where(c => pins.Find(c.Path) == null).ToList();
 
+        // Records and 3D previews are made by Jarvis and can be made again, and they're hidden, so nobody could undo
+        // them: one changed on this PC (by a catch-up whose check-in didn't finish, say) never blocks Get Latest.
+        foreach (var change in local.Where(c => incoming.Contains(c.Path) && IsGenerated(c.Path)).ToList())
+        {
+            await DiscardGeneratedAsync(change, ct).ConfigureAwait(false);
+            local.Remove(change);
+        }
+
         // The promise: never overwrite a file you've changed. Git would refuse anyway, but we
         // check first so the message is clear and nothing is half-done.
         var conflicts = local.Select(c => c.Path).Where(incoming.Contains).ToList();
@@ -407,30 +434,81 @@ public sealed partial class VaultService : IVaultService
             throw new FileInUseException(inUse, "The vault has a newer version. Close them in SolidWorks so they can be updated, then try again.");
         }
 
+        // The long part, downloading the new versions, happens here, before any file in the vault folder is touched.
+        // That makes it safe to cancel: nothing has changed yet, and what was downloaded is kept for next time.
+        progress?.Report($"Downloading {incoming.Count} updated file(s) from the vault\u2026");
+        await PreDownloadAsync(incoming.Count, progress, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+
+        // From here on the files are replaced, which is quick (they're already on this PC) and is never interrupted.
+        var noCancel = CancellationToken.None;
+
         // Files this PC uses an older version of: back to the latest for the update, pinned again after.
         var pinnedIncoming = pins.Pins.Where(p => incoming.Contains(p.Path)).ToList();
-        foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, "HEAD", ct).ConfigureAwait(false);
+        foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, "HEAD", noCancel).ConfigureAwait(false);
 
-        progress?.Report($"Getting {incoming.Count} updated file(s) from the vault\u2026");
-        var merge = await RunAsync(new[] { "merge", "--ff", "--no-edit", "--no-stat", "-m", "Merge vault changes", Upstream }, ct, TransferTimeout).ConfigureAwait(false);
+        progress?.Report($"Updating {incoming.Count} file(s)\u2026");
+        var merge = await RunAsync(new[] { "merge", "--ff", "--no-edit", "--no-stat", "-m", "Merge vault changes", Upstream }, noCancel, TransferTimeout).ConfigureAwait(false);
         if (!merge.Success)
         {
             if (File.Exists(Path.Combine(VaultRoot, ".git", "MERGE_HEAD")))
             {
-                await RunAsync(new[] { "merge", "--abort" }, ct).ConfigureAwait(false);
+                await RunAsync(new[] { "merge", "--abort" }, noCancel).ConfigureAwait(false);
             }
-            foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, pin.Commit, ct).ConfigureAwait(false);
+            foreach (var pin in pinnedIncoming) await RestoreWorkingFileAsync(pin.Path, pin.Commit, noCancel).ConfigureAwait(false);
             throw GitErrorClassifier.Classify(merge, "get the latest versions");
         }
         foreach (var pin in pinnedIncoming)
         {
             // A file deleted from the vault can't stay pinned.
-            if (File.Exists(ToFullPath(pin.Path))) await RestoreWorkingFileAsync(pin.Path, pin.Commit, ct).ConfigureAwait(false);
+            if (File.Exists(ToFullPath(pin.Path))) await RestoreWorkingFileAsync(pin.Path, pin.Commit, noCancel).ConfigureAwait(false);
             else pins.Remove(pin.Path);
         }
         pins.Save(VaultRoot);
 
         return new GetLatestResult(behind, incoming.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex LfsProgress =
+        new System.Text.RegularExpressions.Regex(@"(?<percent>\d+)% \((?<done>\d+)/(?<total>\d+)\)(?:, (?<size>[\d.]+ \w+))?", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>"Downloading LFS objects: 45% (5/11), 12 MB | 3 MB/s" as "Downloading file 5 of 11 (45%, 12 MB)"; null for any other line.</summary>
+    internal static string? DescribeLfsProgress(string line)
+    {
+        var match = LfsProgress.Match(line);
+        if (!match.Success) return null;
+        var size = match.Groups["size"].Success ? ", " + match.Groups["size"].Value : "";
+        return $"Downloading file {match.Groups["done"].Value} of {match.Groups["total"].Value} ({match.Groups["percent"].Value}%{size})\u2026";
+    }
+
+    /// <summary>
+    /// Downloads the file contents the vault's newest state needs into Git's own store, without touching the
+    /// vault folder. If it can't (no Git LFS here, or the server hiccups), the update that follows downloads
+    /// them itself and reports what went wrong, as it always did.
+    /// </summary>
+    private async Task PreDownloadAsync(int files, IProgress<string>? progress, CancellationToken ct)
+    {
+        var args = new[] { "lfs", "fetch", Config.Remote, "refs/remotes/" + Upstream };
+        if (_git is GitRunner runner)
+        {
+            var lines = progress == null ? null : new InlineProgress(line =>
+            {
+                if (DescribeLfsProgress(line) is { } text) progress.Report(text);
+            });
+            await runner.RunAsync(args, null, TransferTimeout, ct, lines).ConfigureAwait(false);
+        }
+        else
+        {
+            await RunAsync(args, ct, TransferTimeout).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Reports on the thread that produced the value (Git's reader), so progress isn't queued behind a busy UI thread and reordered.</summary>
+    private sealed class InlineProgress : IProgress<string>
+    {
+        private readonly Action<string> _report;
+        public InlineProgress(Action<string> report) => _report = report;
+        public void Report(string value) => _report(value);
     }
 
     // ---------------------------------------------------------------- Check Out
@@ -1401,7 +1479,7 @@ public sealed partial class VaultService : IVaultService
             var result = new OperationResult();
             await SyncCoreAsync(progress, ct).ConfigureAwait(false);
             await VerifyIdentityAsync(ct).ConfigureAwait(false);
-            if (GitHubLogin == null) throw new PdmException("Jarvis couldn't confirm your GitHub account (are you online?), so it can't submit for review yet.");
+            if (GitHubLogin == null) throw new PdmException("DevilDrive couldn't confirm your GitHub account (are you online?), so it can't submit for review yet.");
 
             var lockable = await GetLockableAsync(relatives, ct).ConfigureAwait(false);
             var frozen = await ReadFrozenListAsync(ct).ConfigureAwait(false);
@@ -1592,7 +1670,7 @@ public sealed partial class VaultService : IVaultService
             await CommitAndPushAsync(new[] { CheckInRequestList.RelativePath }, $"Requested check-in of {PathList.Name(rel)} from {owner}", progress, ct).ConfigureAwait(false);
 
             result.Succeeded.Add(rel);
-            result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time Jarvis " +
+            result.Notes.Add($"{owner}'s PC will check in their last saved version of {PathList.Name(rel)} and release it, the next time DevilDrive " +
                              "or SolidWorks is running there (within about five minutes if it's on). Unsaved changes in their SolidWorks aren't included.\n\n" +
                              "If their PC is off and you can't wait, use Break Lock instead (their saved work then stays on their PC only).");
             await NotifyAsync(new VaultEvent(VaultEventKind.CheckInRequested, UserDisplayName, new[] { rel }) { PreviousOwner = owner, Comment = note }, result).ConfigureAwait(false);
@@ -1825,6 +1903,10 @@ public sealed partial class VaultService : IVaultService
         {
             problems.Add("The vault isn't set up to store 3D previews efficiently.");
         }
+        if (await ReadVaultTextAsync(VaultSetup.ReadmePath, ct).ConfigureAwait(false) == null)
+        {
+            problems.Add("The vault's GitHub page doesn't show new teammates how to get DevilDrive and join.");
+        }
         return problems;
     }
 
@@ -1872,12 +1954,13 @@ public sealed partial class VaultService : IVaultService
                 var separator = attributes.Length == 0 || attributes.EndsWith("\n", StringComparison.Ordinal) ? "" : "\n";
                 File.WriteAllText(attributesFile, attributes + separator + "\n# 3D previews made by the SolidWorks add-in\n" + VaultSetup.PreviewAttributesRule + "\n");
             }
+            WriteVaultText(VaultSetup.ReadmePath, VaultSetup.Readme(Config.VaultName, Config.LocalPath));
 
-            await CommitAndPushAsync(new[] { VaultSetup.GuardWorkflowPath, VaultSetup.GuardScriptPath, VaultSetup.AttributesPath },
-                "Updated vault setup (vault guard, 3D preview storage)", progress, ct).ConfigureAwait(false);
+            await CommitAndPushAsync(new[] { VaultSetup.GuardWorkflowPath, VaultSetup.GuardScriptPath, VaultSetup.AttributesPath, VaultSetup.ReadmePath },
+                "Updated vault setup (vault guard, 3D preview storage, joining steps)", progress, ct).ConfigureAwait(false);
             result.Succeeded.Add(VaultSetup.GuardWorkflowPath);
             result.Notes.Add("The vault guard is installed. From now on GitHub checks every push and undoes ones that break the vault rules " +
-                             "(you'll see runs under the repo's Actions tab).");
+                             "(you'll see runs under the repo's Actions tab). The vault's GitHub page shows new teammates how to get DevilDrive and join.");
             return result;
         }
         finally

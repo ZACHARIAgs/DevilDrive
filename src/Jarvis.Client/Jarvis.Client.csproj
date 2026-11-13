@@ -4,6 +4,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- For the import table, shared with the SolidWorks add-in (ImportForm). -->
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>DevilDrive</AssemblyName>
     <RootNamespace>Jarvis.Client</RootNamespace>
     <ApplicationIcon>..\..\assets\vault.ico</ApplicationIcon>
@@ -11,10 +13,17 @@
 
   <ItemGroup>
     <Resource Include="..\..\assets\vault.ico" Link="Assets\vault.ico" />
+    <!-- The add-in installer runs as administrator: the exe carries its own copy instead of trusting one in the Temp folder. -->
+    <EmbeddedResource Include="..\..\scripts\Install-SolidWorksAddin.ps1" LogicalName="Jarvis.Client.InstallAddin.ps1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Jarvis.Core\Jarvis.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same import table as the SolidWorks pane's Import files. -->
+    <Compile Include="..\Jarvis.SwAddin\ImportForm.cs" Link="Views\ImportForm.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -67,6 +67,7 @@ internal sealed class VaultPane : UserControl
     private readonly ModernButton _import;
     private readonly ModernButton _refresh;
     private readonly ModernButton _openApp;
+    private readonly ModernButton _help;
     private readonly CaptionLabel _status;
     private readonly ActivityBar _activity;
 
@@ -139,6 +140,7 @@ internal sealed class VaultPane : UserControl
         _import = new ModernButton("Import files\u2026", "\uE8B5");
         _refresh = new ModernButton("Refresh", "");
         _openApp = new ModernButton("Open DevilDrive", "");
+        _help = new ModernButton("Help", "\uE897");
         _exportBom = new ModernButton("Export BOM (Excel)", "\uE9F9");
         _status = new CaptionLabel();
         _activity = new ActivityBar();
@@ -148,7 +150,7 @@ internal sealed class VaultPane : UserControl
             _header, _picker, _activity, _status, _banner, _card, _treeLabel, _tree,
             _downloadRefs, _checkIn, _checkOut, _undo, _watch, _approveReview, _rejectReview, _withdrawReview, _submitReview, _rename, _requestCheckIn, _freeze, _unfreeze,
             new Divider(),
-            _getLatest, _refresh, _import, _exportBom, _openApp,
+            _getLatest, _refresh, _import, _exportBom, _openApp, _help,
             // Which add-in this is, so it can be compared with the app (it updates along with it).
             new CaptionLabel("DevilDrive add-in " + Jarvis.Core.Updates.Updater.Format(Jarvis.Core.Updates.Updater.CurrentVersion(typeof(VaultPane).Assembly))),
         });
@@ -172,6 +174,7 @@ internal sealed class VaultPane : UserControl
         _refresh.Click += async (_, _) => { EnsureUiContext(); await RefreshAsync(contactVault: true); };
         _import.Click += async (_, _) => { EnsureUiContext(); await ImportAsync(); };
         _openApp.Click += (_, _) => OpenDesktopApp();
+        _help.Click += (_, _) => { using var help = new HelpForm(); help.ShowDialog(_sw.MainWindow); };
         _exportBom.Click += (_, _) => ExportBom();
         _timer.Tick += async (_, _) => await OnTickAsync();
 
@@ -1031,12 +1034,13 @@ internal sealed class VaultPane : UserControl
         if (newSolidWorks.Count > 0)
         {
             // With a part-numbering convention, each new file also gets a group, the next free number and (optionally) a matching name.
+            var scheme = _vault.LoadNumbering();
             using var describe = new DescriptionForm(newSolidWorks.Select(p => (p, CurrentDescription(p))).ToList(),
-                _vault.LoadNumbering(), VaultService.UsedPartNumbers(_snapshot?.Files ?? Array.Empty<VaultFile>()));
+                scheme, VaultService.UsedPartNumbers(_snapshot?.Files ?? Array.Empty<VaultFile>()), _vault.ToRelativePath);
             if (describe.ShowDialog(_sw.MainWindow) != DialogResult.OK) return;
             newDescriptions = describe.Descriptions;
             newPartNumbers = describe.PartNumbers;
-            renames = describe.Renames;
+            renames = ConventionTargets(scheme, describe.Renames, describe.PartNumbers.Keys, describe.BoughtFiles, newSolidWorks);
         }
 
 
@@ -1050,7 +1054,7 @@ internal sealed class VaultPane : UserControl
                     $"{PathList.Format(tooNew)} {(tooNew.Count == 1 ? "was" : "were")} last saved in a newer SolidWorks than the team's {TeamYear}, " +
                     $"so teammates on {TeamYear} couldn't open {(tooNew.Count == 1 ? "it" : "them")}. Nothing was checked in.\n\n" +
                     $"Fix: Undo Check Out to get the vault version back, then redo the change in SolidWorks {TeamYear}.",
-                    "Jarvis — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "DevilDrive — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
         }
@@ -1157,8 +1161,42 @@ internal sealed class VaultPane : UserControl
     }
 
     /// <summary>
-    /// After a check-in: renames new files to the names the part-numbering convention gives them, with the same
-    /// move as Rename / Move (assemblies using them are updated and checked in too). Returns a line for the status.
+    /// Where new files go after check-in (full path to vault-relative path): renamed to their part number in their
+    /// folder; with file names that are numbers, ours at the top of the vault, bought ones into the COTS folder, and
+    /// drawings named after their model. Models come first, so drawings move after them.
+    /// </summary>
+    private Dictionary<string, string> ConventionTargets(NumberingScheme? scheme, Dictionary<string, string> renames, IEnumerable<string> ours, HashSet<string> bought, IReadOnlyList<string> newFiles)
+    {
+        var targets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (_vault == null || scheme == null) return targets;
+        static string FolderOf(string relative) => relative.Contains('/') ? relative.Substring(0, relative.LastIndexOf('/') + 1) : "";
+        foreach (var pair in renames)
+        {
+            targets[pair.Key] = (scheme.NameIsNumber ? "" : FolderOf(_vault.ToRelativePath(pair.Key))) + pair.Value;
+        }
+        if (!scheme.NameIsNumber) return targets;
+        foreach (var path in ours.Where(p => !targets.ContainsKey(p) && _vault.ToRelativePath(p).Contains('/')))
+        {
+            targets[path] = Path.GetFileName(path); // already named by its number, but ours go at the top of the vault
+        }
+        foreach (var path in bought.Where(p => scheme.CotsFolder.Length > 0 && !scheme.IsCots(_vault.ToRelativePath(p))))
+        {
+            targets[path] = scheme.CotsFolder + "/" + Path.GetFileName(path);
+        }
+        foreach (var drawing in newFiles.Where(p => p.EndsWith(".slddrw", StringComparison.OrdinalIgnoreCase)))
+        {
+            var model = _sw.GetReferences(drawing, allLevels: false).FirstOrDefault(IsInVault);
+            if (model == null) continue;
+            var modelTarget = targets.TryGetValue(model, out var moved) ? moved : _vault.ToRelativePath(model);
+            var wanted = FolderOf(modelTarget) + Path.GetFileNameWithoutExtension(modelTarget) + Path.GetExtension(drawing);
+            if (!string.Equals(wanted, _vault.ToRelativePath(drawing), StringComparison.OrdinalIgnoreCase)) targets[drawing] = wanted;
+        }
+        return targets;
+    }
+
+    /// <summary>
+    /// After a check-in: moves new files to where the part-numbering convention puts them (<see cref="ConventionTargets"/>),
+    /// with the same move as Rename / Move (assemblies using them are updated and checked in too). Returns a line for the status.
     /// </summary>
     private async Task<string?> RenameToConventionAsync(Dictionary<string, string> renames, IProgress<string> progress)
     {
@@ -1169,9 +1207,8 @@ internal sealed class VaultPane : UserControl
         foreach (var pair in renames)
         {
             var from = _vault.ToRelativePath(pair.Key);
-            var slash = from.LastIndexOf('/');
-            var to = (slash < 0 ? "" : from.Substring(0, slash + 1)) + pair.Value;
-            progress.Report($"Renaming {Path.GetFileName(pair.Key)} to {pair.Value}\u2026");
+            var to = pair.Value;
+            progress.Report($"Renaming {Path.GetFileName(pair.Key)} to {to}\u2026");
             try
             {
                 var plan = await _vault.PlanMoveAsync(new[] { new FileMove(from, to) }, editor, progress);
@@ -1181,7 +1218,7 @@ internal sealed class VaultPane : UserControl
                     continue;
                 }
                 var result = await _vault.MoveAsync(plan, editor, VaultService.MoveComment(plan.Moves), progress);
-                if (result.Failures.Count == 0) done.Add(pair.Value);
+                if (result.Failures.Count == 0) done.Add(to);
                 else problems.Add($"{Path.GetFileName(pair.Key)}: {result.Failures[0].Error.Message}");
             }
             catch (PdmException ex)
@@ -1450,7 +1487,7 @@ internal sealed class VaultPane : UserControl
     {
         var top = _currentPath;
         if (top == null || _vault == null) return;
-        if (MessageBox.Show(_sw.MainWindow, $"Take {Path.GetFileName(top)} out of review? It can then be edited again.", "Jarvis",
+        if (MessageBox.Show(_sw.MainWindow, $"Take {Path.GetFileName(top)} out of review? It can then be edited again.", "DevilDrive",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         await RunAsync("Withdrawing\u2026", async progress => Report(await _vault.WithdrawReviewAsync(new[] { top }, progress), "Withdrew"));
     }
@@ -1595,7 +1632,7 @@ internal sealed class VaultPane : UserControl
         }
         if (IsInVault(source + "\\") || string.Equals(source, vault.VaultRoot, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(_sw.MainWindow, "That folder is already in the vault. Open the files and use Check In instead.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_sw.MainWindow, "That folder is already in the vault. Open the files and use Check In instead.", "DevilDrive — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -1623,7 +1660,7 @@ internal sealed class VaultPane : UserControl
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            MessageBox.Show(_sw.MainWindow, $"Couldn't read {source}: {ex.Message}", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(_sw.MainWindow, $"Couldn't read {source}: {ex.Message}", "DevilDrive — Import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         finally
@@ -1634,14 +1671,14 @@ internal sealed class VaultPane : UserControl
 
         if (files.Count == 0)
         {
-            MessageBox.Show(_sw.MainWindow, $"There are no SolidWorks files (parts, assemblies, drawings) in {source}.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_sw.MainWindow, $"There are no SolidWorks files (parts, assemblies, drawings) in {source}.", "DevilDrive — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         // An open original would be used in place of its copy while the copies are repointed.
         var open = files.Where(f => _sw.FindOpen(f.Path) != null).Select(f => Path.GetFileName(f.Path)).ToList();
         if (open.Count > 0)
         {
-            MessageBox.Show(_sw.MainWindow, $"Close {PathList.Format(open)} in SolidWorks first, then import again.", "Jarvis — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(_sw.MainWindow, $"Close {PathList.Format(open)} in SolidWorks first, then import again.", "DevilDrive — Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         if (TeamYear != null)
@@ -1652,7 +1689,7 @@ internal sealed class VaultPane : UserControl
                 MessageBox.Show(_sw.MainWindow,
                     $"{PathList.Format(tooNew)} {(tooNew.Count == 1 ? "was" : "were")} last saved in a newer SolidWorks than the team's {TeamYear}, " +
                     $"so teammates couldn't open {(tooNew.Count == 1 ? "it" : "them")}. Nothing was imported.",
-                    "Jarvis — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "DevilDrive — Wrong SolidWorks version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
         }
@@ -1660,7 +1697,7 @@ internal sealed class VaultPane : UserControl
             MessageBox.Show(_sw.MainWindow,
                 "Some files use parts that aren't on this PC, so they'll be missing in the vault too:\n\n" + string.Join("\n", missing.Take(10).Select(m => "• " + m)) +
                 (missing.Count > 10 ? $"\n…and {missing.Count - 10} more." : "") + "\n\nImport anyway?",
-                "Jarvis — Import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                "DevilDrive — Import", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
         {
             return;
         }
@@ -1677,10 +1714,23 @@ internal sealed class VaultPane : UserControl
         {
             var editor = new AddinReferenceEditor(_sw, this, storedPaths: true);
             AddinLog.Write($"Import from {source}: {plan.Count} file(s), e.g. {plan[0].Item.Target}");
+            // Vault files this import updates with someone's newer copy: checked out to you first, like any edit.
+            var updates = plan.Where(p => p.Item.ReplaceExisting).Select(p => p.Item.Target).ToList();
+            await vault.CheckOutForImportAsync(updates, progress);
             // Copying and repointing run off the UI thread; the editor sends each SolidWorks call back to it.
-            var copies = await Task.Run(() => VaultImport.CopyAndRepoint(vault.VaultRoot, plan.Select(p => p.Item).ToList(), editor, progress));
+            IReadOnlyList<string> copies;
+            try
+            {
+                copies = await Task.Run(() => VaultImport.CopyAndRepoint(vault.VaultRoot, plan.Select(p => p.Item).ToList(), editor, progress));
+            }
+            catch
+            {
+                // The vault's files are back as they were: release them again.
+                if (updates.Count > 0) await vault.UndoCheckOutAsync(updates, progress);
+                throw;
+            }
             var copyOf = plan.ToDictionary(p => p.Item.Source, p => vault.ToFullPath(p.Item.Target), StringComparer.OrdinalIgnoreCase);
-            foreach (var (item, partNumber, description) in plan.Where(p => !p.Item.UseExisting))
+            foreach (var (item, partNumber, description) in plan.Where(p => !p.Item.UseExisting && !p.Item.ReplaceExisting))
             {
                 var copy = copyOf[item.Source];
                 if (!IsSolidWorksFile(copy) || (partNumber == null && description.Length == 0)) continue;
@@ -1706,7 +1756,7 @@ internal sealed class VaultPane : UserControl
 
             AddinLog.Write("Import: checking in");
             if (copies.Count == 0) return "Nothing to import: the vault already has every one of those files.";
-            var result = await vault.CheckInAsync(copies, $"Imported {copies.Count} file(s) from {Path.GetFileName(source)}", false, progress,
+            var result = await vault.CheckInAsync(copies, VaultImport.CheckInComment(copies.Count - updates.Count, updates.Count, Path.GetFileName(source)), false, progress,
                 indexUpdates: index, previews: previews);
             _sw.MakeReadOnly(result.Succeeded.Select(vault.ToFullPath));
             if (result.Failures.Count > 0)
@@ -1933,7 +1983,7 @@ internal sealed class VaultPane : UserControl
         catch (PdmException ex)
         {
             status = ex.Title;
-            MessageBox.Show(_sw.MainWindow, ex.Message, "Jarvis — " + ex.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(_sw.MainWindow, ex.Message, "DevilDrive — " + ex.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {

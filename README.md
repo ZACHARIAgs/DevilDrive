@@ -25,16 +25,23 @@ Go to the **[latest release](https://github.com/ZACHARIAgs/DevilDrive/releases/l
 * **Check In with nothing selected** offers everything you can check in: your checked-out files plus new files.
 * **Keep checked out** (in the Check In window) saves a version but lets you keep editing.
 * **Undo Check Out** throws away your changes and releases the file. A backup of what you threw away is kept in `%LocalAppData%\DevilDrive\Backups`.
-* **Theme / Dark Mode:** DevilDrive defaults to Dark mode; switch between Light and Dark mode anytime in **Settings**.
-* **McMaster-Carr parts:** click **McMaster** in the toolbar, type the part number (e.g. 91251A540) and click **Get from McMaster**. DevilDrive opens the part's page; click McMaster's **Download**, choose **SOLIDWORKS** and save. DevilDrive picks the file up from your Downloads folder, puts it in `COTS\MCMASTER` and offers to check it in.
-* **Part numbering:** if an admin has set it up (**Numbering** in the toolbar), checking in a new part from SolidWorks asks which group it belongs to (e.g. 200 Chassis), gives it the next free number, and offers to rename the file to match. The rename uses Rename / Move, so assemblies that use it are updated.
+* **McMaster-Carr parts:** click **McMaster** in the toolbar, type the part number (e.g. 91251A540) and click **Get from McMaster**. DevilDrive opens the part's page; click McMaster's **Download**, choose **SOLIDWORKS** and save. DevilDrive picks the file up from your Downloads folder, puts it in `COTS\MCMASTER` and offers to check it in. (McMaster's own API needs an approved account, so DevilDrive uses their normal download.)
+* **Part numbering:** if an admin has set it up (**Admin → Numbering** in the toolbar), checking in a new part from SolidWorks asks which group it belongs to (e.g. 200 Chassis), gives it the next free number, and offers to rename the file to match. The rename uses Rename / Move, so assemblies that use it are updated. If the vault names files only by their number, checking in a new file asks whether it's ours (it becomes the next part number at the top of the vault; describe it) or bought (it keeps its name and goes in COTS).
 * **Material** comes from the part's SolidWorks material (Edit Material), recorded at every check-in; there's nothing to type.
 * **Request Delete** (right-click): ask the admins to delete a file from the vault for everyone. Write why; they see the request in DevilDrive (and Discord) and either delete the file or reject the request. Changed your mind? **Withdraw Delete Request**.
 * **Delete Local File** (right-click) removes a file you made in the vault folder but never checked in (it shows as *Not in vault*). Files that are in the vault can't be deleted this way. A copy is kept in the same backups folder.
 * **Folders**: the tree on the left shows the vault's folders; click one to see the files in it, like File Explorer (a search or filter looks in its subfolders too). Right-click a folder for **New Folder…** (it reaches teammates once files are in it) or **Delete Folder** (empty ones). To move files, drag them onto a folder, or right-click → **Move to Folder…**. The move is checked in right away. Moving SolidWorks files also updates every assembly and drawing that uses them: DevilDrive starts SolidWorks (your team's version) in the background for that, so the first move takes a little longer. Files that are open in SolidWorks have to be closed first. Files you had checked out are still checked out to you afterwards. If an assembly or drawing that isn't downloaded on your PC might use the file (DevilDrive can't tell because it was never indexed), the move is refused until you download it.
 * **Rename**: right-click a file and choose **Rename…**, then type the new name (the .SLDPRT/.SLDASM/.SLDDRW ending stays). It works like Move to Folder: assemblies and drawings that use the file are updated by SolidWorks in the background and checked in with the rename, so nothing breaks for anyone.
-* **Export** (like Pack and Go): select files, right-click, **Export…**. DevilDrive copies them and every part and sub-assembly they use (all levels), and their drawings if you want, to a folder or a .zip file, and points the copies' assemblies and drawings at each other, so they open on any PC without the vault (to send to a sponsor, a machine shop or a teammate). Files that are only placeholders on your PC are downloaded first. SolidWorks is used in the background, as for Move to Folder. Nothing in the vault changes, and the copies aren't linked to it.
-* The version you're on is shown at the bottom right of DevilDrive and at the bottom of the SolidWorks pane. The add-in updates along with the app: if its update was skipped (SolidWorks was open), DevilDrive offers it again at the next start.
+* **Edit Description**: right-click a SolidWorks file and choose **Edit Description…**. The description is the Description property inside the file (BOMs and drawings read it there), so DevilDrive checks the file out, has SolidWorks write it in the background, and checks it in; teammates see it at their next refresh. If the file is already checked out to you, it's saved in the file and goes in with your next check-in. Close the file in SolidWorks first.
+* **Import** / **New Part**: click **Import** in the toolbar to bring a folder of SolidWorks files into the vault under the vault's naming scheme (repointing assemblies and drawings), or click **+ New Part** (or drag and drop files directly onto the file list or folder tree) to add files.
+* **Export** (like Pack and Go): select files, right-click, **Export → Export Files…**. DevilDrive copies them and every part and sub-assembly they use (all levels), and their drawings if you want, to a folder or a .zip file, and points the copies' assemblies and drawings at each other, so they open on any PC without the vault (to send to a sponsor, a machine shop or a teammate). Files that are only placeholders on your PC are downloaded first. SolidWorks is used in the background, as for Move to Folder. Nothing in the vault changes, and the copies aren't linked to it.
+* **Export BOM (Excel)**: right-click an assembly, **Export → Export BOM (Excel)…**: the same parts list the SolidWorks pane makes (every part at every level with quantity, description, material and revision). SolidWorks reads the assembly in the background.
+* **Filters and the summary:** the chips above the list ("Checked out to me 3", "Needs attention 1") show only those files; a chip appears when it has files. With no file selected, the panel on the right shows what's checked out to you, **what teammates checked in** (a blue dot marks the ones new since you clicked **Mark as seen**) and how much **storage** the vault uses.
+* **Columns:** right-click a column header to choose the columns, switch to compact rows, or put them back.
+* **Light or dark look:** **Settings → Look** (defaults to Dark mode for DevilDrive; also supports Light or Same as Windows).
+* **Shortcuts:** Ctrl+G Get Latest, Ctrl+O Check Out, Ctrl+I Check In, Ctrl+U Undo Check Out, Ctrl+H History, Ctrl+E Explorer, Enter Open, F2 Rename, Ctrl+F Search, F5 Refresh, F1 Help.
+* **Cancel:** while Get Latest downloads, **Cancel** (bottom left) stops it. Nothing in the vault folder has changed at that point, and what was downloaded is kept for next time.
+* The version you're on is shown at the bottom right of DevilDrive and at the bottom of the SolidWorks pane (click **Help** or press F1 anytime for troubleshooting). The add-in updates along with the app: if its update was skipped (SolidWorks was open), DevilDrive offers it again at the next start.
 * **New files** (state "New, not in vault yet") just need a Check In. There's no need to check them out first.
 * **Details panel** (right side of the app): a **3D preview you can rotate** (drag to rotate, right-drag to pan, scroll to zoom; **Open large 3D view** for a bigger window) or a picture, its properties (part number, description, material), what it **contains**, and **where it's used**. Check where-used before changing a part so you know which assemblies it affects.
 * **Search** finds files by name, part number, description or any other SolidWorks property.
@@ -52,15 +59,33 @@ Go to the **[latest release](https://github.com/ZACHARIAgs/DevilDrive/releases/l
 
 ### Inside SolidWorks (add-in)
 
-In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It shows the active document and, below it, **Files in use**: everything that document uses, without opening any of the parts.
+In SolidWorks, click the **DevilDrive** tab in the Task Pane on the right. It shows the document you're looking at and, below it, **Files in use**: everything that document uses, without opening any of the parts.
 
-* **Files in use tree:** component tree with dots (🟢 available, 🔵 checked out to you, 🔴 checked out by someone else, ⚫ frozen, 🟩 in review, 🟠 edited without check-out), version ratios (`4/4` or `7/10` orange), part numbers, and descriptions.
-* **Tick boxes:** select multiple rows to check out or in together.
-* **Check Out / Check In / Undo Check Out:** work directly from the pane.
-* **Saving a part inside an assembly:** press Save as usual. The add-in saves only the checked-out parts you changed, leaving read-only assemblies intact.
-* **Get Latest:** updates open files safely.
-* **Rename / Move:** updates all referencing assemblies and drawings across the vault.
-* **Export BOM (Excel):** saves a complete hierarchical parts list as a CSV file (quantities, part numbers, descriptions, materials, revisions).
+* **Files in use tree.** For an assembly, every component instance at every level, like the FeatureManager tree (`bracket<1>`, `bracket<2>`); click the arrow to open a subassembly. For a drawing, the models it shows. Each row has:
+  * a **dot**: 🟢 available, 🔵 checked out to you, 🔴 checked out by someone else (hover for who), ⚫ frozen, 🟩 in review, 🟠 edited without check-out;
+  * the **version as on-your-PC/in-the-vault**, e.g. `4/4` (up to date) or `7/10` (**orange**: the vault has 3 newer check-ins, click Get Latest);
+  * the **part number and description** (the file name when there's no part number).
+  Suppressed components are greyed out, and files **outside the vault** are flagged in orange (teammates won't have them). The tree updates when you switch, open, close or save a document.
+* **Tick boxes.** Tick rows to work on several files at once: click the box, Ctrl-click a row, or Shift-click to tick a range. Right-click a subassembly for **Tick this and everything inside**.
+* **Check Out / Check In / Undo Check Out** work on the whole tree, and their labels say how many files they apply to ("Check Out… (5 available)", "Check In (2 ticked)").
+  * With rows ticked, the ticked files are checked out or in straight away. Check In only asks for the comment; Check Out tells you which ticked files someone else has and checks out the rest.
+  * With nothing ticked, a list of everything in the tree you can check out (or in) opens.
+  * **Check Out** first gets the latest versions if the vault has newer ones, so you never edit an old copy. The files become editable right away.
+  * **Check In** saves the files being checked in and checks them in. **You don't need to close anything**, including the assembly you edited a part in, even if that assembly isn't checked out.
+  * **New files:** the first time a SolidWorks file is checked in, a window asks for its **description** (saved into the file's `Description` property, so it shows everywhere).
+* **Saving a part inside an assembly that isn't checked out:** press Save as usual. The add-in saves the checked-out parts you changed and leaves the read-only assembly alone, instead of SolidWorks asking to save the assembly as a new file.
+* **Get Latest**: as in the app. If files that need updating are open, it offers to close and reopen them.
+* **Open a part from an assembly:** right-click a part or sub-assembly under Files in use and choose **Open**.
+* **Use an older version (this PC only):** right-click a row under Files in use and choose **Use an older version…**, then pick a version. Your PC loads that version (read-only) and reopens the assembly with it, while the rest of the assembly stays at the latest; the vault and your teammates are not affected. The row shows the version in purple (e.g. `3/5`). Get Latest keeps your choice. Right-click again and choose **Return to the latest version** to switch back (the app's right-click menu has **Return to Latest Version** too). A file on an older version can't be checked out or in until it's back on the latest. To make an old version the newest one for everyone, use **History → Restore This Version** in the app.
+* **Rename / Move**: the safe way to rename or move a file. It finds every assembly and drawing that uses the file, updates their references, and checks everything in together.
+* **Import files…** (also **Import** in the DevilDrive app's toolbar, which uses SolidWorks in the background; records come from the add-in if SolidWorks is open, and 3D previews only from the SolidWorks pane): brings existing SolidWorks files into the vault, e.g. a new member's project. Pick their folder; DevilDrive lists every part, assembly and drawing in it (plus files they use from other folders). In the table, pick each file's group (if the vault has part numbering) and edit its name and description; the new file names are shown. Choose the vault folder (Sandbox by default) and click **Import and Check In**: the files are copied in under the new names, every assembly and drawing is pointed at the copies, part numbers and descriptions are saved, and it's all checked in as one change with 3D previews. The original files aren't changed. Close the originals in SolidWorks first. **A file the vault already has** (same file name) gets a choice in the **Already in the vault** column: use the vault's file (nothing is copied), **update the vault's file with this one** (it's checked out to you and this copy becomes its new version; the old one stays in History), or import it as a separate file under another name.
+* **Submit for review**, and for admins **Approve & release** / **Reject**: see *Review before release* below. Approving a drawing here also saves its PDF.
+* **Export BOM (Excel)**: for an assembly, saves a parts list as a CSV file that opens in Excel: every part at every level with its quantity, part number, description, material and released revision. Suppressed and "excluded from BOM" parts are left out.
+* **Notify me when it's free**: for a file someone else has checked out.
+* The card at the top shows the active document's state, its version (`7/10`), part number, which SolidWorks version saved it, where it's used, and whether a drawing may be out of date.
+* **Open DevilDrive**: opens the full app (vault view, history, restore).
+
+When you open a file someone else has checked out, a warning tells you who has it. If the add-in misbehaves, send the file `%LocalAppData%\DevilDrive\addin.log` to an admin.
 
 ### What the states mean
 
@@ -86,17 +111,17 @@ In SolidWorks, click the **safe icon** tab in the Task Pane on the right. It sho
 
 ### When something goes wrong
 
-Every error window has a **Copy** button. Paste the text into Discord when asking for help.
+Click **Help** (in the app's toolbar or the SolidWorks pane) for the common problems and the steps that fix them; every error window has a **Help** button that opens the right one. Every error window also has a **Copy** button: paste the text into Discord when asking for help.
 
 | Message | What it means / what to do |
 |---|---|
-| **Vault offline** | No internet, or GitHub is down. Try again when back online. |
-| **Checked out by someone else** | Someone has the file. Ask them to check it in or request a check-in. |
-| **Check-in not sent to the vault** | Saved locally but push didn't reach GitHub. Click **Check In** again when connected. |
-| **File in use** | Close the file in SolidWorks and retry Get Latest or Undo. |
-| **Not checked out** | Check it out (edits are kept), then check in. |
-| **Conflict** | Someone broke your lock. Copy your version safely, Undo, Get Latest, and reconcile. |
-| **Sign-in or permission problem** | Sign in again via Git Credential Manager or ask an admin to check your Write access. |
+| **Vault offline** | No internet, or GitHub is down. Nothing was changed. Try again when you're back online. The vault view still shows the last known status. |
+| **Checked out by someone else** | *Name* has the file. Ask them to check it in. If they're unreachable and it's stale, ask an admin to **Break Lock**. |
+| **Check-in not sent to the vault** | Your new version is saved on your PC but didn't reach GitHub (offline, or the vault refused it). Your files stay checked out to you. Fix the cause and click **Check In** again: it sends what's waiting. A yellow banner reminds you until it's sent. |
+| **File in use** | Get Latest or Undo needs to replace a file that's open in SolidWorks. Close it (the add-in offers to close and reopen it) and retry. Check-in works with files open. |
+| **Not checked out** | You edited a file without checking it out. Check it out (your edits are kept), then check in. |
+| **Conflict** | The vault has a newer version of a file you also changed. Usually someone broke your check-out. Nothing was overwritten. Click **Keep copies, get the vault's** in the message: your versions go to the Backups folder, the vault's take their place and Get Latest finishes. Then sort it out with whoever made the other change. |
+| **Sign-in or permission problem** | Git Credential Manager will ask you to sign in again. If it still fails, ask an admin to check you're a collaborator on the repo. |
 
 ---
 
@@ -114,15 +139,23 @@ All in the app, no scripts or GitHub settings pages:
    - **SolidWorks version**: team's baseline version (default 2024),
    - **Vault folder**: `C:\SolarDevilsVault` (identical on every PC; keep outside OneDrive).
    
-   The app creates a private GitHub repo with starting folders (`COTS`, `Sandbox`), vault rules (`.gitattributes`, `.gitignore`), team settings (`pdm.json`) and the vault guard.
-3. **Add teammates:** click **Team** in the command bar. Type their GitHub usernames and click **Add to team** (grants Write access). Click **Copy welcome message** to paste into Discord or email with onboarding instructions.
-4. Configure `pdm.json` in `C:\SolarDevilsVault`:
-   - `team`: GitHub username → real name,
-   - `discordWebhookUrl`: Discord channel webhook URL. Check it in via DevilDrive.
+   The app creates a **private** GitHub repo with the starting folders you tick (**COTS** for purchased parts and **Sandbox** for trying things out, both ticked by default; rename them or add more), puts in the vault rules (`.gitattributes`, `.gitignore`), the team settings (`pdm.json` with your name, folder and version) and the vault guard, downloads it to the folder and opens it. If the upload fails halfway, fix the problem and click **Create vault** again: it reuses the empty repo. It never deletes anything on GitHub.
+3. **Add your teammates:** click **Team** in the command bar (offered right after creating the vault too; also **Vaults** → select the vault → **Team…**). Type their GitHub usernames and click **Add to team**: GitHub emails each one an invitation, and they get **Write** access (check out and check in). Misspelled names and people without a GitHub account are listed so you can fix them. GitHub's email links to the vault's GitHub page, which shows the steps (DevilDrive writes them to `.github/README.md`): one link to `DevilDrive.exe` (with "Windows may warn you: More info → Run anyway"), then sign in and **Accept and download** on the welcome screen. So there's nothing else to send; **Copy welcome message** gives the same steps to paste into Discord or a text if you want to.
+
+   The Team window also shows everyone who has access, invitations not accepted yet (**Cancel invite**; GitHub invitations expire after 7 days, so add them again if needed), and **Remove** for people who leave. Anyone on the team can see the list; only the repo's **Admin** role can add or remove people.
+4. Optionally edit `pdm.json` in the vault and check it in:
+   - `team`: GitHub username → real name (shown in the app and Discord),
+   - `discordWebhookUrl`: Discord → Server Settings → Integrations → Webhooks → New Webhook → Copy URL.
+
+Only the repo's **Admin** role can invite people (GitHub doesn't let Maintain do it). `scripts/Initialize-Vault.ps1` still works for a repo you created yourself.
+
+`pdm.json` lives in the vault, so you can change names or the webhook later. Edit it in `C:\SolarDevilsVault` and check it in. Everyone picks up the change on their next Get Latest.
 
 ### Part numbering
 
 Click **Numbering** in the toolbar. Set a prefix, digit count, and groups (e.g. 200 Chassis, 300 Suspension, 400 Powertrain, 500 Aero). Saved in `.pdm/numbering.json` so all teammates get it at next Get Latest.
+
+**Names that are only the number.** Tick **Name files only by their number** instead of making groups: our parts and assemblies are then named just by their part number, from one sequence (TLT-001.SLDPRT, TLT-002.SLDASM…), at the top of the vault, and the **Description** says what each one is (DevilDrive asks for one; the app then shows no separate Part Number column). Checking in a new file from SolidWorks asks whether it's **Ours** (it gets the next number and is renamed to it) or **COTS** (bought: it keeps its name and goes in the COTS folder, which you can name). McMaster-style names are guessed as COTS. A new drawing is named after its model (TLT-007.SLDDRW). Import works the same way.
 
 ### Deleting files from the vault
 
@@ -130,13 +163,32 @@ Only files that nothing else uses can be deleted. Teammates use **Request Delete
 - **Delete from Vault… (admin)**: deletes file, index entry, and 3D preview across the team in one check-in.
 - **Reject Delete Request… (admin)**: keeps the file with a reason sent to Discord.
 
-### Who's an admin
+### Who's an admin (and why typing a name doesn't work)
 
-Admins are anyone GitHub lists as **Admin** or **Maintain** on the repository. Admin status cannot be spoofed by modifying local files.
+**Admins are the people GitHub lists as Admin or Maintain on the vault repo. Nothing else counts:** there's no admin list in `pdm.json` anyone could edit. DevilDrive asks GitHub which account each PC is signed in as, using the sign-in Git already saved, so nobody can claim to be someone else by typing a name, and the vault guard checks the same GitHub roles. Settings shows the verified account. If a PC is offline, admin buttons stay hidden until it can check with GitHub.
 
-### Server-side vault guard
+On a **personal** GitHub repo only the owner can be Admin; collaborators can only get Write. To have more admins later, move the vault to a free GitHub **organization** (repo **Settings → Transfer**), then give those people the Admin or Maintain role. Local folders keep working: GitHub redirects the old URL.
 
-Click **Update Vault Setup** if the guard needs installation or repair. It installs a GitHub Actions check (`.github/workflows/vault-guard.yml` + `guard.py`) that undoes any push breaking vault rules, protecting against manual Git commands. Protect the `main` branch on GitHub to disallow force pushes and deletions.
+### Server-side vault guard (stopping people from getting around the app with Git commands)
+
+The app's rules run on each PC, so someone typing raw Git commands could skip them. These steps move the protection onto GitHub, where nobody but you can change it:
+
+1. **Install the vault guard.** In the app, click **Admin → Update Vault Setup** (it warns in the banner for admins whenever the guard is missing or was changed). This adds a GitHub Actions check (`.github/workflows/vault-guard.yml` + `guard.py`) that runs after every push. It uses GitHub's record of who pushed and undoes any push where a non-admin changed `pdm.json`, the frozen list, `.github`, a frozen file, a file someone else has checked out, a file in review, someone else's check-in request or review, or pushed a milestone tag. It posts to Discord when it does. It also warns about force pushes and files saved in a newer SolidWorks than the team's. Pushes it checks show under the repo's **Actions** tab.
+2. **Repo roles.** On GitHub, go to **Settings**, then **Collaborators**. Give teammates **Write** and admins **Admin** (or Maintain).
+3. **Protect `main`.** On GitHub, go to **Settings**, then **Branches**, then **Add rule** for `main`. Leave **Allow force pushes** and **Allow deletions** off, so history can't be rewritten or erased. On a private repo this needs GitHub Pro, which is free with the GitHub Student Developer Pack.
+4. **Test file locks once with two accounts.** Have a teammate check out a file, then try to push a change to it from your account with Git. If GitHub accepts it, the lock was only enforced by the app; the vault guard still catches frozen files but not ordinary check-outs.
+
+The guard is also why the app warns admins if `.github` is changed: it's the one thing a determined person could tamper with, and **Update Vault Setup** puts it back. If the guard is removed or edited, the admin's app also **posts an alert to Discord** (once per change).
+
+**Security notes**
+
+* **Forced unlocks.** GitHub lets anyone with Write access force-unlock a file with raw Git (`git lfs unlock --force`). The app only shows Break Lock to admins, but it can't stop the raw command. What it can do: the vault guard undoes a push that changes a file someone else had checked out, and every version stays in the history. If a lock disappears unexpectedly, look at the repo's **Actions** tab and Discord.
+* **Keep the Discord webhook URL private.** Anyone with it can post messages as the bot. It's stored in `pdm.json`, so everyone with vault access can read it; don't paste it anywhere public. If it leaks, delete the webhook in Discord, make a new one and update `pdm.json`.
+* **The SolidWorks add-in folder** (`C:\ProgramData\DevilDrive\SolidWorksAddin`) can only be changed by Windows administrators, so another account on the PC can't swap in a DLL that SolidWorks would load.
+* **Updates are checked** against the SHA-256 checksums published with each release before they're installed. Turn on **two-factor sign-in** for the GitHub account that publishes releases: whoever controls it can publish an update. (Releases can also be signed with a key kept off GitHub; see *Publishing a release*.)
+* **Force pushes.** The vault guard puts the vault back if anyone but an admin rewrites its history.
+* **Open** only opens data files (CAD, PDFs, pictures, documents). It refuses programs, scripts and shortcuts someone checked in, and asks first for file types it doesn't know.
+* **The one thing the guard can't stop** is a push that removes or changes the guard's own workflow file: GitHub runs the workflow from the pushed commit. DevilDrive notices (banner for admins, Discord alert) and **Update Vault Setup** puts it back, but that push isn't undone. Branch protection (step 3) is the real fix.
 
 ### Breaking a stale lock
 
@@ -152,11 +204,36 @@ Click **Milestones** → **Create** (admin only) to tag the entire vault state (
 
 ### SolidWorks version guard
 
-Set `"solidWorksVersion": 2024` in `pdm.json`. The add-in blocks check-ins of files saved in newer SolidWorks versions to prevent breaking compatibility for teammates.
+Every freeze is a release with the next revision letter: A, B, C, and so on, skipping I, O, Q, S, X and Z as drawing standards do. The letter shows in the **Rev** column and the SolidWorks pane, and the sequence continues after unfreezing and refreezing. **Freezing a drawing from the SolidWorks pane also saves `<name> Rev X.pdf`** next to it, covering all sheets, and checks in and freezes that PDF with the same revision. Freezing from the desktop app gives the revision but no PDF, because making a PDF needs SolidWorks.
+
+### SolidWorks versions
+
+The PDM itself works with any version, and the add-in supports SolidWorks 2020 and newer. Set `"solidWorksVersion": 2024` in `pdm.json`: **SolidWorks files can't be opened in an older SolidWorks than the one that last saved them.** Agree on one SolidWorks version for all vault files (the oldest one anyone uses), or a single save in a newer version locks everyone on the older one out of that file and every assembly that uses it.
+
+### What's tracked
+
+`.gitattributes` makes these **LFS + lockable** (read-only until checked out): `.sldprt .sldasm .slddrw .step .stp .pdf .dxf` (lower- and upper-case). Everything else (spreadsheets, notes, `pdm.json`) is a normal Git file: it's versioned but not lockable, so you edit it and check it in. `.gitignore` excludes SolidWorks temp files (`~$*`) and backups.
+
+### Using it for another project
+
+Nothing in `DevilDrive.exe` hardcodes a repository. For another team or vault:
+
+1. The team lead clicks **Vaults** → **New team vault…** (see *First-time vault setup*). The folder is saved in the vault's `pdm.json` as `localPath`, so everyone who downloads it gets the same folder.
+2. Click **Team** and add your teammates' GitHub usernames. GitHub's invitation leads them to the vault's page with the steps to join.
+3. Members who already have DevilDrive: **Vaults** → **Find my vaults** → pick the vault → **Download and open**. New members download `DevilDrive.exe`, install it, and accept the invitation on the welcome screen.
+
+### Several groups on one PC
+
+One install of DevilDrive works with every group you're in; each group has its own vault (repo and folder).
+
+* **Add a group's vault:** click **Vaults** (next to the vault dropdown), then **Find my vaults**. It lists every GitHub repo you can access that has a `pdm.json`. Pick one and click **Download and open**; it goes into the folder that vault's `pdm.json` names (`localPath`), or `C:\Vaults\<repo name>`. If a group's vault is missing from the list, accept its GitHub invite (check your email) or ask its admin to invite you. A vault that's already on your PC can be added with **Add a folder on this PC…**.
+* **Switch** with the **Vault** dropdown in the app.
+* **In SolidWorks you don't switch at all:** the pane works in whichever vault the open file is in, so you can have two different projects open and the pane follows the active window. Its header shows the vault's name.
+* Each vault has its own admins (from that repo's GitHub roles), frozen files, reviews, milestones and Discord channel. Removing a vault from the list doesn't delete its files.
 
 ### GitHub LFS storage
 
-Monitor usage in GitHub under repository Settings → Billing & Plans → Git LFS data. GitHub provides 10 GB storage and 10 GB/month bandwidth on free accounts; 50 GB data packs can be added if needed for large teams.
+GitHub limits free LFS **storage and bandwidth**, and every Get Latest that downloads CAD files counts toward bandwidth. **Check the current limits** in GitHub's docs before relying on the free tier. DevilDrive shows how much this vault uses (the summary panel, with no file selected) and warns in the banner at 80% of the allowance; set the allowance with `"storageLimitGb"` in `pdm.json` (10 if it isn't there). The figure counts every stored version of this vault's files; GitHub's allowance is per account, across all its repos. You can also watch usage under the repo's *Settings → Billing / Git LFS*. If you outgrow it, a paid data pack, GitLab, or a self-hosted Gitea are drop-in replacements: change the repo URL and nothing else.
 
 </details>
 
@@ -191,6 +268,9 @@ dotnet test tests/Jarvis.Core.Tests
 dotnet run --project src/Jarvis.Client
 ```
 
+Every push and pull request is built and tested on GitHub too (`.github/workflows/ci.yml`: the app and the Core tests; not the add-in, which needs SolidWorks). The app logs what it did and every error it showed to `%LocalAppData%\DevilDrive\app.log` (the add-in: `addin.log`). Set `DEVILDRIVE_THEME` to `Light` or `Dark` to try a look without changing the setting.
+
+The integration tests use a local bare repo in place of GitHub. A local remote has no LFS lock server, so locking itself is only covered by parser and classifier tests. **Test check-out and check-in against a real GitHub test repo before the team relies on it.**
 ### Publishing the app
 
 Run the automated publishing script from PowerShell:
@@ -212,6 +292,12 @@ Outputs generated in `dist/`:
    .\scripts\Release-Client.ps1 -Notes "Release notes here"
    ```
    This builds release artifacts, tags the commit, and creates a GitHub Release on `ZACHARIAgs/DevilDrive`.
+
+### Automatic updates & release signing
+
+The app checks `ZACHARIAgs/DevilDrive` **GitHub Releases** each time it starts, and every few hours while it's open (then an **Update** button appears in the toolbar). When there's a newer version it asks, downloads it (and the SolidWorks add-in, if installed; Windows asks for permission for that part), **checks every file against the release's `SHA256SUMS`**, swaps the exe and restarts.
+
+**Signed releases (optional, off).** `scripts\New-ReleaseKey.ps1` makes a key: the private half goes to `%UserProfile%\.jarvis\release-key.xml` (never in the repo), the public half into `<UpdateKey>` in `Directory.Build.props`, which is baked into the build. Builds with a key only install updates whose `SHA256SUMS` is signed with it (`SHA256SUMS.sig`, made by `Release-Client.ps1`), so even someone who took over the GitHub account couldn't publish one. The catch: lose the private key and installed copies refuse every later update, so everyone has to download a new `DevilDrive.exe` by hand. `<UpdateKey>` is empty for now (checksums only).
 
 ### SolidWorks Add-in Development
 

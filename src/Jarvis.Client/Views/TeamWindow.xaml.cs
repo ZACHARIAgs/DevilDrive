@@ -24,9 +24,9 @@ public partial class TeamWindow : Window
         public TeamMember Member { get; init; } = null!;
         public string Title { get; init; } = "";
         public string Detail { get; init; } = "";
-        public Brush DetailBrush { get; init; } = Brushes.Gray;
+        public Brush DetailBrush { get; init; } = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush");
         public string Initials { get; init; } = "";
-        public Brush AvatarBrush { get; init; } = Brushes.Gray;
+        public Brush AvatarBrush { get; init; } = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush");
         public string ActionText { get; init; } = "";
         public Visibility ActionVisibility { get; init; }
     }
@@ -74,7 +74,7 @@ public partial class TeamWindow : Window
             if (_api == null)
             {
                 var parsed = VaultInvites.ParseRepoUrl(_remoteUrl)
-                             ?? throw new PdmException("This vault isn't on github.com, so Jarvis can't show or change its team. Manage it on the repo's page instead.");
+                             ?? throw new PdmException("This vault isn't on github.com, so DevilDrive can't show or change its team. Manage it on the repo's page instead.");
                 _api = await GitHubApi.SignedInAsync();
                 _me = (await _api.GetUserAsync()).Login;
                 _repo = await _api.GetRepoAsync(parsed.Owner, parsed.Name)
@@ -151,7 +151,8 @@ public partial class TeamWindow : Window
         var lines = new List<string>();
         if (invited.Count > 0)
         {
-            lines.Add($"Invited {string.Join(", ", invited)}. GitHub emailed them; click \"Copy welcome message\" and send them the steps.");
+            lines.Add($"Invited {string.Join(", ", invited)}. GitHub emailed them a link to the vault, whose page shows how to get DevilDrive and join. " +
+                      "(To send the steps yourself too, click \"Copy welcome message\".)");
         }
         if (problems.Count > 0) lines.Add("Couldn't add:\n" + string.Join("\n", problems));
         if (lines.Count == 0) lines.Add("They already have access.");
@@ -166,7 +167,7 @@ public partial class TeamWindow : Window
             ? $"Cancel {name}'s invitation to {_vaultName}?"
             : $"Remove {name} from {_vaultName}?\n\nThey keep the files already on their PC, but can't Get Latest or check in anymore. " +
               "Anything they have checked out stays checked out until an admin uses Break Lock.";
-        if (MessageBox.Show(this, question, "Team", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+        if (ModernMessageBox.Show(this, question, "Team", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
 
         var parts = _repo.FullName.Split('/');
         SetBusy(true, member.IsPending ? "Cancelling the invitation\u2026" : $"Removing {name}\u2026", Muted);

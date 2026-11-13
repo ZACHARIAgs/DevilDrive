@@ -24,7 +24,7 @@ public class PdmException : Exception
 public sealed class VaultOfflineException : PdmException
 {
     public VaultOfflineException(string action, string? detail = null)
-        : base($"Can't reach the vault on GitHub, so Jarvis couldn't {action}. Check your internet connection and try again.", detail)
+        : base($"Can't reach the vault on GitHub, so DevilDrive couldn't {action}. Check your internet connection and try again.", detail)
     {
     }
 
@@ -167,7 +167,7 @@ public sealed class VaultConflictException : PdmException
 public sealed class GitNotFoundException : PdmException
 {
     public GitNotFoundException()
-        : base("Git isn't installed on this PC (or can't be found). Install it from git-scm.com (keep the default options), then restart Jarvis.")
+        : base("Git isn't installed on this PC (or can't be found). Install it from git-scm.com (keep the default options), then restart DevilDrive.")
     {
     }
 

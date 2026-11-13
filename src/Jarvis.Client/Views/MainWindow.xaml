@@ -6,167 +6,202 @@
         Icon="/Assets/vault.ico"
         Height="720" Width="1280" MinHeight="400" MinWidth="800"
         WindowStartupLocation="CenterScreen"
-        Loaded="OnLoaded">
+        Loaded="OnLoaded" PreviewKeyDown="OnWindowKeyDown">
+    <!-- Keyboard shortcuts (also shown in the tooltips and the right-click menu). F1, Ctrl+F and Esc are in the code-behind. -->
     <Window.InputBindings>
         <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+        <KeyBinding Key="G" Modifiers="Ctrl" Command="{Binding GetLatestCommand}" />
+        <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding CheckOutCommand}" />
+        <KeyBinding Key="I" Modifiers="Ctrl" Command="{Binding CheckInCommand}" />
+        <KeyBinding Key="U" Modifiers="Ctrl" Command="{Binding UndoCheckOutCommand}" />
+        <KeyBinding Key="H" Modifiers="Ctrl" Command="{Binding HistoryCommand}" />
+        <KeyBinding Key="E" Modifiers="Ctrl" Command="{Binding ShowInExplorerCommand}" />
+        <KeyBinding Key="F2" Command="{Binding RenameCommand}" />
     </Window.InputBindings>
 
     <DockPanel>
-        <ToolBarTray DockPanel.Dock="Top" IsLocked="True" Margin="6,4,6,2">
-            <ToolBar>
-                <Button AutomationProperties.Name="Get Latest" Command="{Binding GetLatestCommand}"
-                        ToolTip="Download the newest version of every file. Files you've changed are never overwritten.">
+        <!-- Command bar: everyday commands on the left (they move into "..." when the window is narrow);
+             admin tools, the team, settings and help always on the right. -->
+        <DockPanel DockPanel.Dock="Top" Margin="6,4,6,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+                <Button x:Name="UpdateButton" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" AutomationProperties.Name="Update DevilDrive" Click="OnUpdate" Visibility="Collapsed"
+                        ToolTip="A newer version of DevilDrive is ready. It takes about a minute and the app restarts (the SolidWorks add-in updates too).">
                     <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE896;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Get Latest" />
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE896;" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock x:Name="UpdateLabel" Style="{StaticResource ToolLabel}" Text="Update" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" />
                     </StackPanel>
                 </Button>
-                <Separator />
-                <Button AutomationProperties.Name="Check Out" Command="{Binding CheckOutCommand}"
-                        ToolTip="Lock the selected files so only you can edit them, and make them writable.">
-                    <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE72E;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Check Out" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Check In" Command="{Binding CheckInCommand}"
-                        ToolTip="Save the selected files to the vault as a new version (with nothing selected: everything you can check in).">
-                    <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE898;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Check In" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Undo Check Out" Command="{Binding UndoCheckOutCommand}"
-                        ToolTip="Throw away your changes to the selected files and release the check-out.">
-                    <StackPanel MinWidth="80">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7A7;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Undo Check Out" />
-                    </StackPanel>
-                </Button>
-                <Separator />
-                <Button AutomationProperties.Name="Review" Command="{Binding SubmitReviewCommand}" ToolTip="Ask an admin to review and release the selected files.">
-                    <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8FB;" Foreground="#0F766E" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Review" />
-                    </StackPanel>
-                </Button>                <Button AutomationProperties.Name="History" Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one.">
-                    <StackPanel MinWidth="60">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE81C;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="History" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Milestones" Command="{Binding MilestonesCommand}" ToolTip="Snapshots of the whole vault (e.g. design reviews): view the vault as it was.">
-                    <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7C1;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Milestones" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Return to Latest" Command="{Binding ReturnToLatestCommand}" Visibility="{Binding IsViewingMilestone, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Leave the milestone and go back to the newest files.">
-                    <StackPanel MinWidth="80">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72B;" Foreground="#B45309" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Return to Latest" />
-                    </StackPanel>
-                </Button>                <Button AutomationProperties.Name="Refresh" Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
-                    <StackPanel MinWidth="60">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72C;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Refresh" />
-                    </StackPanel>
-                </Button>
-                <Separator />
-                <Button AutomationProperties.Name="Open" Command="{Binding OpenCommand}" ToolTip="Open the selected file (SolidWorks opens it read-only unless it's checked out to you).">
-                    <StackPanel MinWidth="50">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8E5;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Open" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Explorer" Command="{Binding ShowInExplorerCommand}" ToolTip="Show the selected file in Windows Explorer.">
-                    <StackPanel MinWidth="60">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE838;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Explorer" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="McMaster" Command="{Binding AddMcMasterCommand}"
-                        ToolTip="Add a McMaster-Carr part by its part number (goes in COTS\MCMASTER).">
-                    <StackPanel MinWidth="64">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7BF;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="McMaster" />
-                    </StackPanel>
-                </Button>
-                <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                <Button AutomationProperties.Name="Break Lock" Command="{Binding BreakLockCommand}"
+                <Button x:Name="AdminButton" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" AutomationProperties.Name="Admin" Click="OnAdminMenu"
                         Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: release someone else's stale check-out.">
-                    <StackPanel MinWidth="70">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE711;" Foreground="#C62828" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Break Lock" />
+                        ToolTip="Admin tools: break a check-out, ask for a check-in, freeze and unfreeze files, part numbering.">
+                    <StackPanel MinWidth="52">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7EF;" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Admin" />
+                            <TextBlock Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="8" Margin="4,6,0,0" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
+                        </StackPanel>
                     </StackPanel>
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Break Lock" Command="{Binding BreakLockCommand}" ToolTip="Release someone else's stale check-out of the selected file." />
+                            <MenuItem Header="Request Check-In&#x2026;" Command="{Binding RequestCheckInCommand}"
+                                      ToolTip="Have the person who has the selected file checked out check in their last saved version automatically." />
+                            <Separator />
+                            <MenuItem Header="Freeze&#x2026;" Command="{Binding FreezeCommand}" ToolTip="Freeze the selected files (e.g. released for production) so nobody can change them." />
+                            <MenuItem Header="Unfreeze" Command="{Binding UnfreezeCommand}" ToolTip="Make the selected frozen files editable again." />
+                            <Separator />
+                            <MenuItem Header="Numbering&#x2026;" Command="{Binding NumberingCommand}"
+                                      ToolTip="The vault's part-numbering convention (prefix, groups like 200 Turret). New parts get the next free number." />
+                            <MenuItem Header="Update Vault Setup" Command="{Binding UpdateVaultSetupCommand}"
+                                      ToolTip="Install or repair the vault guard on GitHub and the vault's storage rules (only when something needs fixing)." />
+                        </ContextMenu>
+                    </Button.ContextMenu>
                 </Button>
-                <Button AutomationProperties.Name="Update Vault Setup" Command="{Binding UpdateVaultSetupCommand}" Visibility="{Binding HasSetupProblems, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: install or repair the vault guard on GitHub and the vault's storage rules.">
-                    <StackPanel MinWidth="90">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE83D;" Foreground="#B45309" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Update Vault Setup" />
-                    </StackPanel>
-                </Button>                <Button AutomationProperties.Name="Request Check-In" Command="{Binding RequestCheckInCommand}"
-                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: have the person who has this file checked out check in their last saved version automatically.">
-                    <StackPanel MinWidth="80">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE715;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Request Check-In" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Freeze" Command="{Binding FreezeCommand}"
-                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: freeze the selected files (e.g. released for production) so nobody can change them.">
-                    <StackPanel MinWidth="60">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xEA18;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Freeze" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Unfreeze" Command="{Binding UnfreezeCommand}"
-                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: make the selected frozen files editable again.">
-                    <StackPanel MinWidth="60">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE785;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Unfreeze" />
-                    </StackPanel>
-                </Button>
-                <Separator />
-                <Button AutomationProperties.Name="Numbering" Command="{Binding NumberingCommand}"
-                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Admin: the vault's part-numbering convention (prefix, groups like 200 Turret). New parts get the next free number.">
-                    <StackPanel MinWidth="66">
-                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8EF;" />
-                        <TextBlock Style="{StaticResource ToolLabel}" Text="Numbering" />
-                    </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Team" Command="{Binding TeamCommand}" ToolTip="Who has access to this vault. Admins add teammates (by GitHub username) or remove them here.">
-                    <StackPanel MinWidth="56">
+                <Button Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" AutomationProperties.Name="Team" Command="{Binding TeamCommand}"
+                        ToolTip="Who has access to this vault. Admins add teammates (by GitHub username) or remove them here.">
+                    <StackPanel MinWidth="46">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE716;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Team" />
                     </StackPanel>
                 </Button>
-                <Button AutomationProperties.Name="Settings" Command="{Binding SettingsCommand}" ToolTip="Vault folder and your GitHub username.">
-                    <StackPanel MinWidth="60">
+                <Button Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" AutomationProperties.Name="Settings" Command="{Binding SettingsCommand}"
+                        ToolTip="Vault folder, which folders this PC downloads, light or dark look, and the SolidWorks add-in.">
+                    <StackPanel MinWidth="52">
                         <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE713;" />
                         <TextBlock Style="{StaticResource ToolLabel}" Text="Settings" />
                     </StackPanel>
                 </Button>
-            </ToolBar>
-        </ToolBarTray>
+                <Button Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" AutomationProperties.Name="Help" Click="OnHelp"
+                        ToolTip="Common problems (conflicts, files edited without check-out, missing parts...) and how to fix them (F1).">
+                    <StackPanel MinWidth="42">
+                        <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE897;" />
+                        <TextBlock Style="{StaticResource ToolLabel}" Text="Help" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
 
-        <Border DockPanel.Dock="Top" Background="{Binding BannerBrush}" Padding="14,9" Margin="12,0,12,8" CornerRadius="8"
-                BorderBrush="{Binding BannerBorderBrush}" BorderThickness="1"
+            <ToolBarTray IsLocked="True">
+                <ToolBar>
+                    <Button AutomationProperties.Name="Get Latest" Command="{Binding GetLatestCommand}"
+                            ToolTip="Download the newest version of every file. Files you've changed are never overwritten (Ctrl+G).">
+                        <StackPanel MinWidth="70">
+                            <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE896;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Get Latest" />
+                        </StackPanel>
+                    </Button>
+                    <Separator />
+                    <Button AutomationProperties.Name="Check Out" Command="{Binding CheckOutCommand}"
+                            ToolTip="Lock the selected files so only you can edit them, and make them writable (Ctrl+O).">
+                        <StackPanel MinWidth="70">
+                            <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE72E;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Check Out" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Check In" Command="{Binding CheckInCommand}"
+                            ToolTip="Save the selected files to the vault as a new version (with nothing selected: everything you can check in) (Ctrl+I).">
+                        <StackPanel MinWidth="70">
+                            <TextBlock Style="{StaticResource PrimaryToolGlyph}" Text="&#xE898;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Check In" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Undo Check Out" Command="{Binding UndoCheckOutCommand}"
+                            ToolTip="Throw away your changes to the selected files and release the check-out (Ctrl+U). A copy of your version is kept in Backups.">
+                        <StackPanel MinWidth="80">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7A7;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Undo Check Out" />
+                        </StackPanel>
+                    </Button>
+                    <Separator />
+                    <Button AutomationProperties.Name="Review" Command="{Binding SubmitReviewCommand}" ToolTip="Ask an admin to review and release the selected files.">
+                        <StackPanel MinWidth="56">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8FB;" Foreground="{DynamicResource TealBrush}" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Review" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="History" Command="{Binding HistoryCommand}" ToolTip="See every version of the selected file and restore an old one (Ctrl+H).">
+                        <StackPanel MinWidth="56">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE81C;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="History" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Milestones" Command="{Binding MilestonesCommand}" ToolTip="Snapshots of the whole vault (e.g. design reviews): view the vault as it was.">
+                        <StackPanel MinWidth="66">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7C1;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Milestones" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Return to Latest" Command="{Binding ReturnToLatestCommand}" Visibility="{Binding IsViewingMilestone, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Leave the milestone and go back to the newest files.">
+                        <StackPanel MinWidth="80">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72B;" Foreground="{DynamicResource WarningTextBrush}" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Return to Latest" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Refresh" Command="{Binding RefreshCommand}" ToolTip="Update the list and who has what checked out (F5).">
+                        <StackPanel MinWidth="54">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE72C;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Refresh" />
+                        </StackPanel>
+                    </Button>
+                    <Separator />
+                    <Button AutomationProperties.Name="Open" Command="{Binding OpenCommand}" ToolTip="Open the selected file (SolidWorks opens it read-only unless it's checked out to you) (Enter).">
+                        <StackPanel MinWidth="46">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8E5;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Open" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Explorer" Command="{Binding ShowInExplorerCommand}" ToolTip="Show the selected file in Windows Explorer (Ctrl+E).">
+                        <StackPanel MinWidth="56">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE838;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Explorer" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="Import" Command="{Binding ImportCommand}"
+                            ToolTip="Bring someone's SolidWorks files into the vault (e.g. a Pack and Go): renamed to the vault's numbering, assemblies pointed at the copies, checked in as one change. Files the vault already has can be updated with their newer copies.">
+                        <StackPanel MinWidth="52">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE8B5;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="Import" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.Name="McMaster" Command="{Binding AddMcMasterCommand}"
+                            ToolTip="Add a McMaster-Carr part by its part number (goes in COTS\MCMASTER).">
+                        <StackPanel MinWidth="60">
+                            <TextBlock Style="{StaticResource ToolGlyph}" Text="&#xE7BF;" />
+                            <TextBlock Style="{StaticResource ToolLabel}" Text="McMaster" />
+                        </StackPanel>
+                    </Button>
+                </ToolBar>
+            </ToolBarTray>
+        </DockPanel>
+
+        <!-- A thin line across the window while DevilDrive is working (it keeps its place, so nothing jumps). -->
+        <ProgressBar DockPanel.Dock="Top" Height="2" Margin="12,0,12,4" IsIndeterminate="{Binding IsBusy}" Background="Transparent"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToHidden}}" />
+
+        <Border DockPanel.Dock="Top" Padding="14,9" Margin="12,0,12,8" CornerRadius="8"
+                BorderBrush="#1A000000" BorderThickness="1"
                 Visibility="{Binding HasBanner, Converter={StaticResource BoolToVis}}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{DynamicResource BannerInfoBrush}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding BannerKind}" Value="Warning">
+                            <Setter Property="Background" Value="{DynamicResource BannerWarningBrush}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BannerKind}" Value="Error">
+                            <Setter Property="Background" Value="{DynamicResource BannerErrorBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <DockPanel>
-                <TextBlock DockPanel.Dock="Left" Text="{Binding BannerIcon}" FontFamily="{StaticResource IconFont}" FontSize="16"
-                           Foreground="{Binding BannerIconBrush}" Margin="0,1,10,0" VerticalAlignment="Top" />
-                <TextBlock Text="{Binding BannerText}" Foreground="{Binding BannerTextBrush}" TextWrapping="Wrap" LineHeight="20" />
+                <TextBlock DockPanel.Dock="Left" Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="16"
+                           Foreground="{DynamicResource ToolGlyphBrush}" Margin="0,1,10,0" VerticalAlignment="Top" />
+                <TextBlock Text="{Binding BannerText}" TextWrapping="Wrap" LineHeight="20" />
             </DockPanel>
         </Border>
 
-        <DockPanel DockPanel.Dock="Top" Margin="12,4,12,10">
+        <DockPanel DockPanel.Dock="Top" Margin="12,0,12,8">
             <Button AutomationProperties.Name="New Part" Command="{Binding AddPartCommand}" Margin="0,0,10,0"
                     ToolTip="Add SolidWorks parts, assemblies, or drawings. Click to browse.">
                 <StackPanel Orientation="Horizontal">
@@ -174,42 +209,57 @@
                     <TextBlock Text="New Part" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
-            <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{StaticResource MutedTextBrush}"
+            <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource MutedTextBrush}"
                        VerticalAlignment="Center" Margin="2,0,8,0" ToolTip="Vault" />
             <ComboBox Width="220" ItemsSource="{Binding Vaults}" SelectedItem="{Binding SelectedVault}" FontWeight="SemiBold"
                       ToolTip="Switch to another group's vault." />
-            <Button Content="Vaults" Command="{Binding ManageVaultsCommand}" Margin="6,0,16,0"
+            <Button Content="Vaults" Command="{Binding ManageVaultsCommand}" Margin="6,0,12,0"
                     ToolTip="Add another group's vault (from your GitHub repos) or remove one." />
-            <ComboBox DockPanel.Dock="Right" Width="210" Margin="8,0,0,0" SelectedIndex="{Binding FilterIndex}">
-                <ComboBoxItem Content="All files" />
-                <ComboBoxItem Content="Checked out to me" />
-                <ComboBoxItem Content="Checked out by others" />
-                <ComboBoxItem Content="Needs attention" />
-                <ComboBoxItem Content="Newer version in vault" />
-                <ComboBoxItem Content="Frozen" />
-                <ComboBoxItem Content="Not downloaded" />
-                <ComboBoxItem Content="In review" />
-                <ComboBoxItem Content="Delete requested" />
-            </ComboBox>
             <Grid>
-                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Padding="32,5,8,5"
-                         Tag="Search by name, part number, description or any property" />
-                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{StaticResource MutedTextBrush}"
+                <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Padding="32,5,30,5"
+                         Tag="Search by name, description or any property (Ctrl+F)" AutomationProperties.Name="Search" />
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="{DynamicResource MutedTextBrush}"
                            VerticalAlignment="Center" HorizontalAlignment="Left" Margin="11,0,0,0" IsHitTestVisible="False" />
+                <Button Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" HorizontalAlignment="Right" Margin="0,0,4,0" Padding="6,4"
+                        Command="{Binding ClearSearchCommand}" ToolTip="Clear the search (Esc)" AutomationProperties.Name="Clear search"
+                        Visibility="{Binding HasSearchText, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{DynamicResource MutedTextBrush}" />
+                </Button>
             </Grid>
         </DockPanel>
 
+        <!-- Filters with how many files each one has. Empty ones stay hidden. -->
+        <ItemsControl DockPanel.Dock="Top" Margin="12,0,12,2" ItemsSource="{Binding Filters}" Focusable="False">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Button Style="{StaticResource Chip}" ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Label}"
+                            Command="{Binding DataContext.SelectFilterCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                            Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Label}" />
+                            <TextBlock Style="{StaticResource CountBadge}" Text="{Binding CountText}" />
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <StatusBar DockPanel.Dock="Bottom" Margin="6,0,6,2">
-            <StatusBarItem>
-                <ProgressBar Width="80" Height="12" IsIndeterminate="True"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+            <StatusBarItem Visibility="{Binding CanCancel, Converter={StaticResource BoolToVis}}">
+                <Button Content="Cancel" Command="{Binding CancelCommand}" Padding="10,1" MinHeight="22" FontSize="12"
+                        ToolTip="Stop downloading. Nothing in the vault folder has changed yet, and what's already downloaded is kept for next time." />
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
-                <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource FaintTextBrush}" Margin="10,0,0,0"
-                           ToolTip="DevilDrive checks for a newer version each time it starts" />
+                <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource FaintTextBrush}" Margin="10,0,0,0"
+                           ToolTip="DevilDrive checks for a newer version when it starts and every few hours while it's open" />
             </StatusBarItem>
             <StatusBarItem DockPanel.Dock="Right">
-                <TextBlock Text="{Binding InfoText}" Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Text="{Binding InfoText}" Foreground="{DynamicResource MutedTextBrush}" />
             </StatusBarItem>
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
@@ -218,7 +268,7 @@
 
         <Grid Margin="12,0,12,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" MinWidth="140" />
+                <ColumnDefinition Width="200" MinWidth="140" />
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="*" MinWidth="400" />
                 <ColumnDefinition Width="10" />
@@ -226,15 +276,14 @@
             </Grid.ColumnDefinitions>
 
             <!-- Folders: click one to see its files (and its subfolders' files); drag files onto one to move them there. -->
-            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0,6,0,4">
-                <TreeView x:Name="FolderTree" ItemsSource="{Binding Folders}" BorderThickness="0" Background="Transparent"
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="2,6,0,4">
+                <TreeView x:Name="FolderTree" ItemsSource="{Binding Folders}"
                           SelectedItemChanged="OnFolderSelected" AllowDrop="True" DragOver="OnFolderDragOver" Drop="OnFolderDrop"
                           PreviewMouseRightButtonDown="OnFolderRightClick">
                     <TreeView.ItemContainerStyle>
                         <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                            <Setter Property="Padding" Value="4,3" />
                         </Style>
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>
@@ -243,7 +292,7 @@
                                 <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="#D4A017"
                                            VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding CountText}" Opacity="0.65" FontSize="11"
+                                <TextBlock Text="{Binding CountText}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11"
                                            VerticalAlignment="Center" Margin="6,0,0,0" />
                             </StackPanel>
                         </HierarchicalDataTemplate>
@@ -269,59 +318,71 @@
                       Margin="4,0,4,4"
                       SelectionChanged="OnSelectionChanged"
                       MouseDoubleClick="OnGridDoubleClick"
+                      PreviewKeyDown="OnGridKeyDown"
                       PreviewMouseLeftButtonDown="OnGridMouseDown"
                       PreviewMouseLeftButtonUp="OnGridMouseUp"
                       PreviewMouseMove="OnGridMouseMove"
                       AllowDrop="True"
                       DragOver="OnGridDragOver"
-                      Drop="OnGridDrop">
+                      Drop="OnGridDrop"
+                      ContextMenuOpening="OnGridContextMenuOpening">
+                <!-- Grouped, and tidied each time it opens (OnFileMenuOpened): commands that can't apply to the selection are left out. -->
                 <DataGrid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Check Out" Command="{Binding CheckOutCommand}" />
-                        <MenuItem Header="Check In&#x2026;" Command="{Binding CheckInCommand}" />
-                        <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" />
-                        <MenuItem Header="Delete Local File&#x2026;" Command="{Binding DeleteLocalCommand}"
-                                  ToolTip="Delete files that were made on this PC and never checked in" />
-                        <MenuItem Header="Export&#x2026;" Command="{Binding ExportCommand}"
-                                  ToolTip="Copy the files and everything they use to a folder or .zip that opens on any PC (like Pack and Go)" />
-                        <MenuItem Header="Rename&#x2026;" Command="{Binding RenameCommand}"
+                    <ContextMenu Opened="OnFileMenuOpened">
+                        <MenuItem Header="Check Out" Command="{Binding CheckOutCommand}" InputGestureText="Ctrl+O" Tag="keep" />
+                        <MenuItem Header="Check In&#x2026;" Command="{Binding CheckInCommand}" InputGestureText="Ctrl+I" Tag="keep" />
+                        <MenuItem Header="Undo Check Out" Command="{Binding UndoCheckOutCommand}" InputGestureText="Ctrl+U" Tag="keep" />
+                        <Separator />
+                        <MenuItem Header="New Part&#x2026;" Command="{Binding AddPartCommand}" />
+                        <Separator />
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" InputGestureText="Enter" />
+                        <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" InputGestureText="Ctrl+E" />
+                        <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" InputGestureText="Ctrl+H" />
+                        <Separator />
+                        <MenuItem Header="Edit Description&#x2026;" Command="{Binding EditDescriptionCommand}"
+                                  ToolTip="Change what the file is described as; it's saved in the SolidWorks file and checked in" />
+                        <MenuItem Header="Rename&#x2026;" Command="{Binding RenameCommand}" InputGestureText="F2"
                                   ToolTip="Rename the file; assemblies and drawings that use it are updated and checked in with it" />
                         <MenuItem Header="Move to Folder&#x2026;" Command="{Binding MoveToFolderCommand}"
                                   ToolTip="Move the selected files to another folder (or drag them onto a folder on the left)" />
-                        <MenuItem Header="Request Delete&#x2026;" Command="{Binding RequestDeleteCommand}"
-                                  ToolTip="Ask the admins to delete the file from the vault for everyone, and say why" />
-                        <MenuItem Header="Withdraw Delete Request" Command="{Binding WithdrawDeleteRequestCommand}" />
-                        <MenuItem Header="Delete from Vault&#x2026; (admin)" Command="{Binding DeleteFromVaultCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"
-                                  ToolTip="Delete the file for everyone (it goes away at their next Get Latest)" />
-                        <MenuItem Header="Reject Delete Request&#x2026; (admin)" Command="{Binding RejectDeleteRequestCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Export">
+                            <MenuItem Header="Export Files&#x2026;" Command="{Binding ExportCommand}"
+                                      ToolTip="Copy the files and everything they use to a folder or .zip that opens on any PC (like Pack and Go)" />
+                            <MenuItem Header="Export BOM (Excel)&#x2026;" Command="{Binding ExportBomCommand}"
+                                      ToolTip="For an assembly: a parts list (every part at every level, with quantity, description, material and revision) that opens in Excel" />
+                        </MenuItem>
                         <Separator />
-                        <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
-                    <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />
-                    <MenuItem Header="Approve &amp; Release&#x2026; (admin)" Command="{Binding ApproveReviewCommand}"
-                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                    <MenuItem Header="Reject&#x2026; (admin)" Command="{Binding RejectReviewCommand}"
-                              Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                    <Separator />                    <MenuItem Header="Download" Command="{Binding DownloadCommand}" />
-                    <MenuItem Header="Return to Latest Version" Command="{Binding ReturnToLatestVersionCommand}" />
-                    <MenuItem Header="Notify Me When It's Free (on/off)" Command="{Binding WatchCommand}" />
-                    <MenuItem Header="History&#x2026;" Command="{Binding HistoryCommand}" />
-                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-                        <MenuItem Header="Show in Explorer" Command="{Binding ShowInExplorerCommand}" />
-                        <Separator Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Break Lock (admin)" Command="{Binding BreakLockCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Request Check-In&#x2026; (admin)" Command="{Binding RequestCheckInCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Freeze&#x2026; (admin)" Command="{Binding FreezeCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Unfreeze (admin)" Command="{Binding UnfreezeCommand}"
-                                  Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Review">
+                            <MenuItem Header="Submit for Review&#x2026;" Command="{Binding SubmitReviewCommand}" />
+                            <MenuItem Header="Withdraw from Review" Command="{Binding WithdrawReviewCommand}" />
+                            <MenuItem Header="Approve &amp; Release&#x2026; (admin)" Command="{Binding ApproveReviewCommand}" />
+                            <MenuItem Header="Reject&#x2026; (admin)" Command="{Binding RejectReviewCommand}" />
+                        </MenuItem>
+                        <MenuItem Header="Delete">
+                            <MenuItem Header="Delete Local File&#x2026;" Command="{Binding DeleteLocalCommand}"
+                                      ToolTip="Delete files that were made on this PC and never checked in" />
+                            <MenuItem Header="Request Delete&#x2026;" Command="{Binding RequestDeleteCommand}"
+                                      ToolTip="Ask the admins to delete the file from the vault for everyone, and say why" />
+                            <MenuItem Header="Withdraw Delete Request" Command="{Binding WithdrawDeleteRequestCommand}" />
+                            <MenuItem Header="Delete from Vault&#x2026; (admin)" Command="{Binding DeleteFromVaultCommand}"
+                                      ToolTip="Delete the file for everyone (it goes away at their next Get Latest)" />
+                            <MenuItem Header="Reject Delete Request&#x2026; (admin)" Command="{Binding RejectDeleteRequestCommand}" />
+                        </MenuItem>
+                        <MenuItem Header="More">
+                            <MenuItem Header="Download" Command="{Binding DownloadCommand}" ToolTip="Get the real file for one that isn't downloaded to this PC" />
+                            <MenuItem Header="Return to Latest Version" Command="{Binding ReturnToLatestVersionCommand}" />
+                            <MenuItem Header="Notify Me When It's Free (on/off)" Command="{Binding WatchCommand}" />
+                        </MenuItem>
+                        <MenuItem Header="Admin">
+                            <MenuItem Header="Break Lock" Command="{Binding BreakLockCommand}" />
+                            <MenuItem Header="Request Check-In&#x2026;" Command="{Binding RequestCheckInCommand}" />
+                            <MenuItem Header="Freeze&#x2026;" Command="{Binding FreezeCommand}" />
+                            <MenuItem Header="Unfreeze" Command="{Binding UnfreezeCommand}" />
+                        </MenuItem>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="32" CanUserResize="False" SortMemberPath="StateSort">
+                    <DataGridTemplateColumn Width="26" CanUserResize="False" SortMemberPath="StateSort">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding StateGlyph}" Foreground="{Binding StateBrush}" FontSize="14"
@@ -329,31 +390,47 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="230" />
-                    <DataGridTextColumn Header="Part Number" Binding="{Binding PartNumber}" Width="100">
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150" />
+                    <DataGridTextColumn x:Name="PartNumberColumn" Header="Part Number" Binding="{Binding PartNumber}" Width="100">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Style.Triggers>
                                     <!-- No PartNumber property yet: the file name is shown, greyed out. -->
                                     <DataTrigger Binding="{Binding HasPartNumber}" Value="False">
-                                        <Setter Property="Foreground" Value="#8A94A6" />
+                                        <Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}" />
                                         <Setter Property="ToolTip" Value="No PartNumber property yet, showing the file name" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="170" />
-                    <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="210" SortMemberPath="StateSort" />
-                    <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="130" />
+                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" MinWidth="150" />
+                    <!-- A plain "Available" stays quiet; anything else is a colored pill, with the rest of the story beside it. -->
+                    <DataGridTemplateColumn Header="State" Width="180" SortMemberPath="StateSort">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel ToolTip="{Binding StateText}" LastChildFill="True">
+                                    <Border DockPanel.Dock="Left" Background="{Binding StatePillBrush}" CornerRadius="9" Padding="8,1,8,2" VerticalAlignment="Center"
+                                            Visibility="{Binding ShowPill, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="{Binding StateShort}" Foreground="{Binding StateBrush}" FontSize="12" FontWeight="SemiBold" />
+                                    </Border>
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding StateShort}" Foreground="{DynamicResource FaintTextBrush}" VerticalAlignment="Center"
+                                               Visibility="{Binding ShowPill, Converter={StaticResource InverseBoolToVis}}" />
+                                    <TextBlock Text="{Binding StateNote}" Foreground="{DynamicResource MutedTextBrush}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Checked Out By" Binding="{Binding CheckedOutBy}" Width="120" />
                     <DataGridTextColumn Header="Since" Binding="{Binding CheckedOutSince, StringFormat='{}{0:ddd MMM d, h:mm tt}'}" Width="130" />
-                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="70">
+                    <DataGridTextColumn Header="Version" Binding="{Binding VersionText}" SortMemberPath="Version" Width="60">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="ToolTip" Value="Check-ins on this PC / in the vault" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsBehind}" Value="True">
-                                        <Setter Property="Foreground" Value="#C2410C" />
+                                        <Setter Property="Foreground" Value="{DynamicResource WarningTextBrush}" />
                                         <Setter Property="FontWeight" Value="SemiBold" />
                                         <Setter Property="ToolTip" Value="The vault has newer check-ins. Click Get Latest." />
                                     </DataTrigger>
@@ -361,8 +438,8 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="52" />
-                    <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="260" />
+                    <DataGridTextColumn Header="Rev" Binding="{Binding RevisionText}" Width="46" />
+                    <DataGridTextColumn Header="Last Check-In Comment" Binding="{Binding LastComment}" Width="240" />
                     <DataGridTextColumn Header="Checked In By" Binding="{Binding LastCheckedInBy}" Width="120" />
                     <DataGridTextColumn Header="Checked In" Binding="{Binding LastCheckIn, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="115" />
                     <DataGridTextColumn Header="Material" Binding="{Binding Material}" Width="120" />
@@ -373,25 +450,75 @@
 
             <GridSplitter Grid.Column="3" Width="10" HorizontalAlignment="Stretch" />
 
-            <!-- Details panel: preview, state, properties, references -->
+            <!-- Details panel: one file selected shows its preview, state, properties and references; otherwise a summary of the vault. -->
             <Border Grid.Column="4" Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid>
-                        <TextBlock Margin="18" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}"
-                                   Text="Select a file to see its preview and details."
-                                   Visibility="{Binding Details, Converter={StaticResource NullToVis}}" />
+                        <StackPanel Margin="16,16,16,18" Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding SummaryTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SummarySelectionHint}" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding MyCheckOutsHeader}" />
+                            <ItemsControl ItemsSource="{Binding MyCheckOuts}" Focusable="False" Visibility="{Binding HasMyCheckOuts, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,1" /></DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="Nothing. To edit a file, select it and click Check Out." Foreground="{DynamicResource FaintTextBrush}" TextWrapping="Wrap"
+                                       Visibility="{Binding HasMyCheckOuts, Converter={StaticResource InverseBoolToVis}}" />
+
+                            <DockPanel Margin="0,18,0,6">
+                                <Button DockPanel.Dock="Right" Content="Mark as seen" Command="{Binding MarkSeenCommand}" Padding="8,1" MinHeight="22" FontSize="11"
+                                        ToolTip="You've seen these: stop marking them as new."
+                                        Visibility="{Binding HasNewCheckIns, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0" Text="{Binding RecentCheckInsHeader}" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding RecentCheckIns}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,10" ToolTip="{Binding ToolTip}" Background="Transparent">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="13" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- A blue dot marks a check-in that arrived since you last looked. -->
+                                            <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,6,0,0"
+                                                     Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock TextWrapping="Wrap">
+                                                    <Run Text="{Binding Who, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding When, Mode=OneWay}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" />
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Comment}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Files}" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap"
+                                                           Visibility="{Binding HasFiles, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="No check-ins yet." Foreground="{DynamicResource FaintTextBrush}"
+                                       Visibility="{Binding HasRecentCheckIns, Converter={StaticResource InverseBoolToVis}}" />
+
+                            <StackPanel Visibility="{Binding HasStorage, Converter={StaticResource BoolToVis}}" Background="Transparent"
+                                        ToolTip="GitHub file storage (Git LFS) used by this vault's files and every earlier version of them. Each check-in of a CAD file keeps a version, so this only grows. GitHub's allowance is per account, shared by all of its repos.">
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="Storage" />
+                                <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding StoragePercent, Mode=OneWay}" />
+                                <TextBlock Text="{Binding StorageText}" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
                         <StackPanel Margin="16,16,16,18" DataContext="{Binding Details}"
                                     Visibility="{Binding Converter={StaticResource NotNullToVis}}">
-                            <Border Background="{StaticResource SubtleSurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Height="240" ClipToBounds="True">
+                            <Border Background="{DynamicResource SubtleSurfaceBrush}" CornerRadius="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Height="240" ClipToBounds="True">
                                 <Grid>
                                     <Grid Visibility="{Binding ShowPicture, Converter={StaticResource BoolToVis}}">
                                         <Image Source="{Binding Thumbnail}" Stretch="Uniform" Margin="10" RenderOptions.BitmapScalingMode="HighQuality" />
-                                        <TextBlock Text="No preview" Foreground="#9CA3AF" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        <TextBlock Text="No preview" Foreground="{DynamicResource FaintTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                    Visibility="{Binding HasThumbnail, Converter={StaticResource InverseBoolToVis}}" />
                                     </Grid>
                                     <views:ModelViewer Model="{Binding Model}" Margin="1"
                                                        Visibility="{Binding Show3D, Converter={StaticResource BoolToVis}}" />
-                                    <TextBlock Text="Loading 3D preview&#x2026;" Foreground="#6B7280" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    <TextBlock Text="Loading 3D preview&#x2026;" Foreground="{DynamicResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                Visibility="{Binding Loading3D, Converter={StaticResource BoolToVis}}" />
                                 </Grid>
                             </Border>
@@ -401,7 +528,7 @@
                                         Command="{Binding DataContext.Open3DCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                 <Border />
                             </DockPanel>
-                            <TextBlock Text="{Binding PreviewNote}" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding PreviewNote}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
                             <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" Margin="0,14,0,2" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding StateText}" Foreground="{Binding StateBrush}" FontWeight="SemiBold" TextWrapping="Wrap" />
 
@@ -409,8 +536,8 @@
                                           Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="#FDECEC" CornerRadius="6" Padding="8,6" Margin="0,2">
-                                            <TextBlock Text="{Binding}" Foreground="#991B1B" TextWrapping="Wrap" />
+                                        <Border Background="{DynamicResource DangerSoftBrush}" CornerRadius="6" Padding="8,6" Margin="0,2">
+                                            <TextBlock Text="{Binding}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" />
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -442,7 +569,7 @@
                                 </ItemsControl>
                             </StackPanel>
 
-                            <TextBlock Text="{Binding IndexNote}" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0" />
+                            <TextBlock Text="{Binding IndexNote}" Foreground="{DynamicResource FaintTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0" />
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

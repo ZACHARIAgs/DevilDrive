@@ -1,6 +1,5 @@
 using System;
 using System.Windows.Media;
-using Jarvis.Client.Services;
 using Jarvis.Core.Vault;
 
 namespace Jarvis.Client.ViewModels;
@@ -8,25 +7,18 @@ namespace Jarvis.Client.ViewModels;
 /// <summary>One row of the vault view. Updated in place on refresh so selection survives.</summary>
 public sealed class FileRowViewModel : ViewModelBase
 {
-    // Light mode brushes (standard dark-tinted colors on white)
-    private static readonly Brush Green = Frozen(0x2E, 0x7D, 0x32);
-    private static readonly Brush Blue = Frozen(0x15, 0x65, 0xC0);
-    private static readonly Brush Red = Frozen(0xC6, 0x28, 0x28);
-    private static readonly Brush Orange = Frozen(0xEF, 0x6C, 0x00);
-    private static readonly Brush Purple = Frozen(0x6A, 0x1B, 0x9A);
-    private static readonly Brush Gray = Frozen(0x75, 0x75, 0x75);
-    private static readonly Brush Slate = Frozen(0x33, 0x41, 0x55);
-    private static readonly Brush Teal = Frozen(0x0F, 0x76, 0x6E);
+    /// <summary>State colors: [0] for the light look, [1] (lighter, to read on a dark background) for the dark one.</summary>
+    private static readonly Brush[] Green = { Frozen(0x2E, 0x7D, 0x32), Frozen(0x4A, 0xDE, 0x80) };
+    private static readonly Brush[] Blue = { Frozen(0x15, 0x65, 0xC0), Frozen(0x60, 0xA5, 0xFA) };
+    private static readonly Brush[] Red = { Frozen(0xC6, 0x28, 0x28), Frozen(0xF8, 0x71, 0x71) };
+    private static readonly Brush[] Orange = { Frozen(0xEF, 0x6C, 0x00), Frozen(0xFB, 0x92, 0x3C) };
+    private static readonly Brush[] Purple = { Frozen(0x6A, 0x1B, 0x9A), Frozen(0xC0, 0x84, 0xFC) };
+    private static readonly Brush[] Gray = { Frozen(0x75, 0x75, 0x75), Frozen(0x9C, 0xA3, 0xAF) };
+    private static readonly Brush[] Slate = { Frozen(0x33, 0x41, 0x55), Frozen(0xCB, 0xD5, 0xE1) };
+    private static readonly Brush[] Teal = { Frozen(0x0F, 0x76, 0x6E), Frozen(0x2D, 0xD4, 0xBF) };
 
-    // Dark mode brushes (high contrast bright colors on dark zinc)
-    private static readonly Brush DarkGreen = Frozen(0x4A, 0xDE, 0x80);
-    private static readonly Brush DarkBlue = Frozen(0x60, 0xA5, 0xFA);
-    private static readonly Brush DarkRed = Frozen(0xF8, 0x71, 0x71);
-    private static readonly Brush DarkOrange = Frozen(0xFB, 0x92, 0x3C);
-    private static readonly Brush DarkPurple = Frozen(0xC0, 0x84, 0xFC);
-    private static readonly Brush DarkGray = Frozen(0xA1, 0xA1, 0xAA);
-    private static readonly Brush DarkSlate = Frozen(0x94, 0xA3, 0xB8);
-    private static readonly Brush DarkTeal = Frozen(0x2D, 0xD4, 0xBF);
+    /// <summary>The app is in its dark look (set by ThemeManager; rows are refreshed when it changes).</summary>
+    public static bool DarkMode { get; set; }
 
     public FileRowViewModel(VaultFile file)
     {
@@ -90,30 +82,69 @@ public sealed class FileRowViewModel : ViewModelBase
         }
     }
 
-    public Brush StateBrush
+    public Brush StateBrush => StateColors[DarkMode ? 1 : 0];
+
+    private Brush[] StateColors => File.NotDownloaded ? Gray : File.State switch
+    {
+        FileState.Available => File.IsOutdated ? Gray : Green,
+        FileState.CheckedOutByMe => Blue,
+        FileState.CheckedOutByOther => Red,
+        FileState.ModifiedWithoutCheckOut => Orange,
+        FileState.Modified => Orange,
+        FileState.NotInVault => Purple,
+        FileState.Frozen => Slate,
+        FileState.InReview => Teal,
+        _ => Gray,
+    };
+
+    /// <summary>The state color, faint: the background of the state pill.</summary>
+    public Brush StatePillBrush
     {
         get
         {
-            var isDark = ThemeManager.IsDark;
-            var gray = isDark ? DarkGray : Gray;
-            if (File.NotDownloaded) return gray;
-            return File.State switch
-            {
-                FileState.Available => File.IsOutdated ? gray : (isDark ? DarkGreen : Green),
-                FileState.CheckedOutByMe => isDark ? DarkBlue : Blue,
-                FileState.CheckedOutByOther => isDark ? DarkRed : Red,
-                FileState.ModifiedWithoutCheckOut or FileState.Modified => isDark ? DarkOrange : Orange,
-                FileState.NotInVault => isDark ? DarkPurple : Purple,
-                FileState.Frozen => isDark ? DarkSlate : Slate,
-                FileState.InReview => isDark ? DarkTeal : Teal,
-                _ => gray,
-            };
+            var color = ((SolidColorBrush)StateBrush).Color;
+            var brush = new SolidColorBrush(Color.FromArgb(DarkMode ? (byte)0x38 : (byte)0x22, color.R, color.G, color.B));
+            brush.Freeze();
+            return brush;
         }
     }
 
-    public void OnThemeChanged()
+    /// <summary>An ordinary file with nothing to say: "Available" in quiet text instead of a pill.</summary>
+    public bool ShowPill => !(File.State == FileState.Available && File.ExistsLocally && !File.IsOutdated && !File.NotDownloaded && File.PinnedVersion == null);
+
+    /// <summary>The state in a couple of words, for the pill. <see cref="StateText"/> is the whole story (the tooltip and the details panel).</summary>
+    public string StateShort => File.State switch
     {
-        OnPropertyChanged(nameof(StateBrush));
+        FileState.Available => File.NotDownloaded ? "Not downloaded" : !File.ExistsLocally ? "Not on this PC yet" : File.PinnedVersion != null ? $"Using version {File.PinnedVersion.Version}"
+            : File.IsOutdated ? "Newer in vault" : "Available",
+        FileState.CheckedOutByMe => File.HasLocalChanges ? "Checked out to you \u00B7 edited" : "Checked out to you",
+        FileState.CheckedOutByOther => "Checked out by " + File.CheckedOutBy,
+        FileState.Modified => "Edited",
+        FileState.ModifiedWithoutCheckOut => "Edited without check-out",
+        FileState.NotInVault => "New",
+        FileState.MissingLocally => "Deleted on this PC",
+        FileState.InReview => "In review",
+        FileState.Frozen => File.Revision != null ? $"Frozen \u00B7 Rev {File.Revision}" : "Frozen",
+        _ => File.State.ToString(),
+    };
+
+    /// <summary>What goes beside the pill: who and why, and anything else worth knowing about the file.</summary>
+    public string StateNote
+    {
+        get
+        {
+            var notes = new System.Collections.Generic.List<string>();
+            if (File.State == FileState.InReview) notes.Add($"by {File.ReviewSubmittedBy}" + (string.IsNullOrWhiteSpace(File.Review?.Note) ? "" : $": {File.Review!.Note}"));
+            if (File.State == FileState.Frozen) notes.Add($"by {File.FrozenBy}: {File.Freeze?.Reason}" + (File.FreezeLockMissing ? " (lock missing, freeze again!)" : ""));
+            if (File.State != FileState.Available && File.PinnedVersion != null) notes.Add($"using older version {File.PinnedVersion.Version}");
+            if (File.State != FileState.Available && File.IsOutdated && File.ExistsLocally) notes.Add("newer version in vault");
+            if (File.CheckInRequest != null) notes.Add($"check-in requested by {File.CheckInRequestedBy}");
+            if (File.DeleteRequest != null) notes.Add($"delete requested by {File.DeleteRequestedBy}");
+            if (File.State != FileState.Available && File.NotDownloaded) notes.Add("not downloaded");
+            if (File.ChangedSinceDrawing.Count > 0) notes.Add("drawing may be out of date");
+            if (IsWatched) notes.Add("you'll be told when it's free");
+            return string.Join("; ", notes);
+        }
     }
 
     public void Update(VaultFile file)

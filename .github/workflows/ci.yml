@@ -1,0 +1,32 @@
+# Builds Jarvis and runs the Core tests on every push and pull request, so a change that breaks
+# check-out, check-in or the vault guard is caught before a release is built from it.
+# The SolidWorks add-in isn't built here: it needs SolidWorks installed.
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build the app
+        run: dotnet build src/Jarvis.Client/Jarvis.Client.csproj -c Release --nologo
+      - name: Check the vault guard compiles
+        run: python -m py_compile vault-template/.github/vault-guard/guard.py
+      - name: Run the tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+          git lfs install --skip-repo
+          dotnet test tests/Jarvis.Core.Tests -c Release --nologo

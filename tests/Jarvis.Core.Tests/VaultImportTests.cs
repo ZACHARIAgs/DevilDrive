@@ -67,6 +67,72 @@ public sealed class VaultImportTests : IDisposable
         }
     }
 
+    [Fact]
+    public void CopyAndRepoint_UpdatesAVaultFile_AndPointsNewFilesAtIt()
+    {
+        var plate = Source("plate.sldprt", "their newer plate");
+        var top = Source("top.sldasm");
+        var sw = new FakeSolidWorks();
+        sw.Uses[top] = new List<string> { plate };
+        var vaultPlate = Path.Combine(_vault, "TLT-004.sldprt");
+        File.WriteAllText(vaultPlate, "the vault's plate");
+        var newTop = Path.Combine(_vault, "TLT-090.sldasm");
+        sw.CopyOf[newTop] = top;
+
+        var copies = VaultImport.CopyAndRepoint(_vault, new[]
+        {
+            new ImportItem(plate, "TLT-004.sldprt", replaceExisting: true),
+            new ImportItem(top, "TLT-090.sldasm"),
+        }, sw);
+
+        Assert.Equal("their newer plate", File.ReadAllText(vaultPlate));
+        Assert.Equal(new[] { vaultPlate }, sw.Uses[newTop]);
+        Assert.Equal(2, copies.Count);
+    }
+
+    [Fact]
+    public void CopyAndRepoint_WhenItFails_PutsAnUpdatedVaultFileBackAsItWas()
+    {
+        var plate = Source("plate.sldprt", "their newer plate");
+        var top = Source("top.sldasm");
+        var sw = new FakeSolidWorks { Fail = true };
+        sw.Uses[top] = new List<string> { plate };
+        var vaultPlate = Path.Combine(_vault, "TLT-004.sldprt");
+        File.WriteAllText(vaultPlate, "the vault's plate");
+        sw.CopyOf[Path.Combine(_vault, "TLT-090.sldasm")] = top;
+
+        Assert.Throws<PdmException>(() => VaultImport.CopyAndRepoint(_vault, new[]
+        {
+            new ImportItem(plate, "TLT-004.sldprt", replaceExisting: true),
+            new ImportItem(top, "TLT-090.sldasm"),
+        }, sw));
+
+        Assert.Equal("the vault's plate", File.ReadAllText(vaultPlate));
+        Assert.False(File.Exists(Path.Combine(_vault, "TLT-090.sldasm")));
+    }
+
+    [Fact]
+    public void Problems_AnUpdateNeedsItsVaultFile_AndOnlyOneSourceEach()
+    {
+        var items = new[]
+        {
+            new ImportItem(Source("a.sldprt"), "TLT-001.sldprt", replaceExisting: true),
+            new ImportItem(Source("b.sldprt"), "TLT-001.sldprt", replaceExisting: true),
+            new ImportItem(Source("c.sldprt"), "TLT-777.sldprt", replaceExisting: true),
+        };
+        var problems = VaultImport.Problems(items, rel => rel == "TLT-001.sldprt");
+        Assert.Contains(problems, p => p.Contains("would all update TLT-001.sldprt"));
+        Assert.Contains(problems, p => p.Contains("isn't in the vault"));
+        Assert.Equal(2, problems.Count);
+    }
+
+    [Theory]
+    [InlineData(3, 0, "Imported 3 file(s) from Pack")]
+    [InlineData(3, 2, "Imported 3 file(s) and updated 2 file(s) from Pack")]
+    [InlineData(0, 2, "Updated 2 file(s) from Pack")]
+    public void CheckInComment_SaysWhatWasAddedAndUpdated(int added, int updated, string expected) =>
+        Assert.Equal(expected, VaultImport.CheckInComment(added, updated, "Pack"));
+
     private string Source(string name, string content = "x")
     {
         var path = Path.Combine(_source, name);

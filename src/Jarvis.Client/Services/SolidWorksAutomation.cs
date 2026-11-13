@@ -50,7 +50,7 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
         {
             throw new PdmException(teamYear != null
                 ? $"Moving SolidWorks files needs SolidWorks {teamYear} (your team's version) on this PC, to update the assemblies and drawings that use them. " +
-                  "Move them on a PC that has it, or with Rename / Move in SolidWorks' Jarvis pane."
+                  "Move them on a PC that has it, or with Rename / Move in SolidWorks' DevilDrive pane."
                 : "Moving SolidWorks files needs SolidWorks on this PC, to update the assemblies and drawings that use them.");
         }
 
@@ -63,7 +63,7 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or TargetInvocationException)
         {
-            throw new PdmException("SolidWorks didn't start, so the files can't be moved from Jarvis. Use Rename / Move in SolidWorks' Jarvis pane instead.", ex.ToString());
+            throw new PdmException("SolidWorks didn't start, so the files can't be moved from DevilDrive. Use Rename / Move in SolidWorks' DevilDrive pane instead.", ex.ToString());
         }
         var started = Process.GetProcessesByName("SLDWORKS").Select(p => p.Id).Where(id => !before.Contains(id)).ToList();
         var automation = new SolidWorksAutomation(sw, started);
@@ -146,6 +146,121 @@ internal sealed class SolidWorksAutomation : IReferenceEditor, IDisposable
     public void Restore(IReadOnlyDictionary<string, string> movedFullPaths)
     {
         // Nothing was closed, so there's nothing to reopen.
+    }
+
+    /// <summary>
+    /// Writes file-level custom properties (e.g. Description) into a SolidWorks file: opens it hidden, sets them,
+    /// saves and closes it. Refuses a file that's open in SolidWorks, which would save the user's unsaved changes too.
+    /// </summary>
+    public void SetProperties(string fullPath, IReadOnlyDictionary<string, string> properties)
+    {
+        if (IsOpenInSolidWorks(fullPath) || FileUtil.IsInUse(fullPath))
+        {
+            throw new FileInUseException(new[] { fullPath }, "Close it in SolidWorks, then try again.");
+        }
+        var type = Path.GetExtension(fullPath).ToUpperInvariant() switch { ".SLDPRT" => 1, ".SLDASM" => 2, ".SLDDRW" => 3, _ => 0 };
+        if (type == 0) throw new PdmException($"{Path.GetFileName(fullPath)} isn't a SolidWorks file.");
+        Call("DocumentVisible", false, type);
+        object? doc;
+        var openArgs = new object?[] { fullPath, type, 1 /* silent */, "", 0, 0 };
+        try
+        {
+            doc = _sw!.GetType().InvokeMember("OpenDoc6", BindingFlags.InvokeMethod, null, _sw, openArgs, new[] { new ParameterModifier(6) { [4] = true, [5] = true } }, null, null);
+        }
+        finally
+        {
+            Call("DocumentVisible", true, type);
+        }
+        if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(fullPath)} (error {openArgs[4]}).");
+        try
+        {
+            var extension = doc.GetType().InvokeMember("Extension", BindingFlags.GetProperty, null, doc, null)!;
+            var manager = extension.GetType().InvokeMember("CustomPropertyManager", BindingFlags.GetProperty, null, extension, new object[] { "" })!;
+            foreach (var property in properties)
+            {
+                manager.GetType().InvokeMember("Add3", BindingFlags.InvokeMethod, null, manager, new object[] { property.Key, 30 /* text */, property.Value, 2 /* replace the value */ });
+            }
+            var saveArgs = new object?[] { 1 /* silent */, 0, 0 };
+            var saved = doc.GetType().InvokeMember("Save3", BindingFlags.InvokeMethod, null, doc, saveArgs, new[] { new ParameterModifier(3) { [1] = true, [2] = true } }, null, null);
+            if (saved is not true) throw new PdmException($"SolidWorks couldn't save {Path.GetFileName(fullPath)} (error {saveArgs[1]}).");
+        }
+        finally
+        {
+            Call("CloseDoc", fullPath);
+        }
+    }
+
+    private static object? Invoke(object target, string method, params object[] args) =>
+        target.GetType().InvokeMember(method, BindingFlags.InvokeMethod, null, target, args);
+
+    private static object? Get(object target, string property) =>
+        target.GetType().InvokeMember(property, BindingFlags.GetProperty, null, target, null);
+
+    /// <summary>
+    /// Flattened, parts-only bill of materials of an assembly, the same list the SolidWorks pane's Export BOM makes:
+    /// every part at any level, counted per configuration, without suppressed, envelope and excluded-from-BOM
+    /// components (and everything inside them). Opens the assembly hidden and read-only unless it's already open.
+    /// Properties are left empty: the caller fills them from the vault's records.
+    /// </summary>
+    public List<BomLine> GetBom(string assemblyPath)
+    {
+        object? doc = null;
+        try
+        {
+            doc = Call("GetOpenDocumentByName", assemblyPath);
+        }
+        catch (Exception ex) when (ex is COMException or TargetInvocationException)
+        {
+            // Not open.
+        }
+        var openedHere = false;
+        if (doc == null)
+        {
+            const int assembly = 2;
+            // Silent, read-only and lightweight: only the structure is needed, not every part's geometry.
+            var openArgs = new object?[] { assemblyPath, assembly, 1 | 2 | 64 | 128, "", 0, 0 };
+            Call("DocumentVisible", false, assembly);
+            try
+            {
+                doc = _sw!.GetType().InvokeMember("OpenDoc6", BindingFlags.InvokeMethod, null, _sw, openArgs, new[] { new ParameterModifier(6) { [4] = true, [5] = true } }, null, null);
+            }
+            finally
+            {
+                Call("DocumentVisible", true, assembly);
+            }
+            if (doc == null) throw new PdmException($"SolidWorks couldn't open {Path.GetFileName(assemblyPath)} (error {openArgs[4]}).");
+            openedHere = true;
+        }
+        try
+        {
+            var lines = new Dictionary<string, BomLine>(StringComparer.OrdinalIgnoreCase);
+            if (Invoke(doc, "GetComponents", false) is not Array components) return new List<BomLine>();
+            foreach (var component in components)
+            {
+                if (component == null || Excluded(component)) continue;
+                var path = Invoke(component, "GetPathName") as string ?? "";
+                if (!Path.GetExtension(path).Equals(".sldprt", StringComparison.OrdinalIgnoreCase)) continue;
+                var configuration = Get(component, "ReferencedConfiguration") as string ?? "";
+                var key = path + "|" + configuration;
+                if (!lines.TryGetValue(key, out var line)) lines[key] = line = new BomLine { Path = path, Configuration = configuration };
+                line.Quantity++;
+            }
+            return lines.Values.ToList();
+        }
+        finally
+        {
+            if (openedHere) Call("CloseDoc", assemblyPath);
+        }
+    }
+
+    /// <summary>Suppressed, an envelope or excluded from the BOM, itself or through any assembly it sits in.</summary>
+    private static bool Excluded(object component)
+    {
+        for (var c = component; c != null; c = Invoke(c, "GetParent"))
+        {
+            if (Invoke(c, "IsSuppressed") is true || Get(c, "ExcludeFromBOM") is true || Invoke(c, "IsEnvelope") is true) return true;
+        }
+        return false;
     }
 
     private bool IsOpenInSolidWorks(string fullPath)

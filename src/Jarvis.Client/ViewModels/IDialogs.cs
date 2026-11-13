@@ -46,6 +46,8 @@ public sealed class VaultChoice
 public interface IDialogs
 {
     void ShowError(PdmException error);
+    /// <summary>Shows an error that has a one-click way out (the blue <paramref name="fixText"/> button). True if the user chose it.</summary>
+    bool ShowErrorWithFix(PdmException error, string fixText, string fixToolTip);
     void ShowMessage(string title, string message, bool isWarning);
     bool Confirm(string title, string message);
     CheckInRequest? AskCheckIn(string title, string okText, IReadOnlyList<string> files, string defaultComment, bool allowKeepCheckedOut, string? prompt = null, string? footnote = null);
@@ -74,4 +76,15 @@ public interface IDialogs
     ExportOptions? AskExport(string what, string defaultName);
     /// <summary>Prompts to pick one or more files to import into the vault. Null if cancelled.</summary>
     IReadOnlyList<string>? AskOpenFiles(string title, string filter);
+    /// <summary>Asks where to save a file (<paramref name="filter"/> like "CSV for Excel (*.csv)|*.csv"). Null if cancelled.</summary>
+    string? AskSaveFile(string title, string defaultName, string filter);
+    /// <summary>Picks a folder on this PC (outside the vault). Null if cancelled.</summary>
+    string? AskFolderOnDisk(string title);
+    /// <summary>
+    /// The import table (the same as the SolidWorks pane's): each file's group or ours/COTS, name and description.
+    /// Returns what to import, or null if cancelled.
+    /// </summary>
+    IReadOnlyList<(Jarvis.Core.Vault.ImportItem Item, string? PartNumber, string Description)>? AskImport(IReadOnlyList<(string Path, bool FromElsewhere)> files, string sourceFolder,
+        Jarvis.Core.Vault.NumberingScheme? scheme, IReadOnlyList<string> used, IReadOnlyList<string> vaultFolders, System.Func<string, bool> existsInVault,
+        System.Func<string, (string RelativePath, bool Identical)?> vaultMatch);
 }

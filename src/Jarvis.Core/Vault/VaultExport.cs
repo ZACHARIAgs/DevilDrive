@@ -78,7 +78,7 @@ public static class VaultExport
 
     /// <summary>A sensible name for the export: the first chosen file's name, plus "and N more" when there are several.</summary>
     public static string DefaultName(IReadOnlyList<string> selected) =>
-        selected.Count == 0 ? "Jarvis export" :
+        selected.Count == 0 ? "DevilDrive export" :
         System.IO.Path.GetFileNameWithoutExtension(PathList.Name(selected[0])) + (selected.Count > 1 ? $" and {selected.Count - 1} more" : "");
 
     private static bool IsOutside(string reference) => reference.Contains(":") || reference.StartsWith(@"\\", StringComparison.Ordinal);

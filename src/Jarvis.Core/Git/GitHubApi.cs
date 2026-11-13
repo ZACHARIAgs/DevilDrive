@@ -234,7 +234,7 @@ public sealed class GitHubApi
             case 403:
             case 404:
                 throw new PdmException(ownerIsUser
-                        ? "GitHub didn't let Jarvis create a repo on your account. Sign in to GitHub again (the sign-in needs the \"repo\" permission), then try again."
+                        ? "GitHub didn't let DevilDrive create a repo on your account. Sign in to GitHub again (the sign-in needs the \"repo\" permission), then try again."
                         : $"You can't create repos in the {owner} organization. Ask one of its owners to make you an owner, or to allow members to create private repos (organization Settings, Member privileges), or create the vault on your own account.",
                     text);
             default:
@@ -344,7 +344,7 @@ public sealed class GitHubApi
             404 => new PdmException($"The invitation to {invitation.RepoFullName} isn't there any more (it was withdrawn, already accepted, or expired). If you can't find the vault, ask {NameOrTeamLead(invitation)} to invite you again.", text),
             409 => new PdmException($"GitHub couldn't accept the invitation to {invitation.RepoFullName} right now. Try again in a minute.", text),
             401 => new PdmException("Your saved GitHub sign-in has expired. Sign in to GitHub again, then try again.", text),
-            403 => new PdmException($"GitHub didn't let Jarvis accept the invitation. Accept it on https://github.com/{invitation.RepoFullName}/invitations instead. {ErrorMessageOf(text)}", text),
+            403 => new PdmException($"GitHub didn't let DevilDrive accept the invitation. Accept it on https://github.com/{invitation.RepoFullName}/invitations instead. {ErrorMessageOf(text)}", text),
             var code => new PdmException($"GitHub couldn't accept the invitation ({code}: {ErrorMessageOf(text)}).", text),
         };
     }

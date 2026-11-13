@@ -3,19 +3,19 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
-using Jarvis.Client.Services;
 
 namespace Jarvis.Client.Views;
 
 /// <summary>
 /// Gives every window the app's look (Themes/Modern.xaml): the window style for all Window
-/// subclasses, and on Windows 10/11 a title bar in the window's own color with dark mode support.
+/// subclasses, and on Windows 11 a title bar in the window's own color so it blends with the
+/// command bar instead of standing out as a separate strip.
 /// </summary>
 internal static class ModernWindows
 {
+    private const int DarkModeAttribute = 20;     // DWMWA_USE_IMMERSIVE_DARK_MODE (the title bar's buttons)
     private const int CaptionColorAttribute = 35; // DWMWA_CAPTION_COLOR (Windows 11)
     private const int TextColorAttribute = 36;    // DWMWA_TEXT_COLOR
-    private const int ImmersiveDarkModeAttribute = 20; // DWMWA_USE_IMMERSIVE_DARK_MODE
 
     public static void Apply(Application app)
     {
@@ -24,40 +24,26 @@ internal static class ModernWindows
             new FrameworkPropertyMetadata { DefaultValue = app.FindResource("ModernWindow") });
         EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnLoaded));
         WheelScrolling.Apply();
-
-        ThemeManager.ThemeChanged += isDark =>
-        {
-            foreach (Window window in app.Windows)
-            {
-                UpdateTitleBar(window, isDark);
-            }
-        };
     }
 
     private static void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is Window hooked)
-        {
-            WheelScrolling.Attach(hooked);
-            UpdateTitleBar(hooked, ThemeManager.IsDark);
-        }
+        if (sender is Window hooked) WheelScrolling.Attach(hooked);
+        if (sender is Window window) StyleTitleBar(window);
     }
 
-    public static void UpdateTitleBar(Window window, bool isDark)
+    /// <summary>Colors the window's title bar like the window itself (again whenever the look switches between light and dark).</summary>
+    public static void StyleTitleBar(Window window)
     {
+        if (window.Background is not SolidColorBrush background) return;
         try
         {
             var hwnd = new WindowInteropHelper(window).Handle;
             if (hwnd == IntPtr.Zero) return;
-
-            int darkVal = isDark ? 1 : 0;
-            DwmSetWindowAttribute(hwnd, ImmersiveDarkModeAttribute, ref darkVal, sizeof(int));
-
-            var bg = isDark ? Color.FromRgb(0x18, 0x18, 0x1B) : Color.FromRgb(0xF3, 0xF4, 0xF6);
-            var fg = isDark ? Color.FromRgb(0xF4, 0xF4, 0xF5) : Color.FromRgb(0x1F, 0x29, 0x37);
-
-            var caption = ToColorRef(bg);
-            var text = ToColorRef(fg);
+            var dark = ThemeManager.IsDark ? 1 : 0;
+            var caption = ToColorRef(background.Color);
+            var text = ToColorRef(window.TryFindResource("TextBrush") is SolidColorBrush textBrush ? textBrush.Color : Color.FromRgb(0x1F, 0x29, 0x37));
+            DwmSetWindowAttribute(hwnd, DarkModeAttribute, ref dark, sizeof(int));
             DwmSetWindowAttribute(hwnd, CaptionColorAttribute, ref caption, sizeof(int));
             DwmSetWindowAttribute(hwnd, TextColorAttribute, ref text, sizeof(int));
         }

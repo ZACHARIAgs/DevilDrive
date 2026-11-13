@@ -50,7 +50,7 @@ internal sealed class ExportWindow : Window
             Content = new TextBlock { Text = "Keep the vault's folders (otherwise everything goes in one folder, like Pack and Go)", TextWrapping = TextWrapping.Wrap },
             Margin = new Thickness(0, 6, 0, 0),
         };
-        _problem = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+        _problem = new TextBlock { Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("DangerBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
         var ok = new Button { Content = "Export", IsDefault = true, Style = (Style)Application.Current.FindResource("AccentButton"), Padding = new Thickness(14, 4, 14, 4) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Style = dialogButton };

@@ -31,12 +31,7 @@ public sealed partial class MainViewModel : ViewModelBase
     private bool _isBusy;
     private string _statusText = "Starting…";
     private string _bannerText = "";
-    private BannerSeverity _bannerSeverity = BannerSeverity.Info;
-    private Brush _bannerBrush = Frozen(0xEF, 0xF6, 0xFF);
-    private Brush _bannerBorderBrush = Frozen(0xBF, 0xDB, 0xFE);
-    private Brush _bannerTextBrush = Frozen(0x1E, 0x3A, 0x8A);
-    private Brush _bannerIconBrush = Frozen(0x25, 0x63, 0xEB);
-    private string _bannerIcon = "\uE946";
+    private Brush _bannerBrush = InfoBrush;
     private string _searchText = "";
     private int _filterIndex;
     private string _infoText = "";
@@ -45,26 +40,24 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel(IDialogs dialogs)
     {
         _dialogs = dialogs;
-        Jarvis.Client.Services.ThemeManager.ThemeChanged += _ =>
-        {
-            UpdateBannerBrushes();
-            foreach (var row in _rows.Values) row.OnThemeChanged();
-        };
-        UpdateBannerBrushes();
         FilesView = CollectionViewSource.GetDefaultView(Files);
         FilesView.Filter = o => o is FileRowViewModel row && MatchesFilter(row);
         FilesView.SortDescriptions.Add(new SortDescription(nameof(FileRowViewModel.Path), ListSortDirection.Ascending));
         _autoRefresh.Tick += async (_, _) => await RefreshAsync(quiet: true);
 
         GetLatestCommand = new RelayCommand(async () => await GetLatestAsync(), () => CanEdit);
+        CancelCommand = new RelayCommand(() => _cancel?.Cancel(), () => _cancel != null);
         CheckOutCommand = new RelayCommand(async () => await CheckOutAsync(), () => CanEdit && CheckOutTargets().Count > 0);
         CheckInCommand = new RelayCommand(async () => await CheckInAsync(), () => CanEdit && CheckInTargets().Count > 0);
         UndoCheckOutCommand = new RelayCommand(async () => await UndoCheckOutAsync(), () => CanEdit && UndoTargets().Count > 0);
         DeleteLocalCommand = new RelayCommand(async () => await DeleteLocalAsync(), () => CanEdit && DeleteLocalTargets().Count > 0);
         InitializeFolderCommands();
         InitializeExportCommands();
+        InitializeDescriptionCommands();
+        InitializeImportCommands();
         InitializeDeleteCommands();
         InitializeNumberingCommands();
+        InitializeHomeCommands();
         HistoryCommand = new RelayCommand(ShowHistory, () => _vault != null && SingleSelected?.File.State is not (null or FileState.NotInVault));
         RefreshCommand = new RelayCommand(async () => await RefreshAsync(quiet: false), () => CanRun);
         BreakLockCommand = new RelayCommand(async () => await BreakLockAsync(), () => CanEdit && IsAdmin && SingleSelected?.File.Lock != null && SingleSelected.File.State != FileState.Frozen);
@@ -93,6 +86,8 @@ public sealed partial class MainViewModel : ViewModelBase
     public ICollectionView FilesView { get; }
 
     public ICommand GetLatestCommand { get; }
+    /// <summary>Stops the running command, for the ones that can be stopped safely (downloading the latest files).</summary>
+    public ICommand CancelCommand { get; }
     public ICommand CheckOutCommand { get; }
     public ICommand CheckInCommand { get; }
     public ICommand UndoCheckOutCommand { get; }
@@ -167,7 +162,12 @@ public sealed partial class MainViewModel : ViewModelBase
     public DetailsViewModel? Details
     {
         get => _details;
-        private set => Set(ref _details, value);
+        private set
+        {
+            Set(ref _details, value);
+            OnPropertyChanged(nameof(ShowSummary));
+            OnPropertyChanged(nameof(SummarySelectionHint));
+        }
     }
 
     private void UpdateDetails(bool reloadThumbnail)
@@ -453,31 +453,20 @@ public sealed partial class MainViewModel : ViewModelBase
     public Brush BannerBrush
     {
         get => _bannerBrush;
-        private set => Set(ref _bannerBrush, value);
+        private set
+        {
+            if (Set(ref _bannerBrush, value)) OnPropertyChanged(nameof(BannerKind));
+        }
     }
 
-    public Brush BannerBorderBrush
-    {
-        get => _bannerBorderBrush;
-        private set => Set(ref _bannerBorderBrush, value);
-    }
+    /// <summary>"Info", "Warning" or "Error": the window picks the banner's color for the light or dark look from this.</summary>
+    public string BannerKind => _bannerBrush == ErrorBrush ? "Error" : _bannerBrush == WarningBrush ? "Warning" : "Info";
 
-    public Brush BannerTextBrush
+    /// <summary>The look changed (light or dark): rows work out their state colors again.</summary>
+    public void RefreshColors()
     {
-        get => _bannerTextBrush;
-        private set => Set(ref _bannerTextBrush, value);
-    }
-
-    public Brush BannerIconBrush
-    {
-        get => _bannerIconBrush;
-        private set => Set(ref _bannerIconBrush, value);
-    }
-
-    public string BannerIcon
-    {
-        get => _bannerIcon;
-        private set => Set(ref _bannerIcon, value);
+        foreach (var row in Files) row.Update(row.File);
+        UpdateDetails(reloadThumbnail: false);
     }
 
     public bool IsAdmin => _vault?.IsAdmin == true;
@@ -489,9 +478,13 @@ public sealed partial class MainViewModel : ViewModelBase
         get => _searchText;
         set
         {
-            if (Set(ref _searchText, value)) FilesView.Refresh();
+            if (!Set(ref _searchText, value)) return;
+            FilesView.Refresh();
+            OnPropertyChanged(nameof(HasSearchText));
         }
     }
+
+    public bool HasSearchText => _searchText.Length > 0;
 
     /// <summary>0 all, 1 checked out to me, 2 checked out by others, 3 needs attention, 4 updates available.</summary>
     public int FilterIndex
@@ -499,7 +492,9 @@ public sealed partial class MainViewModel : ViewModelBase
         get => _filterIndex;
         set
         {
-            if (Set(ref _filterIndex, value)) FilesView.Refresh();
+            if (!Set(ref _filterIndex, value)) return;
+            FilesView.Refresh();
+            foreach (var chip in Filters) chip.IsSelected = chip.Index == value;
         }
     }
 
@@ -624,6 +619,7 @@ public sealed partial class MainViewModel : ViewModelBase
             var snapshot = await _vault.GetSnapshotAsync(contactVault: true);
             Apply(snapshot);
             StatusText = quiet ? previousStatus : "Ready";
+            _ = LoadHomeAsync();
             if (snapshot.CheckInRequestsForMe > 0) await CarryOutCheckInRequestsAsync();
         }
         catch (PdmException ex)
@@ -658,6 +654,7 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private void Apply(VaultSnapshot snapshot)
     {
+        NameIsNumber = _vault?.LoadNumbering()?.NameIsNumber == true;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in snapshot.Files)
         {
@@ -689,6 +686,8 @@ public sealed partial class MainViewModel : ViewModelBase
         RebuildFolders();
         FilesView.Refresh();
         UpdateDetails(reloadThumbnail: false);
+        UpdateFilterCounts();
+        UpdateSummary();
 
         // Banner: the most important things first.
         var lines = new List<string>();
@@ -735,7 +734,7 @@ public sealed partial class MainViewModel : ViewModelBase
         HasSetupProblems = snapshot.SetupProblems.Count > 0;
         if (HasSetupProblems)
         {
-            lines.Add("Admin: " + string.Join(" ", snapshot.SetupProblems) + " Click Update Vault Setup to fix it.");
+            lines.Add("Admin: " + string.Join(" ", snapshot.SetupProblems) + " Click Admin, then Update Vault Setup to fix it.");
             if (brush != ErrorBrush) brush = WarningBrush;
         }
         _snapshot = snapshot;
@@ -753,6 +752,12 @@ public sealed partial class MainViewModel : ViewModelBase
         if (snapshot.UpdatesAvailable > 0)
         {
             lines.Add($"The vault has {snapshot.UpdatesAvailable} new check-in(s). Click Get Latest.");
+        }
+        if (_storage is { IsNearlyFull: true } storage)
+        {
+            lines.Add($"The vault uses {storage.Text} of GitHub file storage. Every check-in of a CAD file keeps a version, so it only grows: " +
+                      "ask an admin to get more storage on GitHub (or to raise \"storageLimitGb\" in pdm.json if the team already has more).");
+            if (brush != ErrorBrush) brush = WarningBrush;
         }
         SetBanner(string.Join("\n", lines), brush);
 
@@ -775,19 +780,7 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         if (!InSelectedFolder(row)) return false;
         if (SearchText.Length > 0 && !MatchesSearch(row)) return false;
-        var f = row.File;
-        return FilterIndex switch
-        {
-            1 => f.State == FileState.CheckedOutByMe,
-            2 => f.State == FileState.CheckedOutByOther,
-            3 => f.State is FileState.ModifiedWithoutCheckOut or FileState.NotInVault or FileState.Modified or FileState.MissingLocally || f.IsOutdated,
-            4 => f.IsOutdated,
-            5 => f.State == FileState.Frozen,
-            6 => f.NotDownloaded,
-            7 => f.State == FileState.InReview,
-            8 => f.DeleteRequest != null,
-            _ => true,
-        };
+        return MatchesFilterIndex(row.File, FilterIndex);
     }
 
     // ------------------------------------------------------------ commands
@@ -853,9 +846,9 @@ public sealed partial class MainViewModel : ViewModelBase
     private List<FileRowViewModel> UndoTargets() =>
         _selected.Where(r => r.File.State is FileState.CheckedOutByMe or FileState.ModifiedWithoutCheckOut or FileState.Modified or FileState.MissingLocally).ToList();
 
-    private Task GetLatestAsync() => RunAsync("Getting latest…", async (vault, progress) =>
+    private Task GetLatestAsync() => RunCancellableAsync("Getting latest…", async (vault, progress, ct) =>
     {
-        var result = await vault.GetLatestAsync(progress);
+        var result = await vault.GetLatestAsync(progress, ct);
         return result.CheckInsReceived == 0
             ? "Already up to date."
             : $"Got latest: {result.UpdatedFiles.Count} file(s) updated.";
@@ -991,6 +984,17 @@ public sealed partial class MainViewModel : ViewModelBase
     private void OpenSelected()
     {
         if (_vault == null || SingleSelected == null) return;
+        var name = SingleSelected.Name;
+        switch (FileSafety.RiskOf(SingleSelected.Path))
+        {
+            case OpenRisk.Blocked:
+                _dialogs.ShowMessage("Open", $"{name} is a program, script or shortcut, so opening it would run it. DevilDrive doesn't open those.\n\n" +
+                                             "If you know who put it in the vault and trust it, use Explorer to find it and open it there.", isWarning: true);
+                return;
+            case OpenRisk.Ask when !_dialogs.Confirm("Open", $"{name} isn't a file type DevilDrive knows. Open it with whatever Windows uses for it?\n\n" +
+                                                             "Only do this if you know what the file is and who checked it in."):
+                return;
+        }
         try
         {
             Process.Start(new ProcessStartInfo(_vault.ToFullPath(SingleSelected.Path)) { UseShellExecute = true });
@@ -1029,6 +1033,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (request == null) return;
 
         var pathChanged = !string.Equals(settings.VaultPath.TrimEnd('\\'), request.VaultPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        settings = UserSettings.Load(); // the Settings window saved the look (light or dark) itself
         settings.VaultPath = request.VaultPath;
         settings.AddVault(request.VaultPath);
         settings.Save();
@@ -1102,16 +1107,52 @@ public sealed partial class MainViewModel : ViewModelBase
     // ------------------------------------------------------------ plumbing
 
     /// <summary>Runs a vault command with busy state and error dialogs, then refreshes the view.</summary>
-    private async Task RunAsync(string busyText, Func<VaultService, IProgress<string>, Task<string>> operation)
+    private System.Threading.CancellationTokenSource? _cancel;
+
+    /// <summary>True while a command that can be stopped is running (the status bar shows Cancel).</summary>
+    public bool CanCancel => _cancel != null;
+
+    private Task RunAsync(string busyText, Func<VaultService, IProgress<string>, Task<string>> operation) =>
+        RunCoreAsync(busyText, (vault, progress, _) => operation(vault, progress), cancellable: false);
+
+    /// <summary>Like <see cref="RunAsync"/>, for a command the user may stop part-way; it must leave the vault folder untouched when cancelled.</summary>
+    private Task RunCancellableAsync(string busyText, Func<VaultService, IProgress<string>, System.Threading.CancellationToken, Task<string>> operation) =>
+        RunCoreAsync(busyText, operation, cancellable: true);
+
+    private async Task RunCoreAsync(string busyText, Func<VaultService, IProgress<string>, System.Threading.CancellationToken, Task<string>> operation, bool cancellable)
     {
-        if (_vault == null || IsBusy) return;
+        // The background refresh can start while a dialog is open: wait for it, rather than dropping what the user just confirmed.
+        for (var waited = 0; IsBusy && waited < 1200; waited++) await Task.Delay(100);
+        if (_vault == null) return;
+        if (IsBusy)
+        {
+            StatusText = "DevilDrive is still busy. Try again in a moment.";
+            return;
+        }
         IsBusy = true;
         StatusText = busyText;
         var progress = new Progress<string>(s => StatusText = s);
         var finalStatus = "Ready";
+        IReadOnlyList<string>? conflictFix = null;
+        if (cancellable)
+        {
+            _cancel = new System.Threading.CancellationTokenSource();
+            OnPropertyChanged(nameof(CanCancel));
+        }
         try
         {
-            finalStatus = await operation(_vault, progress);
+            finalStatus = await operation(_vault, progress, _cancel?.Token ?? default);
+        }
+        catch (OperationCanceledException)
+        {
+            finalStatus = "Cancelled. Nothing in the vault folder was changed.";
+        }
+        catch (VaultConflictException ex) when (ex.Paths.Count > 0)
+        {
+            // Files changed on this PC that also have a newer version in the vault: offer the way out in one click.
+            finalStatus = ex.Title;
+            if (_dialogs.ShowErrorWithFix(ex, "Keep copies, get the vault's",
+                    "Saves a copy of your version of each of these files in the Backups folder, puts the vault's version in place, and gets latest. Nothing is lost.")) conflictFix = ex.Paths;
         }
         catch (PdmException ex)
         {
@@ -1125,11 +1166,22 @@ public sealed partial class MainViewModel : ViewModelBase
         }
         finally
         {
+            if (_cancel != null)
+            {
+                _cancel.Dispose();
+                _cancel = null;
+                OnPropertyChanged(nameof(CanCancel));
+            }
             IsBusy = false;
         }
 
         await RefreshAsync(quiet: true);
         StatusText = finalStatus;
+        if (conflictFix != null)
+        {
+            await RunAsync("Keeping copies of your versions…", async (vault, progress) =>
+                Report(await vault.KeepCopiesAndGetLatestAsync(conflictFix, progress), "Got the vault's version of"));
+        }
     }
 
     /// <summary>Shows failures and warnings from a multi-file command; returns the status-bar text.</summary>
@@ -1167,78 +1219,7 @@ public sealed partial class MainViewModel : ViewModelBase
     private void SetBanner(string text, Brush brush)
     {
         BannerText = text;
-        var severity = brush == ErrorBrush ? BannerSeverity.Error :
-                       brush == WarningBrush ? BannerSeverity.Warning :
-                       BannerSeverity.Info;
-        SetBanner(text, severity);
-    }
-
-    public enum BannerSeverity { Info, Warning, Error }
-
-    private void SetBanner(string text, BannerSeverity severity)
-    {
-        BannerText = text;
-        _bannerSeverity = severity;
-        UpdateBannerBrushes();
-    }
-
-    private void UpdateBannerBrushes()
-    {
-        var isDark = Jarvis.Client.Services.ThemeManager.IsDark;
-        if (isDark)
-        {
-            switch (_bannerSeverity)
-            {
-                case BannerSeverity.Error:
-                    BannerBrush = Frozen(0x45, 0x0A, 0x0A);
-                    BannerBorderBrush = Frozen(0xB9, 0x1C, 0x1C);
-                    BannerTextBrush = Frozen(0xFE, 0xE2, 0xE2);
-                    BannerIconBrush = Frozen(0xF8, 0x71, 0x71);
-                    BannerIcon = "\uEA39";
-                    break;
-                case BannerSeverity.Warning:
-                    BannerBrush = Frozen(0x45, 0x1A, 0x03);
-                    BannerBorderBrush = Frozen(0xB4, 0x53, 0x09);
-                    BannerTextBrush = Frozen(0xFE, 0xF3, 0xC7);
-                    BannerIconBrush = Frozen(0xFB, 0xBF, 0x24);
-                    BannerIcon = "\uE7BA";
-                    break;
-                default:
-                    BannerBrush = Frozen(0x17, 0x25, 0x54);
-                    BannerBorderBrush = Frozen(0x1D, 0x4E, 0xD8);
-                    BannerTextBrush = Frozen(0xDB, 0xEA, 0xFE);
-                    BannerIconBrush = Frozen(0x60, 0xA5, 0xFA);
-                    BannerIcon = "\uE946";
-                    break;
-            }
-        }
-        else
-        {
-            switch (_bannerSeverity)
-            {
-                case BannerSeverity.Error:
-                    BannerBrush = Frozen(0xFE, 0xF2, 0xF2);
-                    BannerBorderBrush = Frozen(0xFE, 0xCA, 0xCA);
-                    BannerTextBrush = Frozen(0x7F, 0x1D, 0x1D);
-                    BannerIconBrush = Frozen(0xDC, 0x26, 0x26);
-                    BannerIcon = "\uEA39";
-                    break;
-                case BannerSeverity.Warning:
-                    BannerBrush = Frozen(0xFF, 0xFB, 0xEB);
-                    BannerBorderBrush = Frozen(0xFD, 0xE6, 0x8A);
-                    BannerTextBrush = Frozen(0x78, 0x35, 0x0F);
-                    BannerIconBrush = Frozen(0xD9, 0x77, 0x06);
-                    BannerIcon = "\uE7BA";
-                    break;
-                default:
-                    BannerBrush = Frozen(0xEF, 0xF6, 0xFF);
-                    BannerBorderBrush = Frozen(0xBF, 0xDB, 0xFE);
-                    BannerTextBrush = Frozen(0x1E, 0x3A, 0x8A);
-                    BannerIconBrush = Frozen(0x25, 0x63, 0xEB);
-                    BannerIcon = "\uE946";
-                    break;
-            }
-        }
+        BannerBrush = brush;
     }
 
     private static Brush Frozen(byte r, byte g, byte b)

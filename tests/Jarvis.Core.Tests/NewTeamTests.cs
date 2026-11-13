@@ -115,7 +115,7 @@ public class NewTeamTests
     {
         var files = VaultCreator.TemplateFiles("Club Vault", @"C:\ClubVault", 2024);
 
-        Assert.Equal(new[] { ".gitattributes", ".github/vault-guard/guard.py", ".github/workflows/vault-guard.yml", ".gitignore", "pdm.json" },
+        Assert.Equal(new[] { ".gitattributes", ".github/README.md", ".github/vault-guard/guard.py", ".github/workflows/vault-guard.yml", ".gitignore", "pdm.json" },
             files.Keys.OrderBy(k => k, StringComparer.Ordinal));
         Assert.Contains("*.sldprt filter=lfs diff=lfs merge=lfs -text lockable", files[".gitattributes"]);
         Assert.Contains(VaultSetup.PreviewAttributesRule, files[".gitattributes"]);

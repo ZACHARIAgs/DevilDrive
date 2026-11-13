@@ -49,23 +49,55 @@ public sealed class ReleaseInfo
 /// <summary>
 /// Automatic updates from GitHub Releases on the app's code repo. Every release carries SHA256SUMS;
 /// a download is used only if its SHA-256 matches, so a corrupted or swapped file is never installed.
+/// SHA256SUMS itself is signed (SHA256SUMS.sig) with a key that is kept off GitHub; the matching public key is
+/// baked into the build, so even someone who took over the GitHub account can't publish an update this app installs.
 /// Works with a private code repo too: requests use the GitHub sign-in Git already has, so teammates
 /// need read access to the code repo (or the repo can be public).
 /// </summary>
 public sealed class Updater
 {
     public const string ChecksumsFile = "SHA256SUMS";
+    /// <summary>RSA signature (base64) of <see cref="ChecksumsFile"/>, made by scripts\Release-Client.ps1.</summary>
+    public const string SignatureFile = "SHA256SUMS.sig";
     public const string AppAsset = "DevilDrive.exe";
     public const string AddinAsset = "DevilDrive-SolidWorksAddin.zip";
 
     private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     private readonly string _repo;
+    private readonly string? _publicKey;
     private string? _token;
 
     /// <param name="repo">owner/name of the code repo.</param>
-    public Updater(string repo)
+    /// <param name="publicKey">The release-signing public key ("modulus.exponent", base64). Null or empty: releases aren't signed, only checksums are checked.</param>
+    public Updater(string repo, string? publicKey = null)
     {
         _repo = repo;
+        _publicKey = string.IsNullOrWhiteSpace(publicKey) ? null : publicKey!.Trim();
+    }
+
+    /// <summary>The updater for this build (its code repo and signing key), or null for a build that doesn't know where its updates come from.</summary>
+    public static Updater? ForBuild(Assembly assembly) =>
+        BuiltInRepo(assembly) is { } repo ? new Updater(repo, BuiltInKey(assembly)) : null;
+
+    /// <summary>The public key releases must be signed with (UpdateKey in Directory.Build.props), or null if this build doesn't check signatures.</summary>
+    public static string? BuiltInKey(Assembly assembly) =>
+        assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "UpdateKey")?.Value is { Length: > 0 } key ? key : null;
+
+    /// <summary>True if <paramref name="signatureBase64"/> is the RSA (PKCS#1, SHA-256) signature of <paramref name="data"/> by the key "modulus.exponent".</summary>
+    public static bool VerifySignature(string publicKey, byte[] data, string signatureBase64)
+    {
+        try
+        {
+            var parts = publicKey.Trim().Split('.');
+            if (parts.Length != 2) return false;
+            using var rsa = RSA.Create();
+            rsa.ImportParameters(new RSAParameters { Modulus = Convert.FromBase64String(parts[0]), Exponent = Convert.FromBase64String(parts[1]) });
+            return rsa.VerifyData(data, Convert.FromBase64String(signatureBase64.Trim()), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        }
+        catch (Exception ex) when (ex is FormatException || ex is CryptographicException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The code repo this build updates from (set in Directory.Build.props, baked into the build so a vault file can't redirect it).</summary>
@@ -126,28 +158,53 @@ public sealed class Updater
     /// </summary>
     public async Task<string> DownloadVerifiedAsync(ReleaseInfo release, string assetName, string folder, IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        var asset = release.Find(assetName) ?? throw new PdmException($"Release {release.Tag} has no {assetName}.");
-        var sumsAsset = release.Find(ChecksumsFile) ?? throw new PdmException($"Release {release.Tag} has no {ChecksumsFile}, so the download can't be checked. Not installing it.");
+        var bytes = await DownloadVerifiedBytesAsync(release, assetName, progress, ct).ConfigureAwait(false);
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, assetName);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
 
-        var sums = ParseChecksums(Utf8(await DownloadBytesAsync(sumsAsset, ct).ConfigureAwait(false)));
+    /// <summary>
+    /// Downloads one release file and checks it, in memory, against the release's (signed) SHA256SUMS.
+    /// Throws if the checksum or signature is missing or doesn't match. Nothing is written to disk.
+    /// </summary>
+    public async Task<byte[]> DownloadVerifiedBytesAsync(ReleaseInfo release, string assetName, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var asset = release.Find(assetName) ?? throw new PdmException($"Release {release.Tag} has no {assetName}.");
+        var sums = await GetChecksumsAsync(release, ct).ConfigureAwait(false);
         if (!sums.TryGetValue(assetName, out var expected))
         {
             throw new PdmException($"{ChecksumsFile} in release {release.Tag} has no entry for {assetName}. Not installing it.");
         }
 
-        Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, assetName);
         progress?.Report($"Downloading {assetName} ({asset.Size / 1048576.0:0.#} MB)\u2026");
-        File.WriteAllBytes(path, await DownloadBytesAsync(asset, ct).ConfigureAwait(false));
-
-        var actual = Sha256(path);
+        var bytes = await DownloadBytesAsync(asset, ct).ConfigureAwait(false);
+        var actual = Sha256(bytes);
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
         {
-            File.Delete(path);
             throw new PdmException($"The downloaded {assetName} doesn't match its checksum, so it wasn't installed. Try again later, or tell an admin.",
                 $"expected {expected}, got {actual}");
         }
-        return path;
+        return bytes;
+    }
+
+    /// <summary>The release's SHA256SUMS (file name to hash), after checking its signature when this build has a signing key.</summary>
+    private async Task<Dictionary<string, string>> GetChecksumsAsync(ReleaseInfo release, CancellationToken ct)
+    {
+        var sumsAsset = release.Find(ChecksumsFile) ?? throw new PdmException($"Release {release.Tag} has no {ChecksumsFile}, so the download can't be checked. Not installing it.");
+        var sums = await DownloadBytesAsync(sumsAsset, ct).ConfigureAwait(false);
+        if (_publicKey != null)
+        {
+            var signatureAsset = release.Find(SignatureFile)
+                                 ?? throw new PdmException($"Release {release.Tag} isn't signed (it has no {SignatureFile}), so DevilDrive can't tell it's genuine. Not installing it. Tell whoever maintains DevilDrive.");
+            var signature = Utf8(await DownloadBytesAsync(signatureAsset, ct).ConfigureAwait(false));
+            if (!VerifySignature(_publicKey, sums, signature))
+            {
+                throw new PdmException($"Release {release.Tag} isn't signed with DevilDrive's release key, so it may not be genuine. Not installing it. Tell whoever maintains DevilDrive.");
+            }
+        }
+        return ParseChecksums(Utf8(sums));
     }
 
     /// <summary>
@@ -189,6 +246,12 @@ public sealed class Updater
         using var sha = SHA256.Create();
         using var stream = File.OpenRead(path);
         return string.Concat(sha.ComputeHash(stream).Select(b => b.ToString("x2")));
+    }
+
+    public static string Sha256(byte[] bytes)
+    {
+        using var sha = SHA256.Create();
+        return string.Concat(sha.ComputeHash(bytes).Select(b => b.ToString("x2")));
     }
 
     private static string Utf8(byte[] bytes) => System.Text.Encoding.UTF8.GetString(bytes);

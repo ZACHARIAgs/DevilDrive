@@ -19,8 +19,20 @@ internal sealed class NumberingWindow : Window
     private readonly ComboBox _digits = new ComboBox { Width = 60 };
     private readonly TextBox _nameSeparator = new TextBox { Width = 40 };
     private readonly StackPanel _groups = new StackPanel();
+    private readonly CheckBox _nameIsNumber = new CheckBox
+    {
+        Content = new TextBlock
+        {
+            Text = "Name files only by their number (TLT-001.SLDPRT, TLT-002.SLDASM\u2026), one sequence with no groups. The description says what each one is; bought parts keep their names in a COTS folder.",
+            TextWrapping = TextWrapping.Wrap,
+        },
+        Margin = new Thickness(0, 10, 0, 0),
+    };
+    private readonly TextBox _cotsFolder = new TextBox { Width = 160 };
+    private readonly StackPanel _groupSection = new StackPanel();
+    private readonly WrapPanel _cotsSection = new WrapPanel { Margin = new Thickness(22, 6, 0, 0) };
     private readonly TextBlock _example = new TextBlock { Margin = new Thickness(0, 10, 0, 0), FontWeight = FontWeights.SemiBold };
-    private readonly TextBlock _problem = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _problem = new TextBlock { Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("DangerBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
 
     public NumberingWindow(NumberingScheme? current)
     {
@@ -40,6 +52,13 @@ internal sealed class NumberingWindow : Window
         foreach (var group in scheme.Groups.OrderBy(g => g.Number)) AddGroupRow(group.Number.ToString(CultureInfo.InvariantCulture), group.Name);
         foreach (var box in new Control[] { _prefix, _separator, _nameSeparator }) ((TextBox)box).TextChanged += (_, _) => UpdateExample();
         _digits.SelectionChanged += (_, _) => UpdateExample();
+        _nameIsNumber.IsChecked = scheme.NameIsNumber;
+        _cotsFolder.Text = scheme.CotsFolder;
+        _nameIsNumber.Checked += (_, _) => UpdateExample();
+        _nameIsNumber.Unchecked += (_, _) => UpdateExample();
+        _cotsFolder.TextChanged += (_, _) => UpdateExample();
+        _cotsSection.Children.Add(new TextBlock { Text = "COTS folder", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        _cotsSection.Children.Add(_cotsFolder);
 
         var settings = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         void Field(string label, Control control)
@@ -51,7 +70,11 @@ internal sealed class NumberingWindow : Window
         Field("Prefix", _prefix);
         Field("then", _separator);
         Field("Digits", _digits);
-        Field("before the name", _nameSeparator);
+        var nameSeparatorLabel = new TextBlock { Text = "before the name", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        settings.Children.Add(nameSeparatorLabel);
+        _nameSeparator.Margin = new Thickness(0, 0, 16, 4);
+        settings.Children.Add(_nameSeparator);
+        _nameSeparatorParts = new UIElement[] { nameSeparatorLabel, _nameSeparator };
 
         var addGroup = new Button { Content = "Add a group", HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(0, 4, 0, 0) };
         addGroup.Click += (_, _) =>
@@ -93,15 +116,18 @@ internal sealed class NumberingWindow : Window
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock
         {
-            Text = "When someone checks in a new part from SolidWorks, Jarvis asks which group it belongs to, gives it the next free number " +
+            Text = "When someone checks in a new part from SolidWorks, DevilDrive asks which group it belongs to, gives it the next free number " +
                    "(written into its PartNumber property) and offers to rename the file to match. Everyone in the vault gets this setting.",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = System.Windows.Media.Brushes.DimGray,
+            Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush"),
         });
         panel.Children.Add(settings);
-        panel.Children.Add(new TextBlock { Text = "Groups (number and name)", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
-        panel.Children.Add(_groups);
-        panel.Children.Add(addGroup);
+        panel.Children.Add(_nameIsNumber);
+        panel.Children.Add(_cotsSection);
+        _groupSection.Children.Add(new TextBlock { Text = "Groups (number and name)", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
+        _groupSection.Children.Add(_groups);
+        _groupSection.Children.Add(addGroup);
+        panel.Children.Add(_groupSection);
         panel.Children.Add(_example);
         panel.Children.Add(_problem);
         panel.Children.Add(buttons);
@@ -116,6 +142,8 @@ internal sealed class NumberingWindow : Window
     public bool Removed { get; private set; }
 
     private int Digit() => _digits.SelectedItem is int d ? d : 3;
+
+    private readonly UIElement[] _nameSeparatorParts;
 
     private void AddGroupRow(string number, string name)
     {
@@ -153,15 +181,21 @@ internal sealed class NumberingWindow : Window
         Separator = _separator.Text,
         Digits = Digit(),
         NameSeparator = _nameSeparator.Text.Length == 0 ? "_" : _nameSeparator.Text,
-        Groups = Groups(),
+        NameIsNumber = _nameIsNumber.IsChecked == true,
+        CotsFolder = _cotsFolder.Text.Trim().Replace('\\', '/').Trim('/'),
+        Groups = _nameIsNumber.IsChecked == true ? new List<NumberGroup> { NumberingScheme.Sequence } : Groups(),
     };
 
     private void UpdateExample()
     {
+        var nameIsNumber = _nameIsNumber.IsChecked == true;
+        _groupSection.Visibility = nameIsNumber ? Visibility.Collapsed : Visibility.Visible;
+        _cotsSection.Visibility = nameIsNumber ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var part in _nameSeparatorParts) part.Visibility = nameIsNumber ? Visibility.Collapsed : Visibility.Visible;
         var scheme = Build();
         _problem.Text = "";
-        _example.Text = scheme.Problem() == null
-            ? "Example: " + scheme.Example() + "  (groups: " + string.Join(", ", scheme.Groups.OrderBy(g => g.Number).Select(g => $"{scheme.Format(scheme.RangeOf(g).First)}\u2026 {g.Name}")) + ")"
-            : "";
+        _example.Text = scheme.Problem() != null ? ""
+            : nameIsNumber ? $"Example: {scheme.Format(1)}.SLDPRT, {scheme.Format(2)}.SLDASM\u2026" + (scheme.CotsFolder.Length > 0 ? $"; bought parts go in {scheme.CotsFolder}" : "")
+            : "Example: " + scheme.Example() + "  (groups: " + string.Join(", ", scheme.Groups.OrderBy(g => g.Number).Select(g => $"{scheme.Format(scheme.RangeOf(g).First)}\u2026 {g.Name}")) + ")";
     }
 }

@@ -36,6 +36,14 @@ public sealed class VaultConfig
     /// </summary>
     public int? SolidWorksVersion { get; set; }
 
+    public const double DefaultStorageLimitGb = 10;
+
+    /// <summary>
+    /// How much GitHub file storage (Git LFS) the team has, in GB. Jarvis shows how much of it the vault uses and
+    /// warns when it's nearly full. GitHub's allowance is per account, shared by all of that account's repos.
+    /// </summary>
+    public double StorageLimitGb { get; set; } = DefaultStorageLimitGb;
+
     /// <summary>Ask before checking in files that look like exports (STEP, PDF, DXF, ...).</summary>
     public bool WarnOnExports { get; set; } = true;
 
@@ -92,13 +100,23 @@ public sealed class VaultConfig
         }
     }
 
+    /// <summary>A remote or branch name made of letters, digits, dot, dash and underscore (branches may have slashes): never a URL, a path or an option.</summary>
+    public static bool IsPlainGitName(string? name, bool allowSlash)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name!.Length > 100) return false;
+        if (!char.IsLetterOrDigit(name[0]) || name.Contains("..") || name.EndsWith("/", StringComparison.Ordinal) || name.EndsWith(".", StringComparison.Ordinal)) return false;
+        return name.All(c => (c < 128 && char.IsLetterOrDigit(c)) || c == '.' || c == '-' || c == '_' || (allowSlash && c == '/'));
+    }
+
     private void Normalize()
     {
         Team = new Dictionary<string, string>(Team ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
         Admins ??= new List<string>();
         Notify ??= new NotifySettings();
-        if (string.IsNullOrWhiteSpace(Remote)) Remote = "origin";
-        if (string.IsNullOrWhiteSpace(Branch)) Branch = "main";
+        // These go to Git as arguments. Only plain names are accepted, so a changed pdm.json can't point
+        // Get Latest and check-ins at another address (a URL or network path) or slip Git an option.
+        if (!IsPlainGitName(Remote, allowSlash: false)) Remote = "origin";
+        if (!IsPlainGitName(Branch, allowSlash: true)) Branch = "main";
         if (string.IsNullOrWhiteSpace(VaultName)) VaultName = "Team Vault";
     }
 }

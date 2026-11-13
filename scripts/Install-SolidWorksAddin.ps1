@@ -15,7 +15,10 @@
 param(
     [string]$Source,
     [switch]$Uninstall,
-    [switch]$Elevated
+    [switch]$Elevated,
+    # "name.dll=<sha256>;name2.dll=<sha256>": what the installed files must be. Jarvis passes this when it installs
+    # the add-in from a release, so files swapped in the Temp folder after they were checked are never registered.
+    [string]$Hashes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,13 +95,15 @@ try {
         # Earlier installers could leave the files with no permissions at all; take them back and reset them.
         & takeown.exe /F $InstallDir /A /R /D Y *> $null
         & icacls.exe $InstallDir /reset /T /C /Q | Out-Null
-        Copy-Item (Join-Path $Source '*.dll') $InstallDir -Force
-        Get-ChildItem $InstallDir | Unblock-File
         # Only administrators (and Windows) may change the add-in files; everyone else can only read them.
         # Otherwise another account on this PC could drop a DLL here that SolidWorks would load.
-        # Set on the folder only; the files then inherit it (inheritance flags on files would leave them unreadable).
+        # Set on the folder only, and before anything is copied in; the files then inherit it
+        # (inheritance flags on files would leave them unreadable).
         & icacls.exe $InstallDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /Q | Out-Null
         $folderOk = $LASTEXITCODE -eq 0
+        Get-ChildItem $InstallDir -File | Remove-Item -Force
+        Copy-Item (Join-Path $Source '*.dll') $InstallDir -Force
+        Get-ChildItem $InstallDir | Unblock-File
         & icacls.exe (Join-Path $InstallDir '*') /reset /C /Q | Out-Null
         if (-not $folderOk -or $LASTEXITCODE -ne 0) { Write-Host 'Warning: could not restrict permissions on the add-in folder.' -ForegroundColor Yellow }
         $legacyDll = Join-Path $InstallDir 'Jarvis.SwAddin.dll'
@@ -107,6 +112,25 @@ try {
             Remove-Item $legacyDll -Force -ErrorAction SilentlyContinue
         }
 
+        if ($Hashes) {
+            # Checked here, in the folder only administrators can write to: nothing can change the files after this.
+            $expected = @{}
+            foreach ($pair in $Hashes.Split(';')) {
+                $name, $hash = $pair.Split('=', 2)
+                if ($name) { $expected[$name.ToLowerInvariant()] = $hash }
+            }
+            foreach ($file in Get-ChildItem $InstallDir -File) {
+                $want = $expected[$file.Name.ToLowerInvariant()]
+                if (-not $want -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne $want) {
+                    Get-ChildItem $InstallDir -File | Remove-Item -Force
+                    throw "$($file.Name) isn't the file DevilDrive downloaded and checked, so the add-in wasn't installed. Try again; if it keeps happening, something on this PC is changing files in your Temp folder."
+                }
+            }
+            if (@(Get-ChildItem $InstallDir -File).Count -ne $expected.Count) {
+                Get-ChildItem $InstallDir -File | Remove-Item -Force
+                throw 'Some add-in files are missing, so the add-in was not installed. Try again.'
+            }
+        }
         & $RegAsm $Dll /codebase /nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "RegAsm failed (exit code $LASTEXITCODE)." }
         Write-Host "DevilDrive add-in installed to $InstallDir."

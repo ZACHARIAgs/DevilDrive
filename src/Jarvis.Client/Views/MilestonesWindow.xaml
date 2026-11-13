@@ -36,7 +36,7 @@
 
         <DataGrid x:Name="MilestonesGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                   SelectionMode="Single" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  HorizontalGridLinesBrush="#EEEEEE" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnDoubleClick">
+                  HorizontalGridLinesBrush="{DynamicResource DividerBrush}" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Milestone" Binding="{Binding Name}" Width="200" />
                 <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt.LocalDateTime, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="120" />

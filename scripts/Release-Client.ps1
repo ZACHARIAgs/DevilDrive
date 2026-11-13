@@ -1,13 +1,17 @@
 <#
 .SYNOPSIS
-    Publishes a new Jarvis version as a GitHub release. Teammates' apps find it the next time
+    Publishes a new DevilDrive version as a GitHub release. Teammates' apps find it the next time
     they start and offer to update (checking every file against SHA256SUMS first).
 
 .DESCRIPTION
     1. Bump <Version> in Directory.Build.props, commit and push.
     2. Run this script. It builds everything (Publish-Client.ps1), then creates release v<Version> on
-       the code repo with DevilDrive.exe, DevilDrive-SolidWorksAddin.zip and SHA256SUMS attached,
+       the code repo with DevilDrive.exe, DevilDrive-SolidWorksAddin.zip, SHA256SUMS and its signature attached,
        and notes that start with how to install.
+
+    SHA256SUMS is signed with the release key (scripts\New-ReleaseKey.ps1; by default
+    %UserProfile%\.jarvis\release-key.xml, or the file $env:JARVIS_RELEASE_KEY names). Installed copies of
+    DevilDrive refuse an update that isn't signed with it, so the key must never be committed or uploaded.
 
     Uses the GitHub sign-in Git already saved on this PC; you need write access to the code repo.
     If the code repo is private, teammates need read access to it for updates to download.
@@ -28,6 +32,11 @@ $dist = Join-Path $root 'dist'
 [xml]$props = Get-Content (Join-Path $root 'Directory.Build.props')
 $version = ($props.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
 $repo = ($props.Project.PropertyGroup | ForEach-Object { $_.UpdateRepo } | Where-Object { $_ } | Select-Object -First 1)
+$updateKey = ($props.Project.PropertyGroup | ForEach-Object { $_.UpdateKey } | Where-Object { $_ } | Select-Object -First 1)
+$keyFile = if ($env:JARVIS_RELEASE_KEY) { $env:JARVIS_RELEASE_KEY } else { Join-Path $env:USERPROFILE '.jarvis\release-key.xml' }
+if ($updateKey -and -not (Test-Path $keyFile)) {
+    throw "The release key isn't on this PC ($keyFile). Installed copies of DevilDrive only accept updates signed with it: restore it from your backup, then run this again."
+}
 if (-not $version -or -not $repo) { throw 'Version or UpdateRepo is missing from Directory.Build.props.' }
 $tag = "v$version"
 
@@ -41,9 +50,38 @@ if (& git -C $root status --porcelain --untracked-files=no) { throw 'There are u
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'Publish-Client.ps1')
 }
-$files = @('DevilDrive.exe', 'DevilDrive-SolidWorksAddin.zip', 'SHA256SUMS') |
+if (-not (Test-Path (Join-Path $dist 'SHA256SUMS'))) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
+
+# Sign SHA256SUMS, and check the signature against the public key the app was built with before anything is published.
+$signatureFile = Join-Path $dist 'SHA256SUMS.sig'
+Remove-Item $signatureFile -ErrorAction SilentlyContinue
+if ($updateKey) {
+    $sumBytes = [IO.File]::ReadAllBytes((Join-Path $dist 'SHA256SUMS'))
+    $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+    try {
+        $rsa.FromXmlString([IO.File]::ReadAllText($keyFile))
+        $signature = $rsa.SignData($sumBytes, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+    }
+    finally { $rsa.Dispose() }
+    $modulus, $exponent = $updateKey.Trim().Split('.')
+    $check = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+    try {
+        $parameters = New-Object System.Security.Cryptography.RSAParameters
+        $parameters.Modulus = [Convert]::FromBase64String($modulus)
+        $parameters.Exponent = [Convert]::FromBase64String($exponent)
+        $check.ImportParameters($parameters)
+        if (-not $check.VerifyData($sumBytes, $signature, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)) {
+            throw "The key in $keyFile isn't the one <UpdateKey> in Directory.Build.props belongs to, so installed copies of DevilDrive would refuse this release. Nothing was published."
+        }
+    }
+    finally { $check.Dispose() }
+    [IO.File]::WriteAllText($signatureFile, [Convert]::ToBase64String($signature))
+    Write-Host 'Signed SHA256SUMS with the release key.' -ForegroundColor Green
+}
+$files = @('DevilDrive.exe', 'DevilDrive-SolidWorksAddin.zip', 'SHA256SUMS')
+if (Test-Path $signatureFile) { $files += 'SHA256SUMS.sig' }
+$files = $files |
     ForEach-Object { Join-Path $dist $_ } | Where-Object { Test-Path $_ }
-if (-not ($files | Where-Object { $_ -like '*SHA256SUMS' })) { throw 'dist\SHA256SUMS is missing. Run without -SkipBuild.' }
 
 # Token from Git's credential manager (never printed).
 # Fed from a file through cmd: piping from PowerShell (or .NET's stdin) adds an encoding mark Git rejects.

@@ -84,6 +84,44 @@ public static class FileUtil
         if (updated != attributes) File.SetAttributes(fullPath, updated);
     }
 
+    /// <summary>How long backups are kept before <see cref="PruneBackups"/> removes them.</summary>
+    public static readonly TimeSpan BackupsKeptFor = TimeSpan.FromDays(60);
+
+    /// <summary>
+    /// Deletes backup folders older than <paramref name="olderThan"/> (they're named by date and time, see
+    /// <see cref="NewBackupFolder"/>). Returns how many were removed. Anything else in the folder is left alone.
+    /// </summary>
+    public static int PruneBackups(TimeSpan olderThan, string? root = null, DateTime? now = null)
+    {
+        root ??= BackupRoot;
+        var removed = 0;
+        try
+        {
+            if (!Directory.Exists(root)) return 0;
+            var cutoff = (now ?? DateTime.Now) - olderThan;
+            foreach (var folder in Directory.GetDirectories(root))
+            {
+                if (!DateTime.TryParseExact(Path.GetFileName(folder), "yyyy-MM-dd_HHmmss", System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var made) || made >= cutoff) continue;
+                try
+                {
+                    foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)) File.SetAttributes(file, FileAttributes.Normal);
+                    Directory.Delete(folder, recursive: true);
+                    removed++;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // In use right now: it goes next time.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            // The backups folder can't be read: nothing to clean.
+        }
+        return removed;
+    }
+
     public static string NewBackupFolder() =>
         Path.Combine(BackupRoot, DateTime.Now.ToString("yyyy-MM-dd_HHmmss"));
 

@@ -112,6 +112,7 @@ public static class VaultCreator
             [VaultConfig.FileName] = FillConfig(VaultSetup.TemplateConfig, vaultName, localPath, solidWorksVersion),
             [VaultSetup.GuardWorkflowPath] = VaultSetup.GuardWorkflow,
             [VaultSetup.GuardScriptPath] = VaultSetup.GuardScript,
+            [VaultSetup.ReadmePath] = VaultSetup.Readme(vaultName.Trim(), localPath.Trim()),
         };
         // Git doesn't keep empty folders: a hidden placeholder makes each starting folder reach every teammate.
         foreach (var folder in (folders ?? Array.Empty<string>()).Select(f => f.Trim()).Where(f => f.Length > 0))

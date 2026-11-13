@@ -91,9 +91,9 @@ public partial class InstallWindow : Window
         block.FontWeight = step == Step.Working ? FontWeights.SemiBold : FontWeights.Normal;
         block.Foreground = step switch
         {
-            Step.Problem => ThemeManager.IsDark ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF8, 0x71, 0x71)) : System.Windows.Media.Brushes.Firebrick,
-            Step.Done => ThemeManager.IsDark ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4A, 0xDE, 0x80)) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D)),
-            _ => (System.Windows.Media.Brush?)Application.Current?.TryFindResource("TextBrush") ?? System.Windows.Media.Brushes.Black,
+            Step.Problem => (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("DangerBrush"),
+            Step.Done => (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("SuccessBrush"),
+            _ => (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("TextBrush"),
         };
     }
 
@@ -159,7 +159,7 @@ public partial class InstallWindow : Window
             if (SolidWorksAddinSetup.OnlyHiddenSolidWorksRunning)
             {
                 // A SolidWorks with no window (left by a crash or another program): the user can't close it themselves.
-                if (MessageBox.Show(this, "SolidWorks is still running in the background, without a window (left over from a crash or started by another program).\n\n" +
+                if (ModernMessageBox.Show(this, "SolidWorks is still running in the background, without a window (left over from a crash or started by another program).\n\n" +
                                           "End it now, so the add-in can be installed? Nothing you can see is open in it.",
                         "Install the SolidWorks add-in", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
@@ -171,7 +171,7 @@ public partial class InstallWindow : Window
                 continue;
             }
             SetStep(AddinStep, Step.Working, "Waiting for SolidWorks to close\u2026");
-            var answer = MessageBox.Show(this,
+            var answer = ModernMessageBox.Show(this,
                 "To install the add-in, close SolidWorks (save your work first), then click OK.\n\nCancel skips the add-in; you can add it later in DevilDrive's Settings.",
                 "Install the SolidWorks add-in", MessageBoxButton.OKCancel, MessageBoxImage.Information);
             if (answer != MessageBoxResult.OK)

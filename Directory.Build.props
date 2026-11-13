@@ -5,12 +5,16 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Product>DevilDrive</Product>
     <Company>Solar Devils (ASU)</Company>
-    <Version>0.7.6.2</Version>
+    <Version>0.9.0.1</Version>
     <!-- GitHub repo (owner/name) whose Releases the app updates itself from. Baked into the build on purpose:
          a setting in the vault could be changed to point everyone at a different exe. Change it for a fork (e.g. a club). -->
     <UpdateRepo>ZACHARIAgs/DevilDrive</UpdateRepo>
+    <!-- Optional: the public half of a release-signing key (scripts\New-ReleaseKey.ps1). When set, the app only installs an update
+         whose SHA256SUMS is signed with the private half, kept off GitHub. Empty: updates are checked against SHA256SUMS only. -->
+    <UpdateKey></UpdateKey>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="UpdateRepo" Value="$(UpdateRepo)" />
+    <AssemblyMetadata Include="UpdateKey" Value="$(UpdateKey)" />
   </ItemGroup>
 </Project>

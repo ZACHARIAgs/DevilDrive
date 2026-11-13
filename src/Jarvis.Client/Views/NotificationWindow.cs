@@ -9,7 +9,7 @@ namespace Jarvis.Client.Views;
 /// <summary>Small borderless message in the corner of the screen, e.g. when a watched file becomes free.</summary>
 public sealed class NotificationWindow : Window
 {
-    private readonly TextBlock _text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x29, 0x37)) };
+    private readonly TextBlock _text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
     private readonly DispatcherTimer _closeTimer = new DispatcherTimer();
 
     public NotificationWindow()
@@ -21,11 +21,12 @@ public sealed class NotificationWindow : Window
         ShowActivated = false;
         Width = 360;
         SizeToContent = SizeToContent.Height;
-        Background = Brushes.White;
-        BorderBrush = new SolidColorBrush(Color.FromRgb(0xE1, 0xE4, 0xE9));
+        SetResourceReference(BackgroundProperty, "SurfaceBrush");
+        SetResourceReference(BorderBrushProperty, "StrongBorderBrush");
         BorderThickness = new Thickness(1);
 
-        var title = new TextBlock { Text = "Jarvis", FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)), Margin = new Thickness(0, 0, 0, 4) };
+        var title = new TextBlock { Text = "DevilDrive", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        title.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 12) };
         panel.Children.Add(title);
         panel.Children.Add(_text);

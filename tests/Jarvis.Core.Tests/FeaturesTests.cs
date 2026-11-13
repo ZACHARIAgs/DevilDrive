@@ -109,6 +109,47 @@ public class FeaturesTests
         Assert.Equal("https://www.mcmaster.com/91251A540/", McMaster.PageUrl("91251A540"));
     }
 
+    // ------------------------------------------------------------ help
+
+    [Theory]
+    [InlineData("Conflict", "Conflict")]
+    [InlineData("edited without check-out", "WITHOUT check-out")]
+    [InlineData("File in use", "File in use")]
+    [InlineData("backups", "backups")]
+    public void Help_FindsTheTopicForAMessage(string search, string inTitle)
+    {
+        Assert.Contains(Jarvis.Core.Help.HelpTopics.All.Where(t => t.Matches(search)), t => t.Title.IndexOf(inTitle, StringComparison.OrdinalIgnoreCase) >= 0);
+    }
+
+    [Fact]
+    public void Help_EveryTopicHasSteps()
+    {
+        Assert.All(Jarvis.Core.Help.HelpTopics.All, t => Assert.NotEmpty(t.Steps));
+        Assert.DoesNotContain(Jarvis.Core.Help.HelpTopics.All, t => t.Matches("zzzz qqqq"));
+    }
+
+    // ------------------------------------------------------------ joining steps on the vault's GitHub page
+
+    [Fact]
+    public void NewVault_GitHubPage_ShowsHowToJoin()
+    {
+        var files = VaultCreator.TemplateFiles("Club Vault", @"C:\ClubVault", 2024);
+
+        var readme = files[".github/README.md"];
+        Assert.StartsWith("# Club Vault", readme);
+        Assert.Contains("Install DevilDrive", readme);
+        Assert.Contains("Accept and download", readme);
+        Assert.Contains(@"`C:\ClubVault`", readme);
+    }
+
+    [Fact]
+    public void JoiningSteps_LinkTheLatestJarvis()
+    {
+        var readme = VaultInvites.Readme("Club Vault", @"C:\ClubVault", VaultInvites.InstallLink("team/jarvis"));
+        Assert.Contains("[DevilDrive.exe](https://github.com/team/jarvis/releases/latest/download/DevilDrive.exe)", readme);
+        Assert.Contains("Ask an admin for DevilDrive.exe", VaultInvites.Readme("Club Vault", null, null));
+    }
+
     // ------------------------------------------------------------ starting folders
 
     [Fact]
@@ -134,6 +175,43 @@ public class FeaturesTests
         Assert.Contains("same name", VaultCreator.Validate(request));
         request.Folders = new List<string> { "Bad:Name" };
         Assert.Contains("Starting folder \"Bad:Name\"", VaultCreator.Validate(request));
+    }
+
+    [Fact]
+    public void Numbering_NameIsNumber_OneSequence_FileNameIsTheNumber()
+    {
+        var scheme = NumberingScheme.Parse("{ \"prefix\": \"TLT\", \"digits\": 3, \"nameIsNumber\": true, \"cotsFolder\": \"COTS\" }")!;
+
+        Assert.NotNull(scheme);
+        Assert.Null(scheme.Problem());
+        var group = Assert.Single(scheme.Groups);
+        Assert.Equal(1, scheme.NextNumber(group, new[] { "Old Name.SLDPRT" }));
+        Assert.Equal(3, scheme.NextNumber(group, new[] { "TLT-001.SLDPRT", "TLT-002" }));
+        Assert.Equal(1000 - 1, scheme.RangeOf(group).Last);
+        Assert.Equal("TLT-007", scheme.FileName(7, "Bearing housing"));
+        Assert.True(scheme.Fits("TLT-640.SLDASM"));
+        Assert.Equal("TLT-001.SLDPRT", scheme.Example());
+    }
+
+    [Theory]
+    [InlineData("COTS/MCMASTER/91251A540_Screw.SLDPRT", true, true)]
+    [InlineData("91251A540_Socket Head Screw.SLDPRT", false, true)]
+    [InlineData("5709K77_Tapered-Roller Bearing.SLDPRT", false, true)]
+    [InlineData("TLT-201-Turret.SLDPRT", false, false)]
+    [InlineData("bearing_block.SLDPRT", false, false)]
+    [InlineData("Cotsy/part.SLDPRT", false, false)]
+    public void Numbering_NameIsNumber_Cots(string path, bool isCots, bool looksBought)
+    {
+        var scheme = NumberingScheme.Parse("{ \"prefix\": \"TLT\", \"digits\": 3, \"nameIsNumber\": true, \"cotsFolder\": \"COTS\" }")!;
+        Assert.Equal(isCots, scheme.IsCots(path));
+        Assert.Equal(looksBought, scheme.LooksBought(path));
+    }
+
+    [Fact]
+    public void Numbering_NameIsNumber_NeedsAPrefix()
+    {
+        var scheme = new NumberingScheme { Prefix = "", NameIsNumber = true };
+        Assert.Contains("prefix", scheme.Problem());
     }
 
     [Theory]

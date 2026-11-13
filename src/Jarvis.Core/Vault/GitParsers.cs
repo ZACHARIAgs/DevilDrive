@@ -164,6 +164,30 @@ internal static class GitParsers
     }
 
     /// <summary>
+    /// Parses <c>git log --name-only --format=HeaderFormat+%s</c> into check-ins, newest first, for the "what changed"
+    /// list. Each one's files leave out Jarvis's own records; a check-in that only touched the index or previews
+    /// (housekeeping nobody did by hand) is dropped.
+    /// </summary>
+    public static List<RecentCheckIn> ParseRecentCheckIns(string output, ICollection<string> unseenCommits, string? myName, string? myEmail)
+    {
+        var list = new List<RecentCheckIn>();
+        foreach (var record in output.Split(RecordSep))
+        {
+            var lines = record.Replace("\r", "").Split('\n');
+            var fields = lines[0].Split(new[] { FieldSep }, 5);
+            if (fields.Length < 5) continue;
+            var paths = lines.Skip(1).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            if (paths.Count > 0 && paths.All(p => p.StartsWith(VaultIndex.Folder, StringComparison.OrdinalIgnoreCase) || VaultPaths.IsPreview(p))) continue;
+            var visible = paths.Where(p => !p.Split('/').Any(segment => segment.StartsWith(".", StringComparison.Ordinal))).ToList();
+            var mine = (!string.IsNullOrWhiteSpace(myEmail) && string.Equals(fields[2], myEmail, StringComparison.OrdinalIgnoreCase)) ||
+                       (!string.IsNullOrWhiteSpace(myName) && string.Equals(fields[1], myName, StringComparison.OrdinalIgnoreCase));
+            var version = new FileVersion(fields[0].Trim(), fields[1], fields[2], ParseDate(fields[3]), fields[4].Trim());
+            list.Add(new RecentCheckIn(version, visible, unseenCommits.Contains(version.CommitId) && !mine, mine));
+        }
+        return list;
+    }
+
+    /// <summary>
     /// Parses <c>git log --no-merges --name-only --format=%x1e</c>: how many commits touched each file.
     /// </summary>
     public static Dictionary<string, int> CountCommitsPerFile(string output)

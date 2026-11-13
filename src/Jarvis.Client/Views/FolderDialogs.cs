@@ -26,7 +26,7 @@ internal sealed class TextPromptWindow : Window
         ShowInTaskbar = false;
 
         _box = new TextBox { Text = initial, Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(6, 4, 6, 4) };
-        _problem = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+        _problem = new TextBlock { Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("DangerBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
         var ok = new Button { Content = "OK", IsDefault = true, Style = (Style)Application.Current.FindResource("DialogButton") };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Style = (Style)Application.Current.FindResource("DialogButton") };
         ok.Click += (_, _) => Accept();
@@ -156,7 +156,7 @@ internal sealed class FolderPickerWindow : Window
         }
         catch (PdmException ex)
         {
-            MessageBox.Show(this, ex.Message, "New Folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ModernMessageBox.Show(this, ex.Message, "New Folder", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

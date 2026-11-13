@@ -150,6 +150,84 @@ public sealed class VaultIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task KeepCopiesAndGetLatest_ResolvesAConflict_AndKeepsMyVersionInBackups()
+    {
+        Write(_bob, "shared.txt", "bob's version");
+        AliceChecksIn("shared.txt", "v2", "alice's change");
+        AliceChecksIn("notes.txt", "v2", "alice's notes");
+        var vault = await Open(_bob);
+        var conflict = await Assert.ThrowsAsync<VaultConflictException>(() => vault.GetLatestAsync());
+
+        var result = await vault.KeepCopiesAndGetLatestAsync(conflict.Paths);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal("v2", Read(_bob, "shared.txt"));
+        Assert.Equal("v2", Read(_bob, "notes.txt"));
+        var backupNote = result.Notes.Single(n => n.Contains("backed up to"));
+        var folder = backupNote.Substring(backupNote.IndexOf("backed up to ", StringComparison.Ordinal) + "backed up to ".Length).Split(new[] { ", just" }, StringSplitOptions.None)[0];
+        Assert.Equal("bob's version", File.ReadAllText(Path.Combine(folder, "shared.txt")));
+        Directory.Delete(folder, true);
+    }
+
+    [Fact]
+    public async Task GetLatest_Cancelled_LeavesTheVaultFolderUntouched()
+    {
+        AliceChecksIn("shared.txt", "v2", "alice's change");
+        var vault = await Open(_bob);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => vault.GetLatestAsync(null, cancelled.Token));
+
+        Assert.Equal("v1", Read(_bob, "shared.txt"));
+        Assert.Equal(1, (await vault.GetLatestAsync()).CheckInsReceived); // and it still works afterwards
+        Assert.Equal("v2", Read(_bob, "shared.txt"));
+    }
+
+    [Fact]
+    public async Task RecentCheckIns_MarksWhatArrivedSinceTheUserLastLooked()
+    {
+        var vault = await Open(_bob);
+        await vault.GetSnapshotAsync(contactVault: true);
+        Assert.DoesNotContain(await vault.GetRecentCheckInsAsync(), c => c.IsNew); // first look: nothing counts as new
+
+        AliceChecksIn("shared.txt", "v2", "alice's change");
+        Write(_bob, "notes.txt", "bob's notes");
+        await vault.CheckInAsync(new[] { "notes.txt" }, "bob's own check-in");
+
+        var recent = await vault.GetRecentCheckInsAsync();
+        var alices = recent.Single(c => c.Version.Comment == "alice's change");
+        Assert.True(alices.IsNew);
+        Assert.Equal(new[] { "shared.txt" }, alices.Files);
+        var mine = recent.Single(c => c.Version.Comment == "bob's own check-in");
+        Assert.True(mine.IsMine);
+        Assert.False(mine.IsNew); // my own check-ins are never news to me
+
+        await vault.MarkCheckInsSeenAsync();
+        Assert.DoesNotContain(await vault.GetRecentCheckInsAsync(), c => c.IsNew);
+    }
+
+    [Fact]
+    public async Task GetLatest_ReplacesRecordsAndPreviewsChangedOnThisPc()
+    {
+        // Jarvis makes these and can make them again (a catch-up whose check-in didn't finish leaves them changed here).
+        foreach (var folder in new[] { _alice, _bob }) Directory.CreateDirectory(Path.Combine(folder, ".pdm", "preview"));
+        foreach (var folder in new[] { _alice, _bob }) Directory.CreateDirectory(Path.Combine(folder, ".pdm", "index"));
+        AliceAdds(".pdm/preview/part.SLDPRT.stl", "alice's preview");
+        var vault = await Open(_bob);
+        await vault.GetLatestAsync();
+        Write(_bob, ".pdm/preview/part.SLDPRT.stl", "bob's preview");
+        Write(_bob, ".pdm/index/new.SLDPRT.json", "bob's record");
+        AliceChecksIn(".pdm/preview/part.SLDPRT.stl", "alice's new preview", "new preview");
+        AliceAdds(".pdm/index/new.SLDPRT.json", "alice's record");
+
+        await vault.GetLatestAsync();
+
+        Assert.Equal("alice's new preview", Read(_bob, ".pdm/preview/part.SLDPRT.stl"));
+        Assert.Equal("alice's record", Read(_bob, ".pdm/index/new.SLDPRT.json"));
+    }
+
+    [Fact]
     public async Task CheckIn_SendsNewVersion_AndOthersGetIt_EvenWhenVaultMovedOn()
     {
         AliceChecksIn("shared.txt", "v2", "alice's change");
@@ -996,6 +1074,14 @@ public sealed class VaultIntegrationTests : IDisposable
             "{ \"files\": [ { \"path\": \"" + file + "\", \"by\": \"alice-gh\", \"at\": \"2026-10-19T10:00:00+00:00\", \"reason\": \"" + reason + "\" } ] }");
         Git(_alice, "add", "-A");
         Git(_alice, "commit", "-m", "Froze " + file);
+        Git(_alice, "push");
+    }
+
+    private void AliceAdds(string file, string content)
+    {
+        Write(_alice, file, content);
+        Git(_alice, "add", file);
+        Git(_alice, "commit", "-m", "added " + file);
         Git(_alice, "push");
     }
 

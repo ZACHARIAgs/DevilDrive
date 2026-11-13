@@ -60,7 +60,14 @@ public sealed class GitRunner : IGitRunner
         return fallbacks.FirstOrDefault(File.Exists);
     }
 
-    public async Task<GitResult> RunAsync(IReadOnlyList<string> args, string? stdIn = null, TimeSpan? timeout = null, CancellationToken ct = default)
+    public Task<GitResult> RunAsync(IReadOnlyList<string> args, string? stdIn = null, TimeSpan? timeout = null, CancellationToken ct = default) =>
+        RunAsync(args, stdIn, timeout, ct, null);
+
+    /// <summary>
+    /// Like <see cref="RunAsync(IReadOnlyList{string}, string?, TimeSpan?, CancellationToken)"/>, and reports Git's progress lines
+    /// (what it writes while transferring, e.g. "Downloading LFS objects: 45% (5/11), 12 MB") as they arrive.
+    /// </summary>
+    public async Task<GitResult> RunAsync(IReadOnlyList<string> args, string? stdIn, TimeSpan? timeout, CancellationToken ct, IProgress<string>? progress)
     {
         var psi = new ProcessStartInfo(_gitExe, CommandLine.Join(GlobalArgs.Concat(args)))
         {
@@ -79,6 +86,8 @@ public sealed class GitRunner : IGitRunner
         // English messages, so GitErrorClassifier can recognize them.
         psi.EnvironmentVariables["LC_ALL"] = "C";
         psi.EnvironmentVariables["LANG"] = "C";
+        // Git LFS only writes progress when it thinks someone is watching.
+        if (progress != null) psi.EnvironmentVariables["GIT_LFS_FORCE_PROGRESS"] = "1";
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         var exited = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,7 +103,7 @@ public sealed class GitRunner : IGitRunner
         }
 
         var stdOutTask = process.StandardOutput.ReadToEndAsync();
-        var stdErrTask = process.StandardError.ReadToEndAsync();
+        var stdErrTask = progress == null ? process.StandardError.ReadToEndAsync() : ReadWithProgressAsync(process.StandardError, progress);
 
         if (stdIn != null)
         {
@@ -124,6 +133,22 @@ public sealed class GitRunner : IGitRunner
         var stdOut = await stdOutTask.ConfigureAwait(false);
         var stdErr = await stdErrTask.ConfigureAwait(false);
         return new GitResult(args, process.ExitCode, stdOut, stdErr);
+    }
+
+    /// <summary>Reads everything, reporting the newest line each time more arrives (progress is redrawn with \r).</summary>
+    private static async Task<string> ReadWithProgressAsync(StreamReader reader, IProgress<string> progress)
+    {
+        var all = new StringBuilder();
+        var buffer = new char[1024];
+        int read;
+        while ((read = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+        {
+            all.Append(buffer, 0, read);
+            var tail = all.ToString(Math.Max(0, all.Length - 400), Math.Min(400, all.Length));
+            var line = tail.Split('\r', '\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
+            if (line != null) progress.Report(line);
+        }
+        return all.ToString();
     }
 
     private static void KillTree(Process process)

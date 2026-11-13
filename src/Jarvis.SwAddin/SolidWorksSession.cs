@@ -436,10 +436,17 @@ internal sealed class SolidWorksSession
     /// Saves an open part/assembly as a small binary STL mesh for the app's 3D viewer. Uses coarse
     /// quality and one file for assemblies, then puts the user's own STL export settings back. A mesh
     /// that's still large (usually an assembly) is simplified to <see cref="Jarvis.Core.Preview.PreviewSimplifier.MaxTriangles"/>.
+    /// Only for documents in a window of their own: SolidWorks crashes in its STL export for one that isn't
+    /// (opened invisibly, or loaded only as a component of an open assembly).
     /// </summary>
     public bool ExportPreview(IModelDoc2 doc, string stlPath)
     {
         if (!CanHavePreview(doc.GetPathName())) return false;
+        if (!doc.Visible)
+        {
+            AddinLog.Write($"No 3D preview for {doc.GetPathName()}: it isn't open in a window of its own.");
+            return false;
+        }
         var toggles = new[]
         {
             (swUserPreferenceToggle_e.swSTLBinaryFormat, true),

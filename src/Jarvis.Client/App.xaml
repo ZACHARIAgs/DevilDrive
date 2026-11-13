@@ -6,11 +6,14 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- The palette comes first: Views/ThemeManager.cs swaps it for Themes/Dark.xaml. -->
+                <ResourceDictionary Source="Themes/Light.xaml" />
                 <ResourceDictionary Source="Themes/Modern.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
             <views:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+            <views:BoolToHiddenConverter x:Key="BoolToHidden" />
             <views:NullToVisibilityConverter x:Key="NotNullToVis" />
             <views:NullToVisibilityConverter x:Key="NullToVis" Invert="True" />
 

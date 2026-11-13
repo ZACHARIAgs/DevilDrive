@@ -8,6 +8,15 @@ public sealed partial class MainViewModel
 {
     public ICommand NumberingCommand { get; private set; } = null!;
 
+    private bool _nameIsNumber;
+
+    /// <summary>The vault names files by their part number (TLT-007.SLDPRT), so a separate Part Number column would repeat the name.</summary>
+    public bool NameIsNumber
+    {
+        get => _nameIsNumber;
+        private set => Set(ref _nameIsNumber, value);
+    }
+
     private void InitializeNumberingCommands()
     {
         NumberingCommand = new RelayCommand(async () => await EditNumberingAsync(), () => CanEdit && IsAdmin);

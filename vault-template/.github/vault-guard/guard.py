@@ -12,7 +12,8 @@ commands instead of the app. It checks the push against the vault rules:
   * only admins create, move or delete milestones (milestone/* tags);
   * reviews: non-admins only submit or withdraw their own, and nobody but admins changes a file in review;
   * delete requests: non-admins only add or withdraw their own (admins delete the file or reject them);
-  * (warning only) files saved in a newer SolidWorks than the team's version, force pushes.
+  * only admins force-push (rewrite history): anyone else's is put back as it was;
+  * (warning only) files saved in a newer SolidWorks than the team's version, admins' force pushes.
 
 A push that breaks a rule is undone straight away with a new commit that puts every file it
 touched back the way it was, and the team is told in Discord. History keeps the undone push.
@@ -188,6 +189,13 @@ def undo(before, changed, actor, branch):
     return git("push", "origin", f"HEAD:{branch}", check=False).returncode == 0
 
 
+def restore_branch(before, after, branch):
+    """Undo a force push: point the branch back at what it was, unless someone has pushed on top since."""
+    if git("cat-file", "-e", f"{before}^{{commit}}", check=False).returncode != 0:
+        return False
+    return git("push", f"--force-with-lease=refs/heads/{branch}:{after}", "origin", f"{before}:refs/heads/{branch}", check=False).returncode == 0
+
+
 def notify(config, actor, violations, warnings, undone):
     url = config.get("discordWebhookUrl")
     if not url:
@@ -230,7 +238,8 @@ def main():
 
     if not admin:
         for path in changed:
-            if path in ADMIN_ONLY_FILES or path.startswith(ADMIN_ONLY_PREFIXES):
+            # Compared without case: Windows treats PDM.json and pdm.json as the same file.
+            if path.lower() in ADMIN_ONLY_FILES or path.lower().startswith(ADMIN_ONLY_PREFIXES):
                 violations.append(f"changed {path}, which only admins may change")
         if REQUESTS in changed:
             old, new = request_keys(show(before, REQUESTS)), request_keys(show(after, REQUESTS))
@@ -280,13 +289,17 @@ def main():
                     warnings.append(f"{path[len(INDEX_PREFIX):-5]} was saved in SolidWorks {saved}, newer than the team's {team}")
 
     if forced:
-        warnings.append("force-pushed (rewrote history). Turn on branch protection to block this.")
+        if admin:
+            warnings.append("force-pushed (rewrote history). Turn on branch protection to block this.")
+        else:
+            violations.append("force-pushed (rewrote the vault's history), which only admins may do")
 
     if not violations and not warnings:
         print(f"Push by {actor}: all good ({len(changed)} file(s)).")
         return 0
 
-    undone = bool(violations) and not forced and undo(before, changed, actor, branch)
+    # A force push is undone by pointing the branch back at what it was; anything else by a new commit.
+    undone = bool(violations) and (restore_branch(before, after, branch) if forced else undo(before, changed, actor, branch))
     notify(config, actor, violations, warnings, undone)
     for line in violations:
         print(f"VIOLATION: {line}")

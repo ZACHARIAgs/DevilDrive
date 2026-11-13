@@ -15,14 +15,14 @@
 
         <StackPanel>
             <TextBlock x:Name="HeaderText" FontSize="20" FontWeight="SemiBold" />
-            <TextBlock x:Name="SubText" Foreground="{StaticResource MutedTextBrush}" Margin="0,2,0,12" TextWrapping="Wrap" />
+            <TextBlock x:Name="SubText" Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,0,12" TextWrapping="Wrap" />
         </StackPanel>
 
         <!-- Add people -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,12" x:Name="AddPanel">
             <StackPanel>
                 <TextBlock FontWeight="SemiBold" Text="Add people" />
-                <TextBlock Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,8"
+                <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,8"
                            Text="Their GitHub usernames, separated by commas or spaces. They get an invitation by email, and can check files out and in once they accept. No GitHub account yet? They make a free one at github.com." />
                 <DockPanel>
                     <Button x:Name="AddButton" DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Add to team" Margin="8,0,0,0"
@@ -33,7 +33,7 @@
         </Border>
 
         <DockPanel Grid.Row="2" Margin="2,16,2,6">
-            <TextBlock x:Name="CountText" DockPanel.Dock="Right" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Bottom" />
+            <TextBlock x:Name="CountText" DockPanel.Dock="Right" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Bottom" />
             <TextBlock FontWeight="SemiBold" Text="People with access" />
         </DockPanel>
 

@@ -9,11 +9,12 @@ namespace Jarvis.Core.Vault;
 /// <summary>One file being brought into the vault: where it is now and its new vault-relative path.</summary>
 public sealed class ImportItem
 {
-    public ImportItem(string source, string target, bool useExisting = false)
+    public ImportItem(string source, string target, bool useExisting = false, bool replaceExisting = false)
     {
         Source = source;
         Target = target;
         UseExisting = useExisting;
+        ReplaceExisting = replaceExisting;
     }
 
     /// <summary>Full path of the original (left untouched).</summary>
@@ -25,6 +26,11 @@ public sealed class ImportItem
     /// contains), and the imported assemblies and drawings use that one.
     /// </summary>
     public bool UseExisting { get; }
+    /// <summary>
+    /// The vault already has this file at <see cref="Target"/> and this one is a newer take on it (a teammate changed
+    /// their copy): the vault's file is updated with it, as a new version. It must be checked out to the importer first.
+    /// </summary>
+    public bool ReplaceExisting { get; }
 }
 
 /// <summary>
@@ -49,6 +55,15 @@ public static class VaultImport
         return name.Replace('_', ' ').Trim();
     }
 
+    /// <summary>"Imported 3 file(s) and updated 2 from TLT_Main_Assembly".</summary>
+    public static string CheckInComment(int added, int updated, string sourceName)
+    {
+        var parts = new List<string>();
+        if (added > 0 || updated == 0) parts.Add($"Imported {added} file(s)");
+        if (updated > 0) parts.Add((parts.Count == 0 ? "Updated " : "updated ") + $"{updated} file(s)");
+        return string.Join(" and ", parts) + " from " + sourceName;
+    }
+
     /// <summary>What stops the import (two files getting the same name, a name already in the vault), or nothing.</summary>
     public static IReadOnlyList<string> Problems(IReadOnlyList<ImportItem> items, Func<string, bool> existsInVault)
     {
@@ -57,7 +72,15 @@ public static class VaultImport
         {
             problems.Add($"{Path.GetFileName(item.Source)} should use the vault's {item.Target}, but it isn't in the vault.");
         }
-        items = items.Where(i => !i.UseExisting).ToList();
+        foreach (var item in items.Where(i => i.ReplaceExisting && !existsInVault(i.Target)))
+        {
+            problems.Add($"{Path.GetFileName(item.Source)} should update the vault's {item.Target}, but it isn't in the vault.");
+        }
+        foreach (var group in items.Where(i => i.ReplaceExisting).GroupBy(i => i.Target, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+        {
+            problems.Add($"{string.Join(" and ", group.Select(i => Path.GetFileName(i.Source)))} would all update {group.Key}. Pick one.");
+        }
+        items = items.Where(i => !i.UseExisting && !i.ReplaceExisting).ToList();
         foreach (var group in items.GroupBy(i => i.Target, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
         {
             problems.Add($"{string.Join(" and ", group.Select(i => Path.GetFileName(i.Source)))} would all become {group.Key}. Give them different names.");
@@ -78,9 +101,10 @@ public static class VaultImport
     /// (or to the vault's own file, for items that use one).
     /// A reference matches an imported file by its full path or, failing that, by its file name when only one
     /// imported file has it: Pack and Go copies still store the paths on the PC that made them. References to
-    /// files that aren't being imported are left as they are. If anything fails, the copies are removed again
-    /// and nothing is left behind. Returns the copies' full paths. <paramref name="editor"/> may be null only when
-    /// there are no SolidWorks files. Export uses this too, with the export folder as <paramref name="vaultRoot"/>.
+    /// files that aren't being imported are left as they are. An item that updates a vault file is copied over it
+    /// (the caller has it checked out). If anything fails, the copies are removed again, updated files are put back
+    /// as they were, and nothing is left behind. Returns the copies' full paths (new and updated). <paramref name="editor"/>
+    /// may be null only when there are no SolidWorks files. Export uses this too, with the export folder as <paramref name="vaultRoot"/>.
     /// </summary>
     public static IReadOnlyList<string> CopyAndRepoint(string vaultRoot, IReadOnlyList<ImportItem> items, IReferenceEditor? editor, IProgress<string>? progress = null)
     {
@@ -102,6 +126,8 @@ public static class VaultImport
             return byName.TryGetValue(Path.GetFileName(reference), out var named) ? named : null;
         }
         var copied = new List<string>();
+        // Vault files being updated: where each one's content from before is kept until the import has worked.
+        var before = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var toCopy = items.Where(i => !i.UseExisting).ToList();
@@ -110,7 +136,14 @@ public static class VaultImport
                 progress?.Report($"Copying {i + 1} of {toCopy.Count}: {Path.GetFileName(toCopy[i].Source)}\u2026");
                 var target = Full(toCopy[i].Target);
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Copy(toCopy[i].Source, target, overwrite: false);
+                if (toCopy[i].ReplaceExisting)
+                {
+                    var kept = Path.Combine(Path.GetTempPath(), "jarvis-import-" + Guid.NewGuid().ToString("N") + Path.GetExtension(target));
+                    File.Copy(target, kept, overwrite: false);
+                    before[target] = kept;
+                    File.SetAttributes(target, File.GetAttributes(target) & ~FileAttributes.ReadOnly);
+                }
+                File.Copy(toCopy[i].Source, target, overwrite: toCopy[i].ReplaceExisting);
                 File.SetAttributes(target, File.GetAttributes(target) & ~FileAttributes.ReadOnly);
                 copied.Add(target);
             }
@@ -128,22 +161,38 @@ public static class VaultImport
                     }
                 }
             }
+            foreach (var kept in before.Values) TryDelete(kept);
             return copied;
         }
         catch
         {
-            foreach (var copy in copied)
+            foreach (var pair in before)
             {
                 try
                 {
-                    File.Delete(copy);
+                    File.Copy(pair.Value, pair.Key, overwrite: true);
+                    File.Delete(pair.Value);
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                 {
-                    // Left for the user to delete (it shows as new in the vault).
+                    // Still checked out to the importer, so Undo Check Out puts the vault's version back.
                 }
             }
+            // Brand-new copies are removed; an updated file whose earlier content is back stays.
+            foreach (var copy in copied.Where(c => !before.ContainsKey(c))) TryDelete(copy);
             throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            // Left for the user to delete (in the vault it shows as new).
         }
     }
 

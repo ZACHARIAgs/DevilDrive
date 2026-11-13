@@ -15,6 +15,10 @@ namespace Jarvis.Client.Services;
 /// <summary>
 /// The SolidWorks add-in: is SolidWorks on this PC, is the add-in installed, and installing it from a
 /// local folder/zip or a release's DevilDrive-SolidWorksAddin.zip (checked against SHA256SUMS) with scripts\Install-SolidWorksAddin.ps1.
+///
+/// For online release installs, the installer runs as administrator, so nothing it runs or copies is trusted from the Temp folder:
+/// the script is the copy built into this exe (its hash is checked again in the elevated process before it runs),
+/// and each DLL's hash, taken from the checked zip in memory, is checked again once it's in the install folder.
 /// </summary>
 internal static class SolidWorksAddinSetup
 {
@@ -171,7 +175,7 @@ internal static class SolidWorksAddinSetup
             }
         }
 
-        // 1. Check for folder containing Jarvis.SwAddin.dll
+        // 1. Check for folder containing DevilDrive.SwAddin.dll or Jarvis.SwAddin.dll
         foreach (var dir in searchDirs.Distinct())
         {
             if (!Directory.Exists(dir)) continue;
@@ -254,7 +258,8 @@ internal static class SolidWorksAddinSetup
     }
 
     /// <summary>
-    /// Installs the add-in from local files or from the latest GitHub release (welcome screen and Settings).
+    /// Installs the add-in from local files or from the latest release (welcome screen and Settings).
+    /// Throws a <see cref="PdmException"/> that says what to do if it didn't work.
     /// </summary>
     public static async Task InstallLatestAsync(string? hintPath = null)
     {
@@ -272,29 +277,13 @@ internal static class SolidWorksAddinSetup
             return;
         }
 
-        // Try GitHub release
-        var repo = Updater.BuiltInRepo(Assembly.GetExecutingAssembly());
-        if (repo == null)
-        {
-            throw new PdmException("The SolidWorks add-in files were not found locally. To install, run scripts\\Install-SolidWorksAddin.ps1 from PowerShell.");
-        }
-        var updater = new Updater(repo);
-        ReleaseInfo? release = null;
+        var updater = Updater.ForBuild(Assembly.GetExecutingAssembly())
+                      ?? throw new PdmException("This build of DevilDrive doesn't know where to download the add-in from, and no local add-in files were found. Run scripts\\Install-SolidWorksAddin.ps1 instead.");
+        var release = await updater.GetLatestAsync()
+                      ?? throw new PdmException("Couldn't get the add-in from GitHub. Check your internet connection and try again.");
         try
         {
-            release = await updater.GetLatestAsync();
-        }
-        catch (Exception ex)
-        {
-            throw new PdmException($"Could not check for add-in releases on GitHub ({repo}): {ex.Message}. You can install the add-in locally by running scripts\\Install-SolidWorksAddin.ps1.");
-        }
-        if (release == null)
-        {
-            throw new PdmException($"No releases found on GitHub for {repo} yet. To install the add-in locally, run scripts\\Install-SolidWorksAddin.ps1 from PowerShell.");
-        }
-        try
-        {
-            await InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "DevilDrive-addin-" + release.Version), showConsole: false);
+            await InstallAsync(updater, release, Path.Combine(Path.GetTempPath(), "DevilDrive-addin-" + release.Version));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -307,20 +296,89 @@ internal static class SolidWorksAddinSetup
     /// Downloads the add-in from <paramref name="release"/> and installs it (one Windows permission
     /// prompt). SolidWorks must be closed. Throws a <see cref="PdmException"/> that says what went wrong.
     /// </summary>
-    /// <param name="showConsole">Show the installer's console window (the update flow always did).</param>
-    public static async Task InstallAsync(Updater updater, ReleaseInfo release, string folder, bool showConsole)
+    public static async Task InstallAsync(Updater updater, ReleaseInfo release, string folder)
     {
         if (release.Find(Updater.AddinAsset) == null)
         {
             throw new PdmException($"Release {release.Tag} doesn't include the SolidWorks add-in ({Updater.AddinAsset}). Ask whoever maintains DevilDrive.");
         }
-        var zip = await updater.DownloadVerifiedAsync(release, Updater.AddinAsset, folder);
+        if (IsSolidWorksRunning) throw new PdmException("Close SolidWorks (save your work first), then try again.");
+
+        // The zip is checked in memory and unpacked from memory, so the hashes below are of the genuine files.
+        var zipBytes = await updater.DownloadVerifiedBytesAsync(release, Updater.AddinAsset);
         var extracted = Path.Combine(folder, "addin");
         if (Directory.Exists(extracted)) Directory.Delete(extracted, recursive: true);
-        ZipFile.ExtractToDirectory(zip, extracted);
+        var source = Path.Combine(extracted, "SolidWorksAddin");
+        Directory.CreateDirectory(source);
+        var hashes = new List<string>();
+        using (var zip = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read))
+        {
+            foreach (var entry in zip.Entries)
+            {
+                var parts = entry.FullName.Replace('\\', '/').Split('/');
+                if (parts.Length != 2 || parts[0] != "SolidWorksAddin" || !parts[1].EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) continue;
+                if (parts[1].IndexOfAny(new[] { '=', ';', '\'' }) >= 0) throw new PdmException($"{Updater.AddinAsset} has a file with an unexpected name ({parts[1]}).");
+                using var memory = new MemoryStream();
+                using (var stream = entry.Open()) await stream.CopyToAsync(memory);
+                var bytes = memory.ToArray();
+                File.WriteAllBytes(Path.Combine(source, parts[1]), bytes);
+                hashes.Add(parts[1] + "=" + Updater.Sha256(bytes));
+            }
+        }
+        if (!hashes.Any(h => h.StartsWith("DevilDrive.SwAddin.dll=", StringComparison.OrdinalIgnoreCase) || h.StartsWith("Jarvis.SwAddin.dll=", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new PdmException($"{Updater.AddinAsset} is missing the add-in.");
+        }
 
+        var scriptBytes = InstallerScript();
         var script = Path.Combine(extracted, "Install-SolidWorksAddin.ps1");
-        if (!File.Exists(script)) throw new PdmException($"{Updater.AddinAsset} is missing its installer.");
-        await InstallFromLocalFilesAsync(script, Path.Combine(extracted, "SolidWorksAddin"), showConsole);
+        File.WriteAllBytes(script, scriptBytes);
+
+        // "Load at startup" is per user: set here, so it lands in this account even if the permission prompt is answered with another one.
+        using (var startup = Registry.CurrentUser.CreateSubKey(@"Software\SolidWorks\AddInsStartup\" + AddinGuid))
+        {
+            startup.SetValue("", 1, RegistryValueKind.DWord);
+        }
+
+        // The elevated PowerShell reads the script once, checks those bytes, and runs exactly those bytes.
+        static string Quote(string text) => "'" + text.Replace("'", "''") + "'";
+        var command =
+            $"$b = [IO.File]::ReadAllBytes({Quote(script)}); " +
+            "$h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-', ''); " +
+            $"if ($h -ne {Quote(Updater.Sha256(scriptBytes))}) {{ Write-Host 'The installer was changed on disk, so it was not run.' -ForegroundColor Red; Start-Sleep -Seconds 6; exit 9 }}; " +
+            $"& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString($b))) -Elevated -Source {Quote(source)} -Hashes {Quote(string.Join(";", hashes))}";
+        var start = new ProcessStartInfo("powershell.exe",
+            "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command)))
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+        };
+        Process install;
+        try
+        {
+            install = Process.Start(start) ?? throw new PdmException("The add-in installer didn't start.");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new PdmException("The SolidWorks add-in wasn't installed: Windows' permission prompt was cancelled. Try again and click Yes.", ex.ToString());
+        }
+        using (install)
+        {
+            await install.WaitForExitAsync();
+            if (install.ExitCode == 9) throw new PdmException("The add-in installer was changed on disk after DevilDrive checked it, so it wasn't run. Try again; if it keeps happening, something on this PC is changing files in your Temp folder.");
+            if (install.ExitCode != 0) throw new PdmException("The SolidWorks add-in wasn't installed (registering it failed; the installer's window said why). Close SolidWorks and try again.");
+        }
+    }
+
+    public const string AddinGuid = "{843995B8-683B-4864-9733-A8E3A87F5ABC}";
+
+    /// <summary>scripts\Install-SolidWorksAddin.ps1 as built into this exe.</summary>
+    private static byte[] InstallerScript()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Jarvis.Client.InstallAddin.ps1")
+                           ?? throw new PdmException("This build of DevilDrive is missing the add-in installer.");
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        return memory.ToArray();
     }
 }

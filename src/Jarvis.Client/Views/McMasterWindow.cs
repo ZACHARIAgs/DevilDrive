@@ -34,7 +34,7 @@ internal sealed class McMasterWindow : Window
         ShowInTaskbar = false;
 
         _partNumber = new TextBox { Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(6, 4, 6, 4), FontSize = 15 };
-        _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = System.Windows.Media.Brushes.DimGray };
+        _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush") };
         _get = new Button { Content = "Get from McMaster", IsDefault = true, Style = (Style)Application.Current.FindResource("AccentButton"), Padding = new Thickness(14, 4, 14, 4) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Style = (Style)Application.Current.FindResource("DialogButton") };
         _get.Click += async (_, _) => await GetAsync();
@@ -47,10 +47,10 @@ internal sealed class McMasterWindow : Window
         panel.Children.Add(new TextBlock { Text = "McMaster-Carr part number", FontWeight = FontWeights.SemiBold });
         panel.Children.Add(new TextBlock
         {
-            Text = $"For example 91251A540. Jarvis opens the part on McMaster's site; click Download there and choose SOLIDWORKS. " +
-                   $"Jarvis puts the file in {McMaster.Folder.Replace('/', '\\')} in the vault.",
+            Text = $"For example 91251A540. DevilDrive opens the part on McMaster's site; click Download there and choose SOLIDWORKS. " +
+                   $"DevilDrive puts the file in {McMaster.Folder.Replace('/', '\\')} in the vault.",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = System.Windows.Media.Brushes.DimGray,
+            Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("MutedTextBrush"),
             Margin = new Thickness(0, 2, 0, 0),
         });
         panel.Children.Add(_partNumber);
@@ -89,7 +89,7 @@ internal sealed class McMasterWindow : Window
         _get.IsEnabled = _partNumber.IsEnabled = false;
         Cursor = Cursors.AppStarting;
         _status.Text = $"On McMaster's page for {partNumber}, click Download (under the picture), choose SOLIDWORKS, and save it. " +
-                       $"Jarvis is watching {downloads} and takes it from there\u2026";
+                       $"DevilDrive is watching {downloads} and takes it from there\u2026";
         _waiting = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         try
         {

@@ -24,12 +24,12 @@
             <TextBlock x:Name="AddinText" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
         </DockPanel>
 
-        <TextBlock FontWeight="SemiBold" Text="Appearance" Margin="0,16,0,0" />
-        <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,4" Text="Choose your interface theme." />
-        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-            <RadioButton x:Name="LightThemeRadio" GroupName="Theme" Content="Light" Margin="0,0,16,0" />
-            <RadioButton x:Name="DarkThemeRadio" GroupName="Theme" Content="Dark" />
-        </StackPanel>
+        <TextBlock FontWeight="SemiBold" Text="Look" Margin="0,16,0,0" />
+        <ComboBox x:Name="ThemeBox" Width="220" HorizontalAlignment="Left" Margin="0,4,0,0" ToolTip="Light or dark, or whatever Windows is set to.">
+            <ComboBoxItem Content="Same as Windows" Tag="System" />
+            <ComboBoxItem Content="Light" Tag="Light" />
+            <ComboBoxItem Content="Dark" Tag="Dark" />
+        </ComboBox>
 
         <TextBlock FontWeight="SemiBold" Text="What to download" Margin="0,16,0,0" />
         <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,2,0,6"
@@ -38,7 +38,7 @@
         <RadioButton x:Name="DownloadSomeRadio" GroupName="Download" Content="Only these folders:" Margin="0,4,0,0" />
         <ListBox x:Name="FolderList" MaxHeight="150" Margin="22,4,0,0"
                  IsEnabled="{Binding IsChecked, ElementName=DownloadSomeRadio}" />
-        <TextBlock x:Name="NoFoldersText" Foreground="#9CA3AF" Margin="22,4,0,0" Visibility="Collapsed"
+        <TextBlock x:Name="NoFoldersText" Foreground="{DynamicResource FaintTextBrush}" Margin="22,4,0,0" Visibility="Collapsed"
                    Text="The vault has no folders yet. Organize files into folders to use this." />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Style="{StaticResource DialogButton}" Content="Save" IsDefault="True" Click="OnSave" />

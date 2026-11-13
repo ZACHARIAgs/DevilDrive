@@ -13,20 +13,11 @@ namespace Jarvis.Client.Views;
 
 public partial class SettingsWindow : Window
 {
-    private readonly bool _initialDarkMode;
-
     public SettingsWindow(string vaultPath, string signedInAs, IReadOnlyList<string> folders, IReadOnlyList<string>? downloadFolders)
     {
         InitializeComponent();
         VaultPathBox.Text = vaultPath;
         SignedInText.Text = signedInAs;
-
-        _initialDarkMode = ThemeManager.IsDark;
-        DarkThemeRadio.IsChecked = _initialDarkMode;
-        LightThemeRadio.IsChecked = !_initialDarkMode;
-
-        DarkThemeRadio.Checked += OnThemeRadioChanged;
-        LightThemeRadio.Checked += OnThemeRadioChanged;
 
         var chosen = new HashSet<string>(downloadFolders ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         foreach (var folder in folders.Union(chosen, StringComparer.OrdinalIgnoreCase).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
@@ -36,15 +27,9 @@ public partial class SettingsWindow : Window
         NoFoldersText.Visibility = FolderList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         DownloadSomeRadio.IsChecked = downloadFolders != null;
         DownloadAllRadio.IsChecked = downloadFolders == null;
+        var theme = ThemeManager.Normalize(Jarvis.Core.Config.UserSettings.Load().Theme);
+        ThemeBox.SelectedItem = ThemeBox.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == theme);
         ShowAddin();
-    }
-
-    private void OnThemeRadioChanged(object sender, RoutedEventArgs e)
-    {
-        if (DarkThemeRadio != null && LightThemeRadio != null)
-        {
-            ThemeManager.ApplyTheme(DarkThemeRadio.IsChecked == true);
-        }
     }
 
     private void ShowAddin()
@@ -72,7 +57,7 @@ public partial class SettingsWindow : Window
         catch (PdmException ex)
         {
             ShowAddin();
-            MessageBox.Show(this, ex.Message, "SolidWorks add-in", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ModernMessageBox.Show(this, ex.Message, "SolidWorks add-in", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -82,7 +67,6 @@ public partial class SettingsWindow : Window
     }
 
     public string VaultPath => VaultPathBox.Text.Trim();
-    public bool DarkMode => DarkThemeRadio.IsChecked == true;
 
     /// <summary>Folders to download, or null for everything (also when "only these" is picked with none ticked).</summary>
     public IReadOnlyList<string>? DownloadFolders
@@ -106,26 +90,20 @@ public partial class SettingsWindow : Window
     {
         if (!Directory.Exists(Path.Combine(VaultPath, ".git")))
         {
-            var answer = MessageBox.Show(this,
+            var answer = ModernMessageBox.Show(this,
                 $"{VaultPath} doesn't look like a vault (no .git folder). Save anyway?",
                 "Settings", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (answer != MessageBoxResult.Yes) return;
         }
-
-        var settings = UserSettings.Load();
-        settings.DarkMode = DarkMode;
-        settings.Save();
-        ThemeManager.ApplyTheme(DarkMode);
-
-        DialogResult = true;
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-        if (DialogResult != true && ThemeManager.IsDark != _initialDarkMode)
+        // The look is this PC's own setting: saved and switched right away.
+        var settings = Jarvis.Core.Config.UserSettings.Load();
+        var theme = (string)((ComboBoxItem)ThemeBox.SelectedItem).Tag;
+        if (ThemeManager.Normalize(settings.Theme) != theme)
         {
-            ThemeManager.ApplyTheme(_initialDarkMode);
+            settings.Theme = theme;
+            settings.Save();
+            ThemeManager.Apply(theme);
         }
+        DialogResult = true;
     }
 }
